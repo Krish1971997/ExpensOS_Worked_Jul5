@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DATE &amp; TIME *"
+            android:textSize="11sp"
+            android:textColor="#666"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="yyyy-MM-dd HH:mm:ss"
+            android:inputType="text"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AMOUNT (₹) *"
+            android:textSize="11sp"
+            android:textColor="#666"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_amount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="0.00"
+            android:inputType="numberDecimal"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CATEGORY *"
+            android:textSize="11sp"
+            android:textColor="#666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/sp_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SUB CATEGORY"
+            android:textSize="11sp"
+            android:textColor="#666"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/sp_subcategory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NOTE"
+            android:textSize="11sp"
+            android:textColor="#666"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Optional"
+            android:inputType="text" />
+    </LinearLayout>
+</ScrollView>

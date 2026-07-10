@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- Navbar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/nav_bg"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp"
+        android:elevation="4dp">
+
+        <Button
+            android:id="@+id/btnBackTxn"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="← Back"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Transactions"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:gravity="center" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnAddIncome2"
+                style="@style/BtnSuccess"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="+ Income"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnAddExpense2"
+                style="@style/BtnDanger"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="+ Expense"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Filter tabs -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:background="@color/nav_bg"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="4dp">
+
+        <Button
+            android:id="@+id/btnAll"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="All"
+            android:textSize="13sp"
+            android:textColor="@color/primary" />
+
+        <Button
+            android:id="@+id/btnIncome"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Income"
+            android:textSize="13sp"
+            android:textColor="@color/green" />
+
+        <Button
+            android:id="@+id/btnExpense"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Expense"
+            android:textSize="13sp"
+            android:textColor="@color/red" />
+    </LinearLayout>
+
+    <!-- Count -->
+    <TextView
+        android:id="@+id/tvTxnCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0 transactions"
+        android:textSize="12sp"
+        android:textColor="@color/text_muted"
+        android:padding="12dp" />
+
+    <!-- Transaction list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvTransactions"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="6dp"
+        android:clipToPadding="false" />
+
+    <!-- Pagination row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@color/nav_bg"
+        android:paddingHorizontal="16dp"
+        android:elevation="4dp">
+
+        <Button
+            android:id="@+id/btnPrev"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="← Prev"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tvPage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Page 1 / 1"
+            android:textSize="12sp"
+            android:textColor="@color/text_muted" />
+
+        <Button
+            android:id="@+id/btnNext"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Next →"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+</LinearLayout>

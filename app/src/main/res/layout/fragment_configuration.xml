@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F7FA">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚙ Configuration"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#222"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mirrors web.xml context-params"
+            android:textSize="12sp"
+            android:textColor="#666"
+            android:layout_marginBottom="16dp" />
+
+        <!-- DB Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DATABASE (PostgreSQL / Neon)"
+            android:textSize="12sp"
+            android:textColor="#1565C0"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DB_URL (JDBC)"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_db_url"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="jdbc:postgresql://ep-xxx.neon.tech/dbname"
+                    android:inputType="textUri"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DB_USER"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_db_user"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="postgres"
+                    android:inputType="text"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DB_PASSWORD"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_db_password"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="••••••••"
+                    android:inputType="textPassword"
+                    android:layout_marginBottom="10dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_test_conn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:text="Test Connection"
+                        android:backgroundTint="#546E7A"
+                        android:textColor="@android:color/white"
+                        android:textSize="12sp"
+                        android:layout_marginEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/tv_conn_status"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textSize="12sp"
+                        android:textColor="#666"
+                        android:gravity="center_vertical" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Gmail Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GMAIL (Email Export)"
+            android:textSize="12sp"
+            android:textColor="#1565C0"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="GMAIL_FROM"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_gmail_from"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="you@gmail.com"
+                    android:inputType="textEmailAddress"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="GMAIL_APP_PASS"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_gmail_app_pass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="App password"
+                    android:inputType="textPassword" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Zoho Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ZOHO WORKDRIVE (Cloud Backup)"
+            android:textSize="12sp"
+            android:textColor="#1565C0"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="zoho.client.id"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_zoho_client_id"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Client ID"
+                    android:inputType="text"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="zoho.client.secret"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_zoho_secret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Client Secret"
+                    android:inputType="textPassword"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="zoho.refresh.token"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_zoho_refresh"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Refresh token"
+                    android:inputType="text"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="workdrive.main.folder.id"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_workdrive_folder"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Folder ID"
+                    android:inputType="text" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Schedule Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="BACKUP SCHEDULE &amp; SESSION"
+            android:textSize="12sp"
+            android:textColor="#1565C0"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.cardview.widget.CardView android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="backup.schedule.hour (0–23)"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_backup_hour"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="0"
+                    android:inputType="number"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="backup.schedule.minute (0–59)"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_backup_minute"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="0"
+                    android:inputType="number"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="session.timeout (minutes)"
+                    android:textSize="11sp"
+                    android:textColor="#666" />
+
+                <EditText
+                    android:id="@+id/et_session_timeout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="60"
+                    android:inputType="number" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Save button -->
+        <Button
+            android:id="@+id/btn_save_config"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="✔ Save Configuration"
+            android:backgroundTint="@color/primary"
+            android:textColor="@android:color/white"
+            android:textSize="15sp"
+            android:layout_marginBottom="24dp" />
+    </LinearLayout>
+</ScrollView>

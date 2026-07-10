@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.expenseos.android.ui.home.HomeFragment"
+        android:label="Dashboard" />
+    <fragment
+        android:id="@+id/nav_reports"
+        android:name="com.expenseos.android.ui.reports.ReportsFragment"
+        android:label="Reports" />
+    <fragment
+        android:id="@+id/nav_backup"
+        android:name="com.expenseos.android.ui.backup.BackupFragment"
+        android:label="Backup" />
+    <fragment
+        android:id="@+id/nav_configuration"
+        android:name="com.expenseos.android.ui.settings.ConfigurationFragment"
+        android:label="Configuration" />
+    <fragment
+        android:id="@+id/nav_books"
+        android:name="com.expenseos.android.ui.books.BooksFragment"
+        android:label="Cash Books" />
+    <fragment
+        android:id="@+id/nav_console"
+        android:name="com.expenseos.android.ui.settings.ConsoleFragment"
+        android:label="Sync Console" />
+</navigation>

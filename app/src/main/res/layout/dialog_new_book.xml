@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BOOK NAME *"
+        android:textSize="11sp"
+        android:textColor="#666"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/et_book_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="e.g. June 2026"
+        android:inputType="text"
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DESCRIPTION"
+        android:textSize="11sp"
+        android:textColor="#666"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/et_book_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Optional"
+        android:inputType="text" />
+</LinearLayout>

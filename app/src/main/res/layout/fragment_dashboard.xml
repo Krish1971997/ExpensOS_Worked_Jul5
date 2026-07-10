@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="14dp">
+
+        <!-- Pending sync badge -->
+        <TextView
+            android:id="@+id/tvSyncStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/amber"
+            android:textSize="12sp"
+            android:background="#FEF9C3"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:layout_marginBottom="10dp"
+            android:visibility="gone" />
+
+        <!-- Action buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <Button
+                android:id="@+id/btnAddIncomeDash"
+                style="@style/BtnSuccess"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:text="+ Income"
+                android:layout_marginEnd="6dp" />
+
+            <Button
+                android:id="@+id/btnAddExpenseDash"
+                style="@style/BtnDanger"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:text="+ Expense" />
+        </LinearLayout>
+
+        <!-- Stat cards -->
+        <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="TOTAL INCOME"
+                    android:textSize="9sp"
+                    android:textColor="@color/text_muted"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvDashIncome"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="26sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/green" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TOTAL EXPENSE"
+                        android:textSize="9sp"
+                        android:textColor="@color/text_muted"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDashExpense"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/red" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="NET BALANCE"
+                        android:textSize="9sp"
+                        android:textColor="@color/text_muted"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDashBalance"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+        <!-- Recent transactions header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="RECENT TRANSACTIONS"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_muted"
+                android:letterSpacing="0.08" />
+
+            <Button
+                android:id="@+id/btnViewAll"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="View All →"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvDashRecent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false" />
+    </LinearLayout>
+</ScrollView>

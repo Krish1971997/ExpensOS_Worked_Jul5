@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- Navbar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/nav_bg"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12dp"
+        android:elevation="4dp">
+
+        <Button
+            android:id="@+id/btnBackReports"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="← Back"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Reports &amp; Analytics"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="56dp"
+            android:layout_height="1dp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <!-- Stat cards row 1 -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:useDefaultMargins="true"
+                android:layout_marginBottom="10dp">
+
+                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="2dp"
+                    android:layout_marginEnd="6dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="TOTAL INCOME"
+                            android:textSize="9sp"
+                            android:textColor="@color/text_muted"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvRptIncome"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/green" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="2dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="TOTAL EXPENSE"
+                            android:textSize="9sp"
+                            android:textColor="@color/text_muted"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvRptExpense"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/red" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </GridLayout>
+
+            <!-- Stat cards row 2 -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:useDefaultMargins="true"
+                android:layout_marginBottom="14dp">
+
+                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="2dp"
+                    android:layout_marginEnd="6dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="NET BALANCE"
+                            android:textSize="9sp"
+                            android:textColor="@color/text_muted"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvRptBalance"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/primary" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="2dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="SAVINGS RATE"
+                            android:textSize="9sp"
+                            android:textColor="@color/text_muted"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvRptSavings"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/primary" />
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+            </GridLayout>
+
+            <!-- Monthly Bar Chart -->
+            <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="MONTHLY INCOME VS EXPENSE"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_muted"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.06"
+                        android:layout_marginBottom="10dp" />
+
+                    <com.github.mikephil.charting.charts.BarChart
+                        android:id="@+id/barChart"
+                        android:layout_width="match_parent"
+                        android:layout_height="220dp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Expense by Category Pie -->
+            <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="EXPENSE BY CATEGORY"
+                        android:textSize="10sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_muted"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.06"
+                        android:layout_marginBottom="10dp" />
+
+                    <com.github.mikephil.charting.charts.PieChart
+                        android:id="@+id/pieChart"
+                        android:layout_width="match_parent"
+                        android:layout_height="260dp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
