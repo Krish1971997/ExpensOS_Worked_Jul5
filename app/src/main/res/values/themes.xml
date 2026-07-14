@@ -1,10 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- Main theme -->
     <style name="Theme.ExpenseOS" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="colorAccent">@color/accent</item>
-        <item name="android:windowBackground">@color/background</item>
+        <item name="colorAccent">@color/primary</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:statusBarColor">@color/primary_dark</item>
+    </style>
+
+    <!-- Night / dark mode variant — prevents crash -->
+    <style name="Theme.ExpenseOS.Night" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorAccent">@color/primary</item>
+    </style>
+
+    <!-- Button styles -->
+    <style name="BtnPrimary" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/primary</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="BtnSuccess" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/green</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="BtnDanger" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="strokeColor">@color/red</item>
+        <item name="android:textColor">@color/red</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <!-- Card style -->
+    <style name="StatCard" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/bg_card</item>
+        <item name="cardElevation">2dp</item>
+        <item name="cardCornerRadius">10dp</item>
     </style>
 </resources>

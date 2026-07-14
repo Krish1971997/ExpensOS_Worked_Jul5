@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="4dp"
+    app:cardBackgroundColor="@color/bg_card"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <!-- Type Spinner -->
+        <Spinner
+            android:id="@+id/spBulkType"
+            android:layout_width="80dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp" />
+
+        <!-- Date & Time -->
+        <EditText
+            android:id="@+id/etBulkDate"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1.2"
+            android:hint="yyyy-MM-dd HH:mm"
+            android:inputType="text"
+            android:paddingHorizontal="6dp"
+            android:textSize="11sp" />
+
+        <!-- Amount -->
+        <EditText
+            android:id="@+id/etBulkAmount"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="0.8"
+            android:hint="0.00"
+            android:inputType="numberDecimal"
+            android:paddingHorizontal="6dp"
+            android:textSize="12sp" />
+
+        <!-- Category -->
+        <Spinner
+            android:id="@+id/spBulkCategory"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1" />
+
+        <!-- Note -->
+        <EditText
+            android:id="@+id/etBulkNote"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:hint="Note"
+            android:inputType="text"
+            android:paddingHorizontal="6dp"
+            android:textSize="11sp" />
+
+        <!-- Delete row button -->
+        <Button
+            android:id="@+id/btnBulkRowDel"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:padding="0dp"
+            android:text="✕"
+            android:textColor="@color/text_hint"
+            android:textSize="14sp" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

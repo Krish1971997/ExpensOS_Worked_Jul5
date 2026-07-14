@@ -24,8 +24,11 @@ import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
 import com.github.mikephil.charting.formatter.ValueFormatter;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ReportsFragment extends Fragment {
 
@@ -50,10 +53,18 @@ public class ReportsFragment extends Fragment {
     }
 
     private void loadStats(View v) {
-        double income = dao.sumByType("INCOME", bookId);
-        double expense = dao.sumByType("EXPENSE", bookId);
-        double balance = income - expense;
-        double savings = income > 0 ? (balance / income) * 100 : 0;
+        BigDecimal income = dao.sumByType("INCOME", bookId);
+        BigDecimal expense = dao.sumByType("EXPENSE", bookId);
+        if (income == null) income = BigDecimal.ZERO;
+        if (expense == null) expense = BigDecimal.ZERO;
+
+        BigDecimal balance = income.subtract(expense);
+        BigDecimal savings = BigDecimal.ZERO;
+        if (income.compareTo(BigDecimal.ZERO) > 0) {
+            savings = balance
+                    .divide(income, 2, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
 
         ((TextView) v.findViewById(R.id.tv_report_income)).setText("₹" + String.format("%,.2f", income));
         ((TextView) v.findViewById(R.id.tv_report_expense)).setText("₹" + String.format("%,.2f", expense));
@@ -62,14 +73,14 @@ public class ReportsFragment extends Fragment {
     }
 
     private void loadBarChart(View v) {
-        List<String[]> monthly = dao.monthlyTrend(6, bookId);
+        List<Map<String, Object>> monthly = dao.monthlyTrend(6, bookId);
         List<BarEntry> incE = new ArrayList<>(), expE = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         for (int i = 0; i < monthly.size(); i++) {
-            String[] row = monthly.get(i);
-            labels.add(row[0]);
-            incE.add(new BarEntry(i, Float.parseFloat(row[1])));
-            expE.add(new BarEntry(i, Float.parseFloat(row[2])));
+            Map<String, Object> row = monthly.get(i);
+            labels.add((String) row.get("month"));
+            incE.add(new BarEntry(i, ((BigDecimal) row.get("income")).floatValue()));
+            expE.add(new BarEntry(i, ((BigDecimal) row.get("expense")).floatValue()));
         }
         BarDataSet incSet = new BarDataSet(incE, "Income");
         incSet.setColor(Color.parseColor("#16A34A"));
@@ -97,23 +108,20 @@ public class ReportsFragment extends Fragment {
         int[] colors = {0xFF2563EB, 0xFFDC2626, 0xFF16A34A, 0xFFD97706, 0xFF7C3AED, 0xFF0891B2};
 
         // Expense-by-category pie
-        List<String[]> expenseCats = dao.expenseByCategory(bookId);
+        List<Map<String, Object>> expenseCats = dao.expenseByCategory(bookId);
         PieChart expensePie = v.findViewById(R.id.pie_expense);
         bindPieChart(expensePie, expenseCats, colors, "Expenses");
 
         // Income-by-category pie
-        // NOTE: assumes TransactionDao has an incomeByCategory(bookId) method
-        // returning rows in the same [categoryName, amount] shape as expenseByCategory.
-        // Add it to TransactionDao if it doesn't exist yet.
-        List<String[]> incomeCats = dao.incomeByCategory(bookId);
+        List<Map<String, Object>> incomeCats = dao.incomeByCategory(bookId);
         PieChart incomePie = v.findViewById(R.id.pie_income);
         bindPieChart(incomePie, incomeCats, colors, "Income");
     }
 
-    private void bindPieChart(PieChart pie, List<String[]> rows, int[] colors, String centerLabel) {
+    private void bindPieChart(PieChart pie, List<Map<String, Object>> rows, int[] colors, String centerLabel) {
         List<PieEntry> entries = new ArrayList<>();
-        for (String[] row : rows)
-            entries.add(new PieEntry(Float.parseFloat(row[1]), row[0]));
+        for (Map<String, Object> row : rows)
+            entries.add(new PieEntry(((BigDecimal) row.get("total")).floatValue(), (String) row.get("name")));
 
         PieDataSet ds = new PieDataSet(entries, centerLabel);
         ds.setColors(colors, 255);

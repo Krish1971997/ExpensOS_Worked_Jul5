@@ -1,20 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#1565C0</color>
-    <color name="primary_dark">#0D47A1</color>
-    <color name="accent">#7B1FA2</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="background">#F5F7FA</color>
-    <color name="income_green">#1B8A1B</color>
-    <color name="expense_red">#C0392B</color>
-    <color name="bg">#F5F7FA</color>
-    <color name="nav_bg">#FFFFFF</color>
-    <color name="text">#1A1A1A</color>
-    <color name="text_muted">#757575</color>
-    <color name="text_hint">#9E9E9E</color>
+    <!-- Primary brand -->
+    <color name="primary">#2563EB</color>
+    <color name="primary_dark">#1D4ED8</color>
+
+    <!-- Status colors -->
+    <color name="green">#16A34A</color>
+    <color name="green_bg">#DCFCE7</color>
+    <color name="red">#DC2626</color>
+    <color name="red_bg">#FEE2E2</color>
+    <color name="amber">#D97706</color>
+    <color name="amber_bg">#FEF3C7</color>
+
+    <!-- Background -->
+    <color name="bg">#F8FAFC</color>
     <color name="bg_card">#FFFFFF</color>
-    <color name="border">#E0E0E0</color>
-    <color name="green">#1B8A1B</color>
-    <color name="red">#C0392B</color>
-    <color name="amber">#F39C12</color>
+    <color name="nav_bg">#FFFFFF</color>
+    <color name="border">#E2E8F0</color>
+
+    <!-- Text -->
+    <color name="text">#1E293B</color>
+    <color name="text_muted">#64748B</color>
+    <color name="text_hint">#94A3B8</color>
+    <color name="white">#FFFFFF</color>
+
+    <!-- Transaction type badges -->
+    <color name="income_badge_bg">#DCFCE7</color>
+    <color name="income_badge_text">#15803D</color>
+    <color name="expense_badge_bg">#FEE2E2</color>
+    <color name="expense_badge_text">#B91C1C</color>
 </resources>

@@ -8,40 +8,40 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:background="@color/bg">
+        android:background="@color/bg"
+        android:orientation="vertical">
 
         <!-- Top toolbar -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:background="@color/nav_bg"
-            android:orientation="horizontal"
+            android:elevation="4dp"
             android:gravity="center_vertical"
-            android:paddingHorizontal="14dp"
-            android:elevation="4dp">
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp">
 
             <!-- Hamburger menu button -->
             <ImageButton
                 android:id="@+id/btnHamburger"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
+                android:layout_marginEnd="10dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_sort_by_size"
                 android:contentDescription="Menu"
-                android:tint="@color/primary"
-                android:layout_marginEnd="10dp" />
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                android:tint="@color/primary" />
 
             <TextView
                 android:id="@+id/tvBookTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:textColor="@color/primary"
                 android:ellipsize="end"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:textColor="@color/primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
             <!-- Sync button -->
             <Button
@@ -49,9 +49,9 @@
                 style="@style/BtnPrimary"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
+                android:paddingHorizontal="14dp"
                 android:text="⟳ Sync"
-                android:textSize="12sp"
-                android:paddingHorizontal="14dp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Fragment container — each bottom tab loads here -->
@@ -66,124 +66,128 @@
             android:layout_width="match_parent"
             android:layout_height="64dp"
             android:background="@color/nav_bg"
-            android:orientation="horizontal"
-            android:elevation="8dp">
+            android:elevation="8dp"
+            android:orientation="horizontal">
 
-            <!-- Home -->
+            <!-- Cashbooks (was Home) -->
             <LinearLayout
                 android:id="@+id/navHome"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="6dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
 
-                <TextView
+                <ImageView
                     android:id="@+id/navHomeIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🏠"
-                    android:textSize="20sp" />
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_book"
+                    android:tint="@color/primary" />
 
                 <TextView
                     android:id="@+id/navHomeLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Home"
-                    android:textSize="10sp"
+                    android:layout_marginTop="2dp"
+                    android:text="Cashbooks"
                     android:textColor="@color/primary"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Reports -->
+            <!-- Scheduler (was Reports) -->
             <LinearLayout
                 android:id="@+id/navReports"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="6dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
 
-                <TextView
+                <ImageView
                     android:id="@+id/navReportsIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📊"
-                    android:textSize="20sp" />
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_schedule"
+                    android:tint="@color/text_muted" />
 
                 <TextView
                     android:id="@+id/navReportsLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Reports"
-                    android:textSize="10sp"
-                    android:textColor="@color/text_muted" />
+                    android:layout_marginTop="2dp"
+                    android:text="Scheduler"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
             </LinearLayout>
 
-            <!-- Backup -->
+            <!-- Log (was Backup) -->
             <LinearLayout
                 android:id="@+id/navBackup"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="6dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
 
-                <TextView
+                <ImageView
                     android:id="@+id/navBackupIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🗄️"
-                    android:textSize="20sp" />
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_passbook"
+                    android:tint="@color/text_muted" />
 
                 <TextView
                     android:id="@+id/navBackupLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Backup"
-                    android:textSize="10sp"
-                    android:textColor="@color/text_muted" />
+                    android:layout_marginTop="2dp"
+                    android:text="Log"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
             </LinearLayout>
 
-            <!-- Configuration -->
+            <!-- Settings (was Configuration) -->
             <LinearLayout
                 android:id="@+id/navConfig"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="6dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="true">
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="6dp">
 
-                <TextView
+                <ImageView
                     android:id="@+id/navConfigIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="⚙️"
-                    android:textSize="20sp" />
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@drawable/ic_settings"
+                    android:tint="@color/text_muted" />
 
                 <TextView
                     android:id="@+id/navConfigLabel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Config"
-                    android:textSize="10sp"
-                    android:textColor="@color/text_muted" />
+                    android:layout_marginTop="2dp"
+                    android:text="Settings"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
             </LinearLayout>
 
         </LinearLayout>
@@ -203,25 +207,25 @@
             android:layout_width="match_parent"
             android:layout_height="120dp"
             android:background="@color/primary"
-            android:orientation="vertical"
             android:gravity="bottom"
+            android:orientation="vertical"
             android:padding="16dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="📈 ExpenseOS"
+                android:textColor="#FFFFFF"
                 android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="#FFFFFF" />
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/drawerBookName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="12sp"
+                android:layout_marginTop="2dp"
                 android:textColor="#CCFFFFFF"
-                android:layout_marginTop="2dp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Drawer menu items -->
@@ -241,12 +245,12 @@
                     android:id="@+id/drawerBooks"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="18dp"
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
-                    android:focusable="true">
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="18dp">
 
                     <TextView
                         android:layout_width="28dp"
@@ -257,10 +261,10 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
                         android:text="Cash Books"
-                        android:textSize="14sp"
                         android:textColor="@color/text"
-                        android:layout_marginStart="12dp" />
+                        android:textSize="14sp" />
                 </LinearLayout>
 
                 <!-- Settings -->
@@ -268,12 +272,12 @@
                     android:id="@+id/drawerSettings"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="18dp"
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
-                    android:focusable="true">
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="18dp">
 
                     <TextView
                         android:layout_width="28dp"
@@ -284,30 +288,30 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
                         android:text="Settings"
-                        android:textSize="14sp"
                         android:textColor="@color/text"
-                        android:layout_marginStart="12dp" />
+                        android:textSize="14sp" />
                 </LinearLayout>
 
                 <!-- Divider -->
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="@color/border"
-                    android:layout_marginVertical="6dp" />
+                    android:layout_marginVertical="6dp"
+                    android:background="@color/border" />
 
                 <!-- Audit Log -->
                 <LinearLayout
                     android:id="@+id/drawerAudit"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="18dp"
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
-                    android:focusable="true">
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="18dp">
 
                     <TextView
                         android:layout_width="28dp"
@@ -318,10 +322,10 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
                         android:text="Audit Log"
-                        android:textSize="14sp"
                         android:textColor="@color/text"
-                        android:layout_marginStart="12dp" />
+                        android:textSize="14sp" />
                 </LinearLayout>
 
             </LinearLayout>
@@ -331,11 +335,11 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ExpenseOS v1.0"
-            android:textSize="11sp"
-            android:textColor="@color/text_hint"
             android:gravity="center"
-            android:padding="12dp" />
+            android:padding="12dp"
+            android:text="ExpenseOS v1.0"
+            android:textColor="@color/text_hint"
+            android:textSize="11sp" />
     </LinearLayout>
 
 </androidx.drawerlayout.widget.DrawerLayout>

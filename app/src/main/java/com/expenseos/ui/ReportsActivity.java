@@ -19,8 +19,11 @@ import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
 import com.github.mikephil.charting.formatter.ValueFormatter;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class ReportsActivity extends AppCompatActivity {
 
@@ -43,10 +46,20 @@ public class ReportsActivity extends AppCompatActivity {
     }
 
     private void loadStats() {
-        double income = dao.sumByType("INCOME", bookId);
-        double expense = dao.sumByType("EXPENSE", bookId);
-        double balance = income - expense;
-        double savings = income > 0 ? (balance / income) * 100 : 0;
+        BigDecimal income = dao.sumByType("INCOME", bookId);
+        BigDecimal expense = dao.sumByType("EXPENSE", bookId);
+        if (income == null) income = BigDecimal.ZERO;
+        if (expense == null) expense = BigDecimal.ZERO;
+
+        BigDecimal balance = income.subtract(expense);
+
+        BigDecimal savings = BigDecimal.ZERO;
+
+        if (income.compareTo(BigDecimal.ZERO) > 0) {
+            savings = balance
+                    .divide(income, 2, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
 
         ((TextView) findViewById(R.id.tvRptIncome)).setText("₹" + String.format("%,.2f", income));
         ((TextView) findViewById(R.id.tvRptExpense)).setText("₹" + String.format("%,.2f", expense));
@@ -55,16 +68,18 @@ public class ReportsActivity extends AppCompatActivity {
     }
 
     private void loadBarChart() {
-        List<String[]> monthly = dao.monthlyTrend(6, bookId);
+        List<Map<String, Object>> monthly = dao.monthlyTrend(6, bookId);
         List<BarEntry> incEntries = new ArrayList<>();
         List<BarEntry> expEntries = new ArrayList<>();
         List<String> labels = new ArrayList<>();
 
         for (int i = 0; i < monthly.size(); i++) {
-            String[] row = monthly.get(i);
-            labels.add(row[0]);
-            incEntries.add(new BarEntry(i, Float.parseFloat(row[1])));
-            expEntries.add(new BarEntry(i, Float.parseFloat(row[2])));
+            Map<String, Object> row = monthly.get(i);
+            labels.add((String) row.get("month"));
+            BigDecimal income = (BigDecimal) row.get("income");
+            BigDecimal expense = (BigDecimal) row.get("expense");
+            incEntries.add(new BarEntry(i, income != null ? income.floatValue() : 0f));
+            expEntries.add(new BarEntry(i, expense != null ? expense.floatValue() : 0f));
         }
 
         BarDataSet incSet = new BarDataSet(incEntries, "Income");
@@ -91,7 +106,7 @@ public class ReportsActivity extends AppCompatActivity {
     }
 
     private void loadPieChart() {
-        List<String[]> cats = dao.expenseByCategory(bookId);
+        List<Map<String, Object>> cats = dao.expenseByCategory(bookId);
         List<PieEntry> entries = new ArrayList<>();
         int[] colors = {
                 Color.parseColor("#2563EB"), Color.parseColor("#DC2626"),
@@ -99,8 +114,11 @@ public class ReportsActivity extends AppCompatActivity {
                 Color.parseColor("#7C3AED"), Color.parseColor("#0891B2")
         };
 
-        for (String[] row : cats)
-            entries.add(new PieEntry(Float.parseFloat(row[1]), row[0]));
+        for (Map<String, Object> row : cats) {
+            BigDecimal total = (BigDecimal) row.get("total");
+            String name = (String) row.get("name");
+            entries.add(new PieEntry(total != null ? total.floatValue() : 0f, name));
+        }
 
         PieDataSet ds = new PieDataSet(entries, "Expenses");
         ds.setColors(colors);

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- OPTION A — Cash In / Cash Out bar lives inside the fragment itself,
+     as the last item in the vertical layout. Since the fragment already
+     fills the space above the bottom nav bar, this bar naturally sits
+     right above it — same visual result as the old app screenshot.
+     No changes needed in HomeFragment.java: btn_add_income / btn_add_expense
+     IDs are reused, just restyled + relabeled. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -110,36 +116,8 @@
         </androidx.cardview.widget.CardView>
     </LinearLayout>
 
-    <!-- Action buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
-        android:paddingBottom="8dp">
-
-        <Button
-            android:id="@+id/btn_add_income"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="4dp"
-            android:text="+ Income"
-            android:backgroundTint="#1B8A1B"
-            android:textColor="@android:color/white"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btn_add_expense"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="+ Expense"
-            android:backgroundTint="#C0392B"
-            android:textColor="@android:color/white"
-            android:textSize="13sp" />
-    </LinearLayout>
+    <!-- Top "+ Income" / "+ Expense" buttons REMOVED — replaced by the
+         fixed Cash In / Cash Out bar at the bottom of this screen. -->
 
     <!-- Sync buttons -->
     <LinearLayout
@@ -187,4 +165,42 @@
             android:paddingHorizontal="8dp"
             android:paddingBottom="8dp" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- ── Fixed Cash In / Cash Out bar (old-app style) ──────────────── -->
+    <!-- IDs kept the SAME as before (btn_add_income / btn_add_expense) so
+         HomeFragment.java's existing click listeners keep working untouched. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:orientation="horizontal"
+        android:background="@android:color/white"
+        android:elevation="8dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp">
+
+        <Button
+            android:id="@+id/btn_add_income"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="+ CASH IN"
+            android:backgroundTint="#1B8A1B"
+            android:textColor="@android:color/white"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_add_expense"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="− CASH OUT"
+            android:backgroundTint="#C0392B"
+            android:textColor="@android:color/white"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </LinearLayout>
+<!--    </LinearLayout>-->

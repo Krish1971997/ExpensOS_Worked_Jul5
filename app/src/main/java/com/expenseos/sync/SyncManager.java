@@ -28,11 +28,33 @@ import java.util.concurrent.Executors;
 public class SyncManager {
 
     public interface SyncCallback {
-        default void onProgress(String message) {}
+        default void onProgress(String message) {
+        }
+
         void onComplete(boolean success, String summary);
     }
 
 
+    // Android's core-library desugaring does NOT support the
+    // java.sql.Timestamp <-> java.time bridge methods (toLocalDateTime(),
+    // valueOf(LocalDateTime)) even on apps targeting old minSdk — they
+    // compile on a plain JVM but fail on Android. Route through
+    // string/epoch-millis conversions instead.
+    private static final java.time.format.DateTimeFormatter TS_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static java.time.LocalDateTime timestampToLocalDateTime(Timestamp ts) {
+        if (ts == null) return null;
+        String s = ts.toString(); // "yyyy-MM-dd HH:mm:ss.fffffffff"
+        if (s.length() > 19) s = s.substring(0, 19);
+        return java.time.LocalDateTime.parse(s, TS_FMT);
+    }
+
+    private static Timestamp localDateTimeToTimestamp(java.time.LocalDateTime dt) {
+        if (dt == null) return null;
+        long millis = dt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        return new Timestamp(millis);
+    }
 
     private static SyncManager instance;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -125,7 +147,7 @@ public class SyncManager {
                 String sql = "SELECT t.*, c.name as cat_name, sc.name as subcat_name " +
                         "FROM transactions t " +
                         "LEFT JOIN categories c ON t.category_id = c.id " +
-                        "LEFT JOIN sub_categories sc ON t.sub_categories_id = sc.sub_categories_id " +
+                        "LEFT JOIN sub_categories sc ON t.sub_categories_id = sc.id " +
                         "WHERE t.book_id=? ORDER BY t.txn_datetime DESC";
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setInt(1, bookId);
@@ -136,7 +158,7 @@ public class SyncManager {
                         t.setType("EXPENSE".equals(rs.getString("type"))
                                 ? Transaction.Type.EXPENSE : Transaction.Type.INCOME);
                         Timestamp ts = rs.getTimestamp("txn_datetime");
-                        t.setTxnDatetime(ts != null ? ts.toString() : "");
+                        t.setDateTime(timestampToLocalDateTime(ts));
                         t.setAmount(rs.getBigDecimal("amount"));
                         t.setCategoryId(rs.getInt("category_id"));
                         t.setCategoryName(rs.getString("cat_name"));
@@ -199,7 +221,7 @@ public class SyncManager {
                 "RETURNING id";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, t.getType().name());
-            ps.setString(2, t.getTxnDatetime());
+            ps.setTimestamp(2, localDateTimeToTimestamp(t.getDateTime()));
             ps.setBigDecimal(3, t.getAmount());
             ps.setInt(4, t.getCategoryId());
             ps.setInt(5, t.getSubCategoryId());
@@ -216,7 +238,7 @@ public class SyncManager {
                 "amount=?, category_id=?, sub_categories_id=?, note=? WHERE id=?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, t.getType().name());
-            ps.setString(2, t.getTxnDatetime());
+            ps.setTimestamp(2, localDateTimeToTimestamp(t.getDateTime()));
             ps.setBigDecimal(3, t.getAmount());
             ps.setInt(4, t.getCategoryId());
             ps.setInt(5, t.getSubCategoryId());

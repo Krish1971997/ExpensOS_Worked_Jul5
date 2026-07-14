@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -15,7 +16,8 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
-import com.expenseos.db.SyncManager;
+import com.expenseos.sync.SyncManager;
+import com.expenseos.ui.home.HomeFragment;
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -24,12 +26,10 @@ public class HomeActivity extends AppCompatActivity {
     private DrawerLayout drawerLayout;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // Bottom nav item ids
     private static final int NAV_HOME = 0;
     private static final int NAV_REPORTS = 1;
     private static final int NAV_BACKUP = 2;
     private static final int NAV_CONFIG = 3;
-
     private int currentNav = NAV_HOME;
 
     @Override
@@ -41,7 +41,6 @@ public class HomeActivity extends AppCompatActivity {
         bookId = prefs.getInt("active_book_id", 0);
         bookName = prefs.getString("active_book_name", "");
 
-        // If no book selected → go to book selector
         if (bookId <= 0) {
             startActivity(new Intent(this, MainActivity.class));
             finish();
@@ -56,7 +55,7 @@ public class HomeActivity extends AppCompatActivity {
         setupDrawer();
         setupSync();
 
-        // Default tab: Home
+        // Load HOME tab by default
         loadTab(NAV_HOME);
     }
 
@@ -72,6 +71,7 @@ public class HomeActivity extends AppCompatActivity {
         currentNav = tab;
         updateNavHighlight(tab);
 
+        // ── Use HomeFragment / ReportsFragment / BackupFragment / ConfigFragment
         Fragment frag;
         switch (tab) {
             case NAV_REPORTS:
@@ -84,50 +84,49 @@ public class HomeActivity extends AppCompatActivity {
                 frag = new ConfigFragment();
                 break;
             default:
-                frag = new DashboardFragment();
-                break;
+                frag = new HomeFragment();
+                break; // ← HomeFragment (not DashboardFragment)
         }
 
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragmentContainer, frag)
-                .commit();
+        getSupportFragmentManager().beginTransaction().replace(R.id.fragmentContainer, frag).commit();
     }
 
     private void updateNavHighlight(int tab) {
-        // Reset all labels to muted
-        int[][] navSets = {
-                {R.id.navHomeLabel, NAV_HOME},
-                {R.id.navReportsLabel, NAV_REPORTS},
-                {R.id.navBackupLabel, NAV_BACKUP},
-                {R.id.navConfigLabel, NAV_CONFIG}
-        };
-        for (int[] set : navSets) {
+        int[][] navLabelSets = {{R.id.navHomeLabel, NAV_HOME}, {R.id.navReportsLabel, NAV_REPORTS}, {R.id.navBackupLabel, NAV_BACKUP}, {R.id.navConfigLabel, NAV_CONFIG}};
+        for (int[] set : navLabelSets) {
             TextView lbl = findViewById(set[0]);
-            lbl.setTextColor(getResources().getColor(
-                    set[1] == tab ? R.color.primary : R.color.text_muted, null));
+            if (lbl != null)
+                lbl.setTextColor(getResources().getColor(set[1] == tab ? R.color.primary : R.color.text_muted, null));
+        }
+
+        int[][] navIconSets = {{R.id.navHomeIcon, NAV_HOME}, {R.id.navReportsIcon, NAV_REPORTS}, {R.id.navBackupIcon, NAV_BACKUP}, {R.id.navConfigIcon, NAV_CONFIG}};
+        for (int[] set : navIconSets) {
+            android.widget.ImageView icon = findViewById(set[0]);
+            if (icon != null)
+                icon.setColorFilter(getResources().getColor(set[1] == tab ? R.color.primary : R.color.text_muted, null));
         }
     }
 
     // ── Side Drawer ───────────────────────────────────────
     private void setupDrawer() {
-        findViewById(R.id.btnHamburger).setOnClickListener(v ->
-                drawerLayout.openDrawer(GravityCompat.START));
+        View btnHamburger = findViewById(R.id.btnHamburger);
+        if (btnHamburger != null)
+            btnHamburger.setOnClickListener(v -> drawerLayout.openDrawer(GravityCompat.START));
 
-        // Books → go to book selector
-        findViewById(R.id.drawerBooks).setOnClickListener(v -> {
+        View drawerBooks = findViewById(R.id.drawerBooks);
+        if (drawerBooks != null) drawerBooks.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, MainActivity.class));
         });
 
-        // Settings → categories / sub-categories
-        findViewById(R.id.drawerSettings).setOnClickListener(v -> {
+        View drawerSettings = findViewById(R.id.drawerSettings);
+        if (drawerSettings != null) drawerSettings.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, SettingsActivity.class));
         });
 
-        // Audit Log
-        findViewById(R.id.drawerAudit).setOnClickListener(v -> {
+        View drawerAudit = findViewById(R.id.drawerAudit);
+        if (drawerAudit != null) drawerAudit.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, AuditLogActivity.class));
         });
@@ -136,28 +135,43 @@ public class HomeActivity extends AppCompatActivity {
     // ── Sync Button ───────────────────────────────────────
     private void setupSync() {
         Button btnSync = findViewById(R.id.btnSync);
+        if (btnSync == null) return;
+
         btnSync.setOnClickListener(v -> {
             btnSync.setEnabled(false);
             btnSync.setText("Syncing…");
-            SyncManager.sync(this, new SyncManager.SyncCallback() {
-                @Override
-                public void onSuccess(String msg) {
-                    mainHandler.post(() -> {
-                        btnSync.setEnabled(true);
-                        btnSync.setText("⟳ Sync");
-                        Toast.makeText(HomeActivity.this, msg, Toast.LENGTH_SHORT).show();
-                        // Refresh current fragment
-                        loadTab(currentNav);
-                    });
-                }
 
+            // Chain push (syncToCloud) then pull (fetchFromCloud) — the real
+            // SyncManager singleton doesn't expose one combined "sync" call.
+            SyncManager.get().syncToCloud(this, new SyncManager.SyncCallback() {
                 @Override
-                public void onError(String err) {
-                    mainHandler.post(() -> {
-                        btnSync.setEnabled(true);
-                        btnSync.setText("⟳ Sync");
-                        Toast.makeText(HomeActivity.this,
-                                "Sync failed: " + err, Toast.LENGTH_LONG).show();
+                public void onComplete(boolean pushOk, String pushSummary) {
+                    if (!pushOk) {
+                        mainHandler.post(() -> {
+                            btnSync.setEnabled(true);
+                            btnSync.setText("⟳ Sync");
+                            Toast.makeText(HomeActivity.this, "Sync failed: " + pushSummary, Toast.LENGTH_LONG).show();
+                        });
+                        return;
+                    }
+
+                    SyncManager.get().fetchFromCloud(HomeActivity.this, new SyncManager.SyncCallback() {
+                        @Override
+                        public void onComplete(boolean pullOk, String pullSummary) {
+                            mainHandler.post(() -> {
+                                btnSync.setEnabled(true);
+                                btnSync.setText("⟳ Sync");
+                                if (pullOk) {
+                                    Toast.makeText(HomeActivity.this, pushSummary + " | " + pullSummary, Toast.LENGTH_SHORT).show();
+                                    // Refresh current fragment — do NOT call loadTab() — causes page jump
+                                    Fragment cur = getSupportFragmentManager().findFragmentById(R.id.fragmentContainer);
+                                    if (cur instanceof HomeFragment)
+                                        ((HomeFragment) cur).refreshData();
+                                } else {
+                                    Toast.makeText(HomeActivity.this, "Sync failed: " + pullSummary, Toast.LENGTH_LONG).show();
+                                }
+                            });
+                        }
                     });
                 }
             });
@@ -166,10 +180,8 @@ public class HomeActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+        if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START))
             drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            super.onBackPressed();
-        }
+        else super.onBackPressed();
     }
 }

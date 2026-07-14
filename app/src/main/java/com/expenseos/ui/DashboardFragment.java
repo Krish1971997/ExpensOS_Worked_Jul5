@@ -20,6 +20,7 @@ import com.expenseos.dao.TransactionDao;
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.Transaction;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public class DashboardFragment extends Fragment {
@@ -67,9 +68,9 @@ public class DashboardFragment extends Fragment {
     }
 
     private void loadData(View v) {
-        double income = dao.sumByType("INCOME", bookId);
-        double expense = dao.sumByType("EXPENSE", bookId);
-        double balance = income - expense;
+        BigDecimal income = dao.sumByType("INCOME", bookId);
+        BigDecimal expense = dao.sumByType("EXPENSE", bookId);
+        BigDecimal balance = income.subtract(expense);
 
         ((TextView) v.findViewById(R.id.tvDashIncome)).setText("₹" + String.format("%,.2f", income));
         ((TextView) v.findViewById(R.id.tvDashExpense)).setText("₹" + String.format("%,.2f", expense));
@@ -82,10 +83,10 @@ public class DashboardFragment extends Fragment {
         tvSync.setText("⚠ " + unsynced + " pending sync");
 
         // Recent 5 transactions
-        List<Transaction> recent = dao.findRecent(bookId);
+        List<Transaction> recent = dao.findAll(null, 1, 5, bookId);
         RecyclerView rv = v.findViewById(R.id.rvDashRecent);
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
-        rv.setAdapter(new TransactionAdapter(recent, txn -> {
+        rv.setAdapter(new TransactionAdapter(requireContext(), recent, null, txn -> {
             Intent i = new Intent(requireContext(), TransactionActivity.class);
             i.putExtra("id", txn.getId());
             startActivity(i);

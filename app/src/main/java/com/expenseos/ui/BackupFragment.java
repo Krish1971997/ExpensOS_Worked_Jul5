@@ -18,7 +18,7 @@ import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
 import com.expenseos.db.LocalDB;
-import com.expenseos.db.SyncManager;
+import com.expenseos.sync.SyncManager;
 
 public class BackupFragment extends Fragment {
 
@@ -74,27 +74,36 @@ public class BackupFragment extends Fragment {
         btnFullSync.setText("Syncing…");
         showStatus("⏳ Connecting to Neon DB…", null);
 
-        // ── SyncManager runs on its own ExecutorService ─────
-        SyncManager.sync(requireContext(), new SyncManager.SyncCallback() {
+        // ── SyncManager singleton: chain push (syncToCloud) then pull (fetchFromCloud) ─────
+        SyncManager.get().syncToCloud(requireContext(), new SyncManager.SyncCallback() {
             @Override
-            public void onSuccess(String msg) {
-                mainHandler.post(() -> {
-                    // Guard: fragment still attached?
-                    if (!isAdded() || getView() == null) return;
-                    btnFullSync.setEnabled(true);
-                    btnFullSync.setText("⟳ Sync to Cloud (Push + Pull)");
-                    showStatus("✓ " + msg, true);
-                    loadLocalStats(); // refresh counts
-                });
-            }
+            public void onComplete(boolean pushOk, String pushSummary) {
+                if (!isAdded() || getView() == null) return;
 
-            @Override
-            public void onError(String err) {
-                mainHandler.post(() -> {
-                    if (!isAdded() || getView() == null) return;
+                if (!pushOk) {
                     btnFullSync.setEnabled(true);
                     btnFullSync.setText("⟳ Sync to Cloud (Push + Pull)");
-                    showStatus("✗ Sync failed: " + err, false);
+                    showStatus("✗ Push failed: " + pushSummary, false);
+                    return;
+                }
+
+                showStatus("⏳ Pushed. Pulling latest from cloud…", null);
+
+                SyncManager.get().fetchFromCloud(requireContext(), new SyncManager.SyncCallback() {
+                    @Override
+                    public void onComplete(boolean pullOk, String pullSummary) {
+                        mainHandler.post(() -> {
+                            if (!isAdded() || getView() == null) return;
+                            btnFullSync.setEnabled(true);
+                            btnFullSync.setText("⟳ Sync to Cloud (Push + Pull)");
+                            if (pullOk) {
+                                showStatus("✓ " + pushSummary + " | " + pullSummary, true);
+                            } else {
+                                showStatus("✗ Pull failed: " + pullSummary, false);
+                            }
+                            loadLocalStats(); // refresh counts
+                        });
+                    }
                 });
             }
         });

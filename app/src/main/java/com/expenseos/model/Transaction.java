@@ -1,24 +1,53 @@
 package com.expenseos.model;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class Transaction {
-
-    public enum Type {INCOME, EXPENSE}
+    public enum Type {
+        INCOME, EXPENSE
+    }
 
     private int id;
     private Type type;
-    private String txnDatetime;   // stored as ISO string locally
+    private LocalDateTime dateTime;
     private BigDecimal amount;
     private int categoryId;
     private String categoryName;
-    private int subCategoryId;
-    private String subCategoryName;
     private String note;
+    private int subcategoryid;
+    private String subCategoryName;
     private int bookId;
-    private boolean synced;        // local-only flag
+    private boolean synced;          // false = pending sync (show amber dot)
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private Map<String, String> customValues = new LinkedHashMap<>();
 
-    // ── Getters / Setters ────────────────────────────────────
+    public Transaction() {
+    }
+
+    public String getFormattedDate() {
+        if (dateTime == null)
+            return "";
+        return dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
+    }
+
+    public String getFormattedDateTime() {
+        if (dateTime == null)
+            return "";
+        return dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm"));
+    }
+
+    public String getFormattedTime() {
+        if (dateTime == null)
+            return "";
+        return dateTime.format(DateTimeFormatter.ofPattern("hh:mm a"));
+    }
+
+    // Getters / Setters
     public int getId() {
         return id;
     }
@@ -35,68 +64,81 @@ public class Transaction {
         this.type = type;
     }
 
-    public String getTxnDatetime() {
-        return txnDatetime;
+    public LocalDateTime getDateTime() {
+        return dateTime;
     }
 
-    public void setTxnDatetime(String d) {
-        this.txnDatetime = d;
+    public void setDateTime(LocalDateTime dateTime) {
+        this.dateTime = dateTime;
     }
 
     public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal a) {
-        this.amount = a;
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 
     public int getCategoryId() {
         return categoryId;
     }
 
-    public void setCategoryId(int c) {
-        this.categoryId = c;
+    public void setCategoryId(int categoryId) {
+        this.categoryId = categoryId;
     }
 
     public String getCategoryName() {
         return categoryName;
     }
 
-    public void setCategoryName(String s) {
-        this.categoryName = s;
-    }
-
-    public int getSubCategoryId() {
-        return subCategoryId;
-    }
-
-    public void setSubCategoryId(int s) {
-        this.subCategoryId = s;
-    }
-
-    public String getSubCategoryName() {
-        return subCategoryName;
-    }
-
-    public void setSubCategoryName(String s) {
-        this.subCategoryName = s;
+    public void setCategoryName(String categoryName) {
+        this.categoryName = categoryName;
     }
 
     public String getNote() {
         return note;
     }
 
-    public void setNote(String n) {
-        this.note = n;
+    public void setNote(String note) {
+        this.note = note;
+    }
+
+    public int getSubCategoryId() {
+        return subcategoryid;
+    }
+
+    public void setSubCategoryId(int subcategoryid) {
+        this.subcategoryid = subcategoryid;
+    }
+
+
+    public String getSubCategoryName() {
+        return subCategoryName;
+    }
+
+    public void setSubCategoryName(String subCategoryName) {
+        this.subCategoryName = subCategoryName;
     }
 
     public int getBookId() {
         return bookId;
     }
 
-    public void setBookId(int b) {
-        this.bookId = b;
+    public void setBookId(int bookId) {
+        this.bookId = bookId;
+    }
+
+    public Map<String, String> getCustomValues() {
+        return customValues;
+    }
+
+    public void setCustomValues(Map<String, String> customValues) {
+        this.customValues = customValues;
+    }
+
+    public void addCustomValue(String key, String value) {
+        this.customValues.put(key, value);
     }
 
     public boolean isSynced() {
@@ -107,9 +149,11 @@ public class Transaction {
         this.synced = s;
     }
 
-    public String getAmountFormatted() {
-        if (amount == null) return "₹0.00";
-        String sign = (type == Type.INCOME) ? "+" : "-";
-        return sign + "₹" + amount.toPlainString();
+    public String getFormattedAmount() {
+        if (amount == null)
+            return "₹0.00";
+        java.text.DecimalFormat df = new java.text.DecimalFormat("#,##0.00");
+        return "₹" + df.format(amount);
     }
+
 }

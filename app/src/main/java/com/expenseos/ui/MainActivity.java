@@ -1,90 +1,266 @@
 package com.expenseos.ui;
 
+import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.PopupMenu;
+import android.widget.Switch;
+import android.widget.TextView;
+import android.widget.Toast;
 
-import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
-import androidx.core.view.GravityCompat;
-import androidx.drawerlayout.widget.DrawerLayout;
-import androidx.navigation.NavController;
-import androidx.navigation.fragment.NavHostFragment;
-import androidx.navigation.ui.AppBarConfiguration;
-import androidx.navigation.ui.NavigationUI;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
+import com.expenseos.dao.CashBookDao;
+import com.expenseos.model.CashBook;
 import com.expenseos.util.AppConfig;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.navigation.NavigationView;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
-    private NavController navController;
-    private DrawerLayout drawerLayout;
+    private CashBookDao dao;
+    private List<CashBook> books;
+    private String search = null;
+    private String sort = null; // null=updated, name_asc, balance_desc, balance_asc, created
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    protected void onCreate(Bundle s) {
+        super.onCreate(s);
         setContentView(R.layout.activity_main);
+        dao = new CashBookDao(this);
 
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
+        // Settings
+        findViewById(R.id.btnSettings).setOnClickListener(v ->
+                startActivity(new Intent(this, SettingsActivity.class)));
 
-        drawerLayout = findViewById(R.id.drawer_layout);
-        NavigationView sideNav = findViewById(R.id.side_navigation_view);
+        // New Book
+        findViewById(R.id.btnNewBook).setOnClickListener(v -> showNewBookDialog());
 
-        // Bottom navigation
-        BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
-        NavHostFragment navHostFragment = (NavHostFragment)
-                getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
-        navController = navHostFragment.getNavController();
-
-        // Bottom nav destinations
-        AppBarConfiguration appBarConfig = new AppBarConfiguration.Builder(
-                R.id.nav_home, R.id.nav_reports,
-                R.id.nav_backup, R.id.nav_configuration)
-                .setOpenableLayout(drawerLayout)
-                .build();
-        NavigationUI.setupWithNavController(toolbar, navController, appBarConfig);
-        NavigationUI.setupWithNavController(bottomNav, navController);
-
-        // Side drawer (Settings, Books)
-        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
-                this, drawerLayout, toolbar,
-                R.string.nav_open, R.string.nav_close);
-        drawerLayout.addDrawerListener(toggle);
-        toggle.syncState();
-
-        sideNav.setNavigationItemSelectedListener(item -> {
-            int id = item.getItemId();
-            if (id == R.id.nav_settings) {
-                navController.navigate(R.id.nav_configuration);
-            } else if (id == R.id.nav_books) {
-                navController.navigate(R.id.nav_books);
-            } else if (id == R.id.nav_console) {
-                navController.navigate(R.id.nav_console);
+        // Search bar
+        EditText etSearch = findViewById(R.id.etBookSearch);
+        etSearch.addTextChangedListener(new TextWatcher() {
+            public void afterTextChanged(Editable e) {
+                search = e.toString().trim().isEmpty() ? null : e.toString().trim();
+                loadBooks();
             }
-            drawerLayout.closeDrawer(GravityCompat.START);
-            return true;
+
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
         });
 
-        // Update toolbar subtitle with active book name
-        updateBookLabel();
+        // Sort button
+        findViewById(R.id.btnBookSort).setOnClickListener(v -> showSortDialog());
+
+        loadBooks();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadBooks();
+    }
+
+    private void loadBooks() {
+        books = dao.findAll(search, sort);
+        RecyclerView rv = findViewById(R.id.rvBooks);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        rv.setAdapter(new BookAdapter());
+    }
+
+    // ── Sort dialog ───────────────────────────────────────
+    private void showSortDialog() {
+        String[] opts = {"Last Updated", "Name (A-Z)", "Balance (High→Low)",
+                "Balance (Low→High)", "Last Created"};
+        String[] keys = {null, "name_asc", "balance_desc", "balance_asc", "created"};
+        int cur = 0;
+        for (int i = 0; i < keys.length; i++)
+            if ((keys[i] == null && sort == null) || (keys[i] != null && keys[i].equals(sort))) {
+                cur = i;
+                break;
+            }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Sort Books")
+                .setSingleChoiceItems(opts, cur, null)
+                .setPositiveButton("Apply", (d, w) -> {
+                    int sel = ((AlertDialog) d).getListView().getCheckedItemPosition();
+                    sort = keys[Math.max(0, sel)];
+                    loadBooks();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    // ── New book dialog ───────────────────────────────────
+    private void showNewBookDialog() {
+        View v = LayoutInflater.from(this).inflate(R.layout.dialog_new_book, null);
+        EditText etName = v.findViewById(R.id.et_book_name);
+        EditText etDesc = v.findViewById(R.id.et_book_desc);
+        new AlertDialog.Builder(this)
+                .setTitle("New Cash Book")
+                .setView(v)
+                .setPositiveButton("Create & Open", (d, w) -> {
+                    String name = etName.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    int id = (int) dao.insert(name, etDesc.getText().toString().trim());
+                    openBook(id, name);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void openBook(int id, String name) {
+        // Guard: check active flag
+        CashBook b = dao.findById(id);
+        if (b != null && !b.isActive()) {
+            Toast.makeText(this,
+                    "This book is inactive. Edit it to activate.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        getSharedPreferences("expenseos_prefs", MODE_PRIVATE).edit()
+                .putInt("active_book_id", id)
+                .putString("active_book_name", name)
+                .apply();
+        startActivity(new Intent(this, HomeActivity.class));
+    }
+
+    // ── Inner RecyclerView adapter ────────────────────────
+    // NOTE: item_book.xml was redesigned to a single net-amount row with a
+    // per-item menu button (btn_book_menu) instead of separate income/expense
+    // text views and separate Open/Edit buttons. This adapter was updated to
+    // match: tap the row to open, tap the menu (⋮) for Open/Edit options.
+    class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
+
+        class VH extends RecyclerView.ViewHolder {
+            View row;
+            TextView tvName, tvCreated, tvActiveBadge, tvNet;
+            ImageButton btnMenu;
+
+            VH(View v) {
+                super(v);
+                row = v.findViewById(R.id.row_book_item);
+                tvName = v.findViewById(R.id.tv_book_name);
+                tvCreated = v.findViewById(R.id.tv_book_created);
+                tvActiveBadge = v.findViewById(R.id.tv_book_active);
+                tvNet = v.findViewById(R.id.tv_book_net);
+                btnMenu = v.findViewById(R.id.btn_book_menu);
+            }
+        }
+
+        @Override
+        public VH onCreateViewHolder(android.view.ViewGroup p, int t) {
+            return new VH(LayoutInflater.from(p.getContext())
+                    .inflate(R.layout.item_book, p, false));
+        }
+
+        @Override
+        public void onBindViewHolder(VH h, int pos) {
+            CashBook b = books.get(pos);
+            Map<String, BigDecimal> sum = dao.getSummary(b.getId());
+            BigDecimal income = sum.getOrDefault("income", BigDecimal.ZERO);
+            BigDecimal expense = sum.getOrDefault("expense", BigDecimal.ZERO);
+            BigDecimal net = income.subtract(expense);
+
+            h.tvName.setText(b.getName());
+            h.tvCreated.setText(b.getFormattedDate() != null ? b.getFormattedDate() : "");
+
+            boolean negative = net.signum() < 0;
+            h.tvNet.setText((negative ? "-₹" : "₹") + String.format("%,.2f", net.abs()));
+            h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
+
+            // Active badge — item_book.xml just shows/hides it (green pill), no INACTIVE state built in
+            h.tvActiveBadge.setVisibility(b.isActive() ? View.VISIBLE : View.GONE);
+
+            // Row tap = open (only if active)
+            h.row.setOnClickListener(v -> {
+                if (b.isActive()) {
+                    openBook(b.getId(), b.getName());
+                } else {
+                    Toast.makeText(MainActivity.this,
+                            "This book is inactive. Edit it to activate.",
+                            Toast.LENGTH_SHORT).show();
+                }
+            });
+
+            // Menu button = Open / Edit
+            h.btnMenu.setOnClickListener(v -> {
+                PopupMenu popup = new PopupMenu(MainActivity.this, v);
+                popup.getMenu().add(0, 1, 0, "Open");
+                popup.getMenu().add(0, 2, 1, "Edit");
+                popup.setOnMenuItemClickListener(item -> {
+                    if (item.getItemId() == 1) {
+                        if (b.isActive()) {
+                            openBook(b.getId(), b.getName());
+                        } else {
+                            Toast.makeText(MainActivity.this,
+                                    "This book is inactive. Edit it to activate.",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                        return true;
+                    } else if (item.getItemId() == 2) {
+                        showEditDialog(b);
+                        return true;
+                    }
+                    return false;
+                });
+                popup.show();
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return books.size();
+        }
+    }
+
+    // ── Edit book dialog ──────────────────────────────────
+    private void showEditDialog(CashBook b) {
+        View v = LayoutInflater.from(this).inflate(R.layout.dialog_edit_book, null);
+        EditText etName = v.findViewById(R.id.etEditBookName);
+        EditText etDesc = v.findViewById(R.id.etEditBookDesc);
+        Switch swActive = v.findViewById(R.id.swEditBookActive);
+
+        etName.setText(b.getName());
+        etDesc.setText(b.getDescription() != null ? b.getDescription() : "");
+        swActive.setChecked(b.isActive());
+
+        new AlertDialog.Builder(this)
+                .setTitle("Edit Cash Book")
+                .setView(v)
+                .setPositiveButton("Save", (d, w) -> {
+                    String name = etName.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    dao.update(b.getId(), name,
+                            etDesc.getText().toString().trim(),
+                            swActive.isChecked());
+                    loadBooks();
+                    Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     public void updateBookLabel() {
         String bookName = AppConfig.get(this).getActiveBookName();
         if (getSupportActionBar() != null) {
             getSupportActionBar().setSubtitle("● " + bookName);
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            drawerLayout.closeDrawer(GravityCompat.START);
-        } else {
-            super.onBackPressed();
         }
     }
 }
