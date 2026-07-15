@@ -18,7 +18,8 @@
             android:textStyle="bold"
             android:textColor="#222"
             android:layout_marginBottom="12dp" />
-        <!-- Summary cards row -->
+
+        <!-- ═══ All-time summary cards ═══ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -160,7 +161,133 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
         </LinearLayout>
-        <!-- Monthly bar chart -->
+
+        <!-- ═══ Month selector (new — mirrors reports.jsp month-bar) ═══ -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="10dp">
+
+                <ImageButton
+                    android:id="@+id/btn_prev_month"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Previous month"
+                    android:src="@android:drawable/ic_media_previous" />
+
+                <Spinner
+                    android:id="@+id/spinner_month"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <Spinner
+                    android:id="@+id/spinner_year"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <ImageButton
+                    android:id="@+id/btn_next_month"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Next month"
+                    android:src="@android:drawable/ic_media_next" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ═══ Selected month summary strip (new) ═══ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Selected Month"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#444"
+            android:layout_marginBottom="6dp" />
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            app:cardCornerRadius="10dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="10dp"
+                android:weightSum="4">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="INCOME" android:textSize="9sp" android:textColor="#666" />
+                    <TextView android:id="@+id/tv_month_income" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
+                        android:textStyle="bold" android:textColor="#1B8A1B" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="EXPENSE" android:textSize="9sp" android:textColor="#666" />
+                    <TextView android:id="@+id/tv_month_expense" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
+                        android:textStyle="bold" android:textColor="#C0392B" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="NET" android:textSize="9sp" android:textColor="#666" />
+                    <TextView android:id="@+id/tv_month_net" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
+                        android:textStyle="bold" android:textColor="#1565C0" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="TXNS" android:textSize="9sp" android:textColor="#666" />
+                    <TextView android:id="@+id/tv_month_count" android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" android:text="0" android:textSize="13sp"
+                        android:textStyle="bold" android:textColor="#7B1FA2" />
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- ═══ Monthly bar chart (last 6 months trend, unchanged) ═══ -->
         <androidx.cardview.widget.CardView android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
@@ -188,7 +315,8 @@
                     android:layout_height="220dp" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
-        <!-- Pie charts row -->
+
+        <!-- ═══ Pie charts row (expense/income by category — for selected month) ═══ -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

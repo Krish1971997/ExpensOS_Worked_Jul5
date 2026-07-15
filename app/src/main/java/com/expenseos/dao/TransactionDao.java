@@ -225,7 +225,57 @@ public class TransactionDao {
                 list.add(mapRow(c));
         }
         loadCustomValues(list);
+        attachRunningBalances(list, f.getBookId());
         return list;
+    }
+
+    // ── RUNNING BALANCE ────────────────────────────────────
+    // Sets Transaction.runningBalance = cumulative (income - expense) total,
+    // computed in chronological (oldest -> newest) order, matching the old
+    // app's behaviour: the balance shown next to a transaction is the book's
+    // total AFTER that transaction was posted.
+    //
+    // `list` itself is left in whatever order the caller's sort/filter
+    // produced (e.g. newest-first for the UI) — only the field values are
+    // set, via the same object references, so this is safe to call after
+    // the query regardless of display order.
+    //
+    // NOTE: only correct when the filter is scoped to a single book
+    // (bookId != null). If bookId is null (viewing across all books),
+    // a single running balance doesn't mean much — this method skips the
+    // calculation in that case and leaves runningBalance null.
+    private void attachRunningBalances(List<Transaction> list, Integer bookId) {
+        if (list.isEmpty() || bookId == null || bookId <= 0)
+            return;
+
+        try {
+            List<Transaction> chronological = new ArrayList<>(list);
+            chronological.sort((a, b) -> {
+                if (a.getDateTime() == null && b.getDateTime() == null) return 0;
+                if (a.getDateTime() == null) return -1; // nulls first, defensive only — shouldn't normally happen
+                if (b.getDateTime() == null) return 1;
+                int cmp = a.getDateTime().compareTo(b.getDateTime());
+                return cmp != 0 ? cmp : Integer.compare(a.getId(), b.getId());
+            });
+
+            // TODO: if CashBook has an opening balance field, start from that
+            // instead of ZERO, e.g. BigDecimal running = cashBookDao.findById(bookId).getOpeningBalance();
+            BigDecimal running = BigDecimal.ZERO;
+            for (Transaction t : chronological) {
+                if (t.getAmount() == null) {
+                    Log.w(TAG, "attachRunningBalances: txn id=" + t.getId() + " has null amount, skipping");
+                    continue;
+                }
+                running = t.getType() == Transaction.Type.INCOME
+                        ? running.add(t.getAmount())
+                        : running.subtract(t.getAmount());
+                t.setRunningBalance(running);
+            }
+        } catch (Exception e) {
+            // Never let a running-balance bug break the transaction list itself —
+            // worst case the balance column is blank, not the whole screen.
+            Log.e(TAG, "attachRunningBalances() failed: " + e.getMessage(), e);
+        }
     }
 
     public int countByFilter(TransactionFilter f) {

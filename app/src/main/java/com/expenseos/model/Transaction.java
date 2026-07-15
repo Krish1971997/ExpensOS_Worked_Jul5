@@ -26,6 +26,10 @@ public class Transaction {
     private LocalDateTime updatedAt;
     private Map<String, String> customValues = new LinkedHashMap<>();
 
+    // Cumulative book balance as of this transaction (chronological order).
+    // Populated by TransactionDao.findByFilter() — not stored in the DB.
+    private BigDecimal runningBalance;
+
     public Transaction() {
     }
 
@@ -147,6 +151,14 @@ public class Transaction {
 
     public void setSynced(boolean s) {
         this.synced = s;
+    }
+
+    public BigDecimal getRunningBalance() {
+        return runningBalance;
+    }
+
+    public void setRunningBalance(BigDecimal runningBalance) {
+        this.runningBalance = runningBalance;
     }
 
     public String getFormattedAmount() {

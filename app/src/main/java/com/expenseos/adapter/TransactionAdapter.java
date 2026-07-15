@@ -185,13 +185,13 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         // Note
         h.tvNote.setText(t.getNote() != null ? t.getNote() : "");
 
-        // Running balance — populated by the DAO/service layer via
-        // Transaction.setRunningBalance(...) before this list is passed in.
-//        if (t.getRunningBalance() != null) {
-//            h.tvBalance.setText("Balance: " + t.getRunningBalance().toPlainString());
-//        } else {
-//            h.tvBalance.setText("");
-//        }
+//         Running balance — populated by the DAO/service layer via
+//         Transaction.setRunningBalance(...) before this list is passed in.
+        if (t.getRunningBalance() != null) {
+            h.tvBalance.setText("Balance: " + t.getRunningBalance().toPlainString());
+        } else {
+            h.tvBalance.setText("");
+        }
 
         // Sync pending dot — small amber indicator if not synced
         h.tvSyncDot.setVisibility(t.isSynced() ? View.GONE : View.VISIBLE);

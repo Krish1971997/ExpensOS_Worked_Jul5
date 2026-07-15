@@ -4,12 +4,15 @@ import android.app.AlertDialog;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -28,6 +31,7 @@ import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Category;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
+import com.expenseos.model.TransactionFilter;
 import com.expenseos.sync.SyncManager;
 import com.expenseos.util.AppConfig;
 
@@ -54,6 +58,12 @@ public class HomeFragment extends Fragment {
     private TransactionAdapter adapter;
     private List<Transaction> transactions = new ArrayList<>();
 
+    private EditText etSearch;
+    private ImageButton btnFilter;
+
+    // Persists across searches/filter-dialog opens for this fragment instance.
+    private final TransactionFilter currentFilter = new TransactionFilter();
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View root = inflater.inflate(R.layout.fragment_home, container, false);
@@ -63,10 +73,49 @@ public class HomeFragment extends Fragment {
         tvNetBalance = root.findViewById(R.id.tv_net_balance);
         swipeRefresh = root.findViewById(R.id.swipe_refresh);
         rvTransactions = root.findViewById(R.id.rv_transactions);
+        etSearch = root.findViewById(R.id.etTxnSearch);
+        btnFilter = root.findViewById(R.id.btnTxnFilter);
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> showEditDialog(txn));
         rvTransactions.setAdapter(adapter);
+
+        currentFilter.setPageSize(Integer.MAX_VALUE);
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int st, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                String q = e.toString().trim();
+                currentFilter.setNoteSearch(q.isEmpty() ? null : q);
+                loadTransactions();
+            }
+        });
+
+        btnFilter.setOnClickListener(v -> {
+            int bookId = AppConfig.get(requireContext()).getActiveBookId();
+            new TransactionFilterDialog(requireContext(), bookId, currentFilter, appliedFilter -> {
+                // keep noteSearch box in sync with whatever the dialog produced
+                // (dialog doesn't touch noteSearch, so this just re-applies our field)
+                appliedFilter.setNoteSearch(currentFilter.getNoteSearch());
+                currentFilter.setDateFrom(appliedFilter.getDateFrom());
+                currentFilter.setDateTo(appliedFilter.getDateTo());
+                currentFilter.setCategoryIds(appliedFilter.getCategoryIds());
+                currentFilter.setSubCategoryIds(appliedFilter.getSubCategoryIds());
+                currentFilter.setAmountOp1(appliedFilter.getAmountOp1());
+                currentFilter.setAmount1(appliedFilter.getAmount1());
+                currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
+                currentFilter.setAmount2(appliedFilter.getAmount2());
+                loadTransactions();
+            }).show();
+        });
 
         Button btnIncome = root.findViewById(R.id.btn_add_income);
         Button btnExpense = root.findViewById(R.id.btn_add_expense);
@@ -116,7 +165,10 @@ public class HomeFragment extends Fragment {
     private void loadTransactions() {
         int bookId = AppConfig.get(requireContext()).getActiveBookId();
         TransactionDao dao = new TransactionDao(requireContext());
-        List<Transaction> all = dao.findAll(null, 1, Integer.MAX_VALUE, bookId);
+
+        currentFilter.setBookId(bookId);
+        currentFilter.setType(null); // this screen always shows both income & expense
+        List<Transaction> all = dao.findByFilter(currentFilter);
 
         BigDecimal income = BigDecimal.ZERO, expense = BigDecimal.ZERO;
         for (Transaction t : all) {
@@ -132,7 +184,7 @@ public class HomeFragment extends Fragment {
 
         transactions.clear();
         transactions.addAll(all);
-        adapter.notifyDataSetChanged();
+        adapter.setData(transactions);
 
         // Update toolbar book label
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
@@ -175,11 +227,7 @@ public class HomeFragment extends Fragment {
             t.setType(type);
             t.setAmount(new BigDecimal(amtStr));
             t.setNote(etNote.getText().toString().trim());
-//            t.setDateTime(etDate.getText().toString().trim());
-//            String dt = t.getString(etDate.getText().toString().trim());
-//            if (dt != null) {
             t.setDateTime(LocalDateTime.parse(etDate.getText().toString().trim(), DATE_FMT));
-//            }
             t.setBookId(AppConfig.get(requireContext()).getActiveBookId());
 
             if (!cats.isEmpty() && spCategory.getSelectedItem() != null) {
@@ -237,7 +285,6 @@ public class HomeFragment extends Fragment {
 
             txn.setAmount(new BigDecimal(etAmount.getText().toString().trim()));
             txn.setNote(etNote.getText().toString().trim());
-//            txn.setTxnDatetime(etDate.getText().toString().trim());
             txn.setDateTime(LocalDateTime.parse(etDate.getText().toString().trim(), DATE_FMT));
             if (!cats.isEmpty() && spCategory.getSelectedItem() != null)
                 txn.setCategoryId(((Category) spCategory.getSelectedItem()).getId());
