@@ -7,8 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 6; // bumped: migrate devices stuck on v5 missing sub_categories_id
-
+    private static final int DB_VERSION = 9; // bumped: added transaction_receipts table
     private static LocalDB instance;
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -96,18 +95,41 @@ public class LocalDB extends SQLiteOpenHelper {
                 "updated_at TEXT DEFAULT (datetime('now')))");
 
         // audit_log
-        db.execSQL("CREATE TABLE IF NOT EXISTS audit_log (" +
-                "id           INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "action       TEXT NOT NULL," +
-                "table_name   TEXT," +
-                "record_id    INTEGER," +
-                "description  TEXT," +
-                "created_at   TEXT DEFAULT (datetime('now')))");
+        db.execSQL("CREATE TABLE IF NOT EXISTS transaction_audit_log (" +
+                "id             INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                "action         TEXT NOT NULL," +
+                "changed_by     TEXT DEFAULT 'user'," +
+                "changed_at     TEXT DEFAULT (datetime('now'))," +
+                "field_name     TEXT," +
+                "old_value      TEXT," +
+                "new_value      TEXT," +
+                "note           TEXT," +
+                "created_at     TEXT DEFAULT (datetime('now'))," +
+                "updated_at     TEXT DEFAULT (datetime('now'))" +
+                ")");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_changed ON transaction_audit_log(changed_at DESC);");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_txn_id ON transaction_audit_log(transaction_id ASC);");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_transaction_audit_log_updated ON transaction_audit_log(updated_at ASC);");
+
+        // transaction_receipts — mirrors the Postgres transaction_receipts table
+        // (bytea -> BLOB, timestamp -> TEXT, ON DELETE CASCADE preserved)
+        db.execSQL("CREATE TABLE IF NOT EXISTS transaction_receipts (" +
+                "id             INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                "file_name      TEXT NOT NULL," +
+                "file_type      TEXT," +
+                "file_data      BLOB," +
+                "file_size      INTEGER," +
+                "uploaded_at    TEXT DEFAULT (datetime('now'))," +
+                "created_at     TEXT DEFAULT (datetime('now'))," +
+                "updated_at     TEXT DEFAULT (datetime('now')))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_receipts_txn ON transaction_receipts(transaction_id)");
 
         // Seed default categories
         String[] incomes = {"Salary", "Freelance", "Gift", "Other"};
         String[] expenses = {"Food", "Transport", "Merchandise",
-                "Healthcare", "Entertainment", "Education", "Other"};
+                "Health", "Entertainment", "Other","Snacks"};
         for (String c : incomes)
             db.execSQL("INSERT OR IGNORE INTO categories(name,type,book_id) VALUES('" + c + "','INCOME',NULL)");
         for (String c : expenses)
@@ -127,15 +149,6 @@ public class LocalDB extends SQLiteOpenHelper {
                     "value          TEXT," +
                     "UNIQUE(transaction_id,col_def_id))");
 
-            // audit_log missing-ஆ இருந்தா create பண்ணு
-            db.execSQL("CREATE TABLE IF NOT EXISTS audit_log (" +
-                    "id           INTEGER PRIMARY KEY AUTOINCREMENT," +
-                    "action       TEXT NOT NULL," +
-                    "table_name   TEXT," +
-                    "record_id    INTEGER," +
-                    "description  TEXT," +
-                    "created_at   TEXT DEFAULT (datetime('now')))");
-
             // updated_at missing-ஆ இருந்தா add பண்ணு
             try { db.execSQL("ALTER TABLE cash_books ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"); }
             catch (Exception ignored) {}
@@ -152,11 +165,48 @@ public class LocalDB extends SQLiteOpenHelper {
             try { db.execSQL("ALTER TABLE transactions ADD COLUMN sub_categories_id INTEGER REFERENCES sub_categories(id)"); }
             catch (Exception ignored) {}
         }
-    }
 
-    @Override
-    public void onOpen(SQLiteDatabase db) {
-        super.onOpen(db);
-        db.execSQL("PRAGMA foreign_keys = ON;");
+        // v6 → v7: add transaction_receipts for existing installs
+        if (oldV < 7) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS transaction_receipts (" +
+                    "id             INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                    "file_name      TEXT NOT NULL," +
+                    "file_type      TEXT," +
+                    "file_data      BLOB," +
+                    "file_size      INTEGER," +
+                    "uploaded_at    TEXT DEFAULT (datetime('now'))," +
+                    "created_at     TEXT DEFAULT (datetime('now'))," +
+                    "updated_at     TEXT DEFAULT (datetime('now')))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_receipts_txn ON transaction_receipts(transaction_id)");
+        }
+            if (oldV < 9) {
+                // Drop older simple audit log if it exists to avoid conflicts
+                db.execSQL("DROP TABLE IF EXISTS audit_log;");
+
+                // audit_log
+                db.execSQL("CREATE TABLE IF NOT EXISTS transaction_audit_log (" +
+                        "id             INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                        "action         TEXT NOT NULL," +
+                        "changed_by     TEXT DEFAULT 'user'," +
+                        "changed_at     TEXT DEFAULT (datetime('now'))," +
+                        "field_name     TEXT," +
+                        "old_value      TEXT," +
+                        "new_value      TEXT," +
+                        "note           TEXT," +
+                        "created_at     TEXT DEFAULT (datetime('now'))," +
+                        "updated_at     TEXT DEFAULT (datetime('now'))" +
+                        ")");
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_changed ON transaction_audit_log(changed_at DESC);");
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_txn_id ON transaction_audit_log(transaction_id ASC);");
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_transaction_audit_log_updated ON transaction_audit_log(updated_at ASC);");
+            }
+        }
+
+        @Override
+        public void onOpen(SQLiteDatabase db) {
+            super.onOpen(db);
+            db.execSQL("PRAGMA foreign_keys = ON;");
+        }
     }
-}

@@ -47,8 +47,9 @@ public class TransactionActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_transactions);
 
-        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-        bookId = prefs.getInt("active_book_id", 0);
+//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+//        bookId = prefs.getInt("active_book_id", 0);
+        bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
 

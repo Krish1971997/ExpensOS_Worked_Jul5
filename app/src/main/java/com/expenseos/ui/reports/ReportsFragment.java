@@ -96,9 +96,13 @@ public class ReportsFragment extends Fragment {
         bookId = AppConfig.get(requireContext()).getActiveBookId();
         db = LocalDatabase.get(requireContext()).getReadableDatabase();
 
-        Calendar now = Calendar.getInstance();
-        selYear = now.get(Calendar.YEAR);
-        selMonth = now.get(Calendar.MONTH) + 1; // Calendar month is 0-based
+        // Default to the most recent month that actually has transactions —
+        // using the device's real "today" here would leave the Selected
+        // Month card blank whenever the demo/test data doesn't reach the
+        // current real-world month.
+        int[] latest = getLatestMonthWithData();
+        selYear = latest[0];
+        selMonth = latest[1];
 
         setupMonthSelector();
         loadAllTimeSummary();
@@ -106,20 +110,46 @@ public class ReportsFragment extends Fragment {
         refreshSelectedMonth();
     }
 
+    // ── Finds latest year/month with a transaction, falls back to the
+    //    real calendar month if the active book has no data yet ──────────
+    private int[] getLatestMonthWithData() {
+        Cursor c = db.rawQuery(
+                "SELECT strftime('%Y', txn_datetime), strftime('%m', txn_datetime) " +
+                        "FROM transactions WHERE book_id=? AND is_deleted=0 " +
+                        "ORDER BY txn_datetime DESC LIMIT 1",
+                new String[]{String.valueOf(bookId)});
+        int y, m;
+        if (c.moveToFirst()) {
+            y = Integer.parseInt(c.getString(0));
+            m = Integer.parseInt(c.getString(1));
+        } else {
+            Calendar now = Calendar.getInstance();
+            y = now.get(Calendar.YEAR);
+            m = now.get(Calendar.MONTH) + 1; // Calendar month is 0-based
+        }
+        c.close();
+        return new int[]{y, m};
+    }
+
     // ── Month selector (mirrors reports.jsp's month-bar / prev-next links) ──
     private void setupMonthSelector() {
+        // Custom item layouts with explicit dark text — the default
+        // android.R.layout.simple_spinner_item inherits the app theme's
+        // textColorPrimary, which renders white-on-white on a light card
+        // and looks like the picker has no options / doesn't respond.
         ArrayAdapter<String> monthAdapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_item, MONTH_NAMES);
-        monthAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                R.layout.spinner_item_dark, MONTH_NAMES);
+        monthAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item_dark);
         spinnerMonth.setAdapter(monthAdapter);
         spinnerMonth.setSelection(selMonth - 1);
 
         int currentYear = Calendar.getInstance().get(Calendar.YEAR);
         List<String> years = new ArrayList<>();
-        for (int y = currentYear - 3; y <= currentYear + 1; y++) years.add(String.valueOf(y));
+        for (int y = Math.min(currentYear, selYear) - 3; y <= Math.max(currentYear, selYear) + 1; y++)
+            years.add(String.valueOf(y));
         ArrayAdapter<String> yearAdapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_item, years);
-        yearAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                R.layout.spinner_item_dark, years);
+        yearAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item_dark);
         spinnerYear.setAdapter(yearAdapter);
         spinnerYear.setSelection(years.indexOf(String.valueOf(selYear)));
 

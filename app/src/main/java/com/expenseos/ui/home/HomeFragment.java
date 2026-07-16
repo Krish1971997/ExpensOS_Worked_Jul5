@@ -60,6 +60,7 @@ public class HomeFragment extends Fragment {
 
     private EditText etSearch;
     private ImageButton btnFilter;
+    private TextView chipDate, chipCategory, chipSubCategory, chipAmount;
 
     // Persists across searches/filter-dialog opens for this fragment instance.
     private final TransactionFilter currentFilter = new TransactionFilter();
@@ -75,6 +76,10 @@ public class HomeFragment extends Fragment {
         rvTransactions = root.findViewById(R.id.rv_transactions);
         etSearch = root.findViewById(R.id.etTxnSearch);
         btnFilter = root.findViewById(R.id.btnTxnFilter);
+        chipDate = root.findViewById(R.id.chipDate);
+        chipCategory = root.findViewById(R.id.chipCategory);
+        chipSubCategory = root.findViewById(R.id.chipSubCategory);
+        chipAmount = root.findViewById(R.id.chipAmount);
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> showEditDialog(txn));
@@ -99,23 +104,11 @@ public class HomeFragment extends Fragment {
             }
         });
 
-        btnFilter.setOnClickListener(v -> {
-            int bookId = AppConfig.get(requireContext()).getActiveBookId();
-            new TransactionFilterDialog(requireContext(), bookId, currentFilter, appliedFilter -> {
-                // keep noteSearch box in sync with whatever the dialog produced
-                // (dialog doesn't touch noteSearch, so this just re-applies our field)
-                appliedFilter.setNoteSearch(currentFilter.getNoteSearch());
-                currentFilter.setDateFrom(appliedFilter.getDateFrom());
-                currentFilter.setDateTo(appliedFilter.getDateTo());
-                currentFilter.setCategoryIds(appliedFilter.getCategoryIds());
-                currentFilter.setSubCategoryIds(appliedFilter.getSubCategoryIds());
-                currentFilter.setAmountOp1(appliedFilter.getAmountOp1());
-                currentFilter.setAmount1(appliedFilter.getAmount1());
-                currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
-                currentFilter.setAmount2(appliedFilter.getAmount2());
-                loadTransactions();
-            }).show();
-        });
+        btnFilter.setOnClickListener(v -> openFilterDialog(0, false));
+        chipDate.setOnClickListener(v -> openFilterDialog(0, true));
+        chipCategory.setOnClickListener(v -> openFilterDialog(1, true));
+        chipSubCategory.setOnClickListener(v -> openFilterDialog(2, true));
+        chipAmount.setOnClickListener(v -> openFilterDialog(3, true));
 
         Button btnIncome = root.findViewById(R.id.btn_add_income);
         Button btnExpense = root.findViewById(R.id.btn_add_expense);
@@ -185,9 +178,76 @@ public class HomeFragment extends Fragment {
         transactions.clear();
         transactions.addAll(all);
         adapter.setData(transactions);
+        refreshFilterChips();
 
         // Update toolbar book label
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
+    }
+
+    // tab: 0=Date, 1=Category, 2=Sub Category, 3=Amount.
+    // singleField=true (chip tap) locks the dialog to just that tab;
+    // singleField=false (filter icon tap) shows the full tabbed dialog.
+    private void openFilterDialog(int tab, boolean singleField) {
+        int bookId = AppConfig.get(requireContext()).getActiveBookId();
+        new TransactionFilterDialog(requireContext(), bookId, currentFilter, tab, singleField, appliedFilter -> {
+            // keep noteSearch box in sync with whatever the dialog produced
+            // (dialog doesn't touch noteSearch, so this just re-applies our field)
+            appliedFilter.setNoteSearch(currentFilter.getNoteSearch());
+            currentFilter.setDateFrom(appliedFilter.getDateFrom());
+            currentFilter.setDateTo(appliedFilter.getDateTo());
+            currentFilter.setCategoryIds(appliedFilter.getCategoryIds());
+            currentFilter.setSubCategoryIds(appliedFilter.getSubCategoryIds());
+            currentFilter.setAmountOp1(appliedFilter.getAmountOp1());
+            currentFilter.setAmount1(appliedFilter.getAmount1());
+            currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
+            currentFilter.setAmount2(appliedFilter.getAmount2());
+            loadTransactions();
+        }).show();
+    }
+
+    // Updates each pill's label to reflect the active filter, e.g.
+    // "Date: This Month", "Category (2)", "Amount: >=10". Falls back to the
+    // plain field name when that field isn't filtered.
+    private void refreshFilterChips() {
+        // Date
+        if (currentFilter.getDateFrom() == null && currentFilter.getDateTo() == null) {
+            chipDate.setText("Date ▾");
+        } else if (currentFilter.getDateFrom() != null && currentFilter.getDateFrom().equals(currentFilter.getDateTo())) {
+            chipDate.setText("Date: " + currentFilter.getDateFrom() + " ▾");
+        } else {
+            chipDate.setText("Date: range ▾");
+        }
+
+        // Category
+        int catCount = currentFilter.getCategoryIds() != null ? currentFilter.getCategoryIds().size() : 0;
+        chipCategory.setText(catCount == 0 ? "Category ▾" : "Category (" + catCount + ") ▾");
+
+        // Sub Category
+        int subCount = currentFilter.getSubCategoryIds() != null ? currentFilter.getSubCategoryIds().size() : 0;
+        chipSubCategory.setText(subCount == 0 ? "Sub Category ▾" : "Sub Category (" + subCount + ") ▾");
+
+        // Amount
+        if (currentFilter.getAmount1() == null) {
+            chipAmount.setText("Amount ▾");
+        } else {
+            String label = currentFilter.getAmountOp1() + currentFilter.getAmount1().toPlainString();
+            if (currentFilter.getAmount2() != null)
+                label += " " + currentFilter.getAmountOp2() + currentFilter.getAmount2().toPlainString();
+            chipAmount.setText("Amount: " + label + " ▾");
+        }
+
+        int normalColor = getResources().getColor(R.color.text);
+        int activeColor = getResources().getColor(R.color.primary);
+        boolean dateActive = currentFilter.getDateFrom() != null || currentFilter.getDateTo() != null;
+        setChipActive(chipDate, dateActive, normalColor, activeColor);
+        setChipActive(chipCategory, catCount > 0, normalColor, activeColor);
+        setChipActive(chipSubCategory, subCount > 0, normalColor, activeColor);
+        setChipActive(chipAmount, currentFilter.getAmount1() != null, normalColor, activeColor);
+    }
+
+    private void setChipActive(TextView chip, boolean active, int normalColor, int activeColor) {
+        chip.setTextColor(active ? activeColor : normalColor);
+        chip.setTypeface(null, active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
     }
 
     private void showAddDialog(Transaction.Type type) {

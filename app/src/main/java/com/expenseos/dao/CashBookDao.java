@@ -43,11 +43,12 @@ public class CashBookDao {
      */
     public List<CashBook> findAll(String search, String sort) {
         StringBuilder sql = new StringBuilder(
-                "SELECT b.id, b.name, b.description, b.created_at, b.is_active," +
+                "SELECT b.id, b.name, b.description, b.created_at, t.updated_at, b.is_active," +
                         " COALESCE(t.income,0) - COALESCE(t.expense,0) AS net_balance" +
                         " FROM cash_books b" +
                         " LEFT JOIN (" +
-                        "   SELECT book_id," +
+                        "   SELECT book_id,  MAX(txn_datetime) as updated_at , " +
+//                        "MAX(GREATEST(created_at, updated_at)) AS updated_at, " +
                         "     SUM(CASE WHEN type='INCOME'  THEN amount ELSE 0 END) AS income," +
                         "     SUM(CASE WHEN type='EXPENSE' THEN amount ELSE 0 END) AS expense" +
                         "   FROM transactions GROUP BY book_id" +
@@ -65,7 +66,7 @@ public class CashBookDao {
             case "name_asc"     -> " ORDER BY b.name ASC";
             case "balance_desc" -> " ORDER BY net_balance DESC";
             case "balance_asc"  -> " ORDER BY net_balance ASC";
-            default             -> " ORDER BY b.created_at DESC";
+            default             -> " ORDER BY COALESCE(t.updated_at, b.created_at) DESC";
         };
         sql.append(order);
 
@@ -77,8 +78,8 @@ public class CashBookDao {
             b.setName(c.getString(1));
             b.setDescription(c.getString(2));
             b.setCreatedAt(c.getString(3));
-            b.setActive(c.getInt(4) == 1);
-            // index 5 = net_balance (not stored in model, used for sort only)
+            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));   // <-- new, index shifted
+            b.setActive(c.getInt(5) == 1);                          // <-- index shifted
             list.add(b);
         }
         c.close();
@@ -144,5 +145,28 @@ public class CashBookDao {
                 c.getString(c.getColumnIndexOrThrow("description")),
                 c.getString(c.getColumnIndexOrThrow("created_at")), // CashBook.createdAt is a String
                 c.getInt(c.getColumnIndexOrThrow("is_active")) == 1);
+    }
+
+    /**
+     * Force delete: removes all transactions + categories (scoped to this book) + the book itself.
+     * Call only after the user has explicitly confirmed via exact-name match.
+     */
+    /** Cascade delete: transactions → sub_categories(book-specific) → categories(book-specific) → the book itself. */
+    public void deleteCascade(int bookId) {
+        db.beginTransaction();
+        try {
+            // sub_categories under this book's categories
+            db.execSQL(
+                    "DELETE FROM sub_categories WHERE category_id IN (SELECT id FROM categories WHERE book_id=?)",
+                    new Object[]{bookId});
+            db.execSQL("DELETE FROM transaction_custom_values WHERE transaction_id IN " +
+                    "(SELECT id FROM transactions WHERE book_id=?)", new Object[]{bookId});
+            db.execSQL("DELETE FROM transactions WHERE book_id=?", new Object[]{bookId});
+            db.execSQL("DELETE FROM categories WHERE book_id=?", new Object[]{bookId});
+            db.execSQL("DELETE FROM cash_books WHERE id=?", new Object[]{bookId});
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 }

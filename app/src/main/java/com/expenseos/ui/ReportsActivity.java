@@ -35,8 +35,9 @@ public class ReportsActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_reports);
 
-        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-        bookId = prefs.getInt("active_book_id", 0);
+//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+//        int bookId = prefs.getInt("active_book_id", 0);
+        int bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
         dao = new TransactionDao(this);
 
         findViewById(R.id.btnBackReports).setOnClickListener(v -> finish());

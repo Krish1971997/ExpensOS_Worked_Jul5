@@ -49,6 +49,8 @@ public class TransactionFilterDialog extends Dialog {
     private final int bookId;
     private final TransactionFilter filter;
     private final OnApply onApply;
+    private final int initialTab;
+    private final boolean singleFieldMode;
 
     private TextView tabDate, tabCategory, tabSubCategory, tabAmount;
     private View panelDate, panelCategory, panelSubCategory, panelAmount;
@@ -72,10 +74,25 @@ public class TransactionFilterDialog extends Dialog {
     private String activeDatePreset = "all";
 
     public TransactionFilterDialog(Context ctx, int bookId, TransactionFilter currentFilter, OnApply onApply) {
+        this(ctx, bookId, currentFilter, 0, false, onApply);
+    }
+
+    // tab: 0=Date, 1=Category, 2=Sub Category, 3=Amount — used by the "Filter"
+    // icon button, opens the full dialog with all tabs visible.
+    public TransactionFilterDialog(Context ctx, int bookId, TransactionFilter currentFilter, int tab, OnApply onApply) {
+        this(ctx, bookId, currentFilter, tab, false, onApply);
+    }
+
+    // singleFieldMode=true hides the left tab list entirely, locking the
+    // dialog to just `tab`'s panel — used by the individual filter chips
+    // (e.g. tapping the "Date" chip only lets you pick a date, nothing else).
+    public TransactionFilterDialog(Context ctx, int bookId, TransactionFilter currentFilter, int tab, boolean singleFieldMode, OnApply onApply) {
         super(ctx);
         this.bookId = bookId;
         this.filter = copyOf(currentFilter);
         this.onApply = onApply;
+        this.initialTab = tab;
+        this.singleFieldMode = singleFieldMode;
     }
 
     private static TransactionFilter copyOf(TransactionFilter f) {
@@ -115,6 +132,13 @@ public class TransactionFilterDialog extends Dialog {
         wireDatePanel();
         wireAmountPanel();
         prefillFromFilter();
+
+        if (singleFieldMode) {
+            findViewById(R.id.tabListContainer).setVisibility(View.GONE);
+            findViewById(R.id.dividerTabs).setVisibility(View.GONE);
+            String[] titles = {"Date", "Category", "Sub Category", "Amount"};
+            ((TextView) findViewById(R.id.dialogTitle)).setText(titles[initialTab]);
+        }
 
         findViewById(R.id.btnFilterClose).setOnClickListener(v -> dismiss());
         findViewById(R.id.btnClearAll).setOnClickListener(v -> {
@@ -166,7 +190,7 @@ public class TransactionFilterDialog extends Dialog {
         tabCategory.setOnClickListener(v -> selectTab(1));
         tabSubCategory.setOnClickListener(v -> selectTab(2));
         tabAmount.setOnClickListener(v -> selectTab(3));
-        selectTab(0);
+        selectTab(initialTab);
     }
 
     private void selectTab(int index) {

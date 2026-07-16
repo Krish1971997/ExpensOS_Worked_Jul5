@@ -10,6 +10,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.Switch;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -51,14 +52,15 @@ public class BooksFragment extends Fragment {
         List<CashBook> books = new ArrayList<>();
         SQLiteDatabase db = LocalDatabase.get(requireContext()).getReadableDatabase();
         Cursor c = db.rawQuery(
-                "SELECT id, name, description, created_at, is_active FROM cash_books", null);
+                "SELECT id, name, description, created_at, updated_at, is_active FROM cash_books", null);
         while (c.moveToNext()) {
             CashBook b = new CashBook();
             b.setId(c.getInt(0));
             b.setName(c.getString(1));
             b.setDescription(c.getString(2));
             b.setCreatedAt(c.getString(3));
-            b.setActive(c.isNull(4) || c.getInt(4) == 1); // default active if column missing/null
+            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));
+            b.setActive(c.isNull(5) || c.getInt(5) == 1);
 
             // Calculate totals
             Cursor inc = db.rawQuery(
@@ -93,7 +95,8 @@ public class BooksFragment extends Fragment {
                     Toast.makeText(getContext(), "Switched to: " + book.getName(), Toast.LENGTH_SHORT).show();
                     loadBooks();
                 },
-                this::showEditBookDialog);
+                this::showEditBookDialog,
+                this::showDeleteBookDialog);   // <-- 4th param, new
         rvBooks.setAdapter(adapter);
     }
 
@@ -114,8 +117,9 @@ public class BooksFragment extends Fragment {
             cv.put("description", etDesc.getText().toString().trim());
             cv.put("created_at", nowTs());
             cv.put("is_active", 1);
-            LocalDatabase.get(requireContext()).getWritableDatabase()
+            long newId = LocalDatabase.get(requireContext()).getWritableDatabase()
                     .insert("cash_books", null, cv);
+            AppConfig.get(requireContext()).setActiveBook((int) newId, name);
             Toast.makeText(getContext(), "Book created (sync to push to cloud)", Toast.LENGTH_SHORT).show();
             loadBooks();
         });
@@ -174,5 +178,53 @@ public class BooksFragment extends Fragment {
 
     private String nowTs() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new java.util.Date());
+    }
+
+    private void showDeleteBookDialog(CashBook book) {
+        AlertDialog.Builder b = new AlertDialog.Builder(requireContext());
+        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_delete_book, null);
+        b.setView(v).setTitle("Delete " + book.getName() + " ?");
+
+        TextView tvMsg = v.findViewById(R.id.tvDeleteConfirmMsg);
+        EditText etConfirm = v.findViewById(R.id.etDeleteBookName);
+        tvMsg.setText("Please type " + book.getName() + " to confirm");
+
+        AlertDialog dialog = b.setPositiveButton("Delete", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            android.widget.Button deleteBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            deleteBtn.setEnabled(false);
+
+            etConfirm.addTextChangedListener(new android.text.TextWatcher() {
+                public void afterTextChanged(android.text.Editable s) {
+                    deleteBtn.setEnabled(s.toString().equals(book.getName()));
+                }
+
+                public void beforeTextChanged(CharSequence s, int a, int c, int cn) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b2, int c) {
+                }
+            });
+
+            deleteBtn.setOnClickListener(view -> {
+                new com.expenseos.dao.CashBookDao(requireContext()).deleteCascade(book.getId());
+
+                AppConfig cfg = AppConfig.get(requireContext());
+                if (cfg.getActiveBookId() == book.getId()) {
+                    cfg.setActiveBook(0, null);
+                    if (getActivity() instanceof MainActivity)
+                        ((MainActivity) getActivity()).updateBookLabel();
+                }
+
+                Toast.makeText(getContext(), "Book deleted", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                loadBooks();
+            });
+        });
+
+        dialog.show();
     }
 }

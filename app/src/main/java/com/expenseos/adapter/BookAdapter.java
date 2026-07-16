@@ -27,21 +27,32 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
         void onEdit(CashBook book);
     }
 
+    public interface OnBookDelete {
+        void onDelete(CashBook book);
+    }
+
     private final List<CashBook> data;
     private final int activeId;
     private final OnBookSelected openListener;
     private final OnBookEdit editListener;
 
-    public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener, OnBookEdit editListener) {
+    private final OnBookDelete deleteListener;
+
+    public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener, OnBookEdit editListener, OnBookDelete deleteListener) {
         this.data = data;
         this.activeId = activeId;
         this.openListener = openListener;
         this.editListener = editListener;
+        this.deleteListener = deleteListener;
     }
 
-    // Backward-compatible constructor (no edit callback)
+    // backward-compatible constructors — deleteListener null ஆ இருக்கும்
+    public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener, OnBookEdit editListener) {
+        this(data, activeId, openListener, editListener, null);
+    }
+
     public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener) {
-        this(data, activeId, openListener, null);
+        this(data, activeId, openListener, null, null);
     }
 
     @NonNull
@@ -55,6 +66,7 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
         CashBook b = data.get(pos);
         h.tvName.setText(b.getName());
         h.tvCreated.setText("Created: " + b.getFormattedDate());
+        h.tvCreated.setText(b.getStatusLabel());
 
         BigDecimal income = b.getTotalIncome() != null ? b.getTotalIncome() : BigDecimal.ZERO;
         BigDecimal expense = b.getTotalExpense() != null ? b.getTotalExpense() : BigDecimal.ZERO;
@@ -77,12 +89,16 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
             PopupMenu popup = new PopupMenu(v.getContext(), v);
             popup.getMenu().add(0, 1, 0, "Open");
             popup.getMenu().add(0, 2, 1, "Edit");
+            popup.getMenu().add(0, 3, 2, "Delete");   // <-- new
             popup.setOnMenuItemClickListener(item -> {
                 if (item.getItemId() == 1) {
                     if (canOpen && openListener != null) openListener.onOpen(b);
                     return true;
                 } else if (item.getItemId() == 2) {
                     if (editListener != null) editListener.onEdit(b);
+                    return true;
+                } else if (item.getItemId() == 3) {                     // <-- new
+                    if (deleteListener != null) deleteListener.onDelete(b);
                     return true;
                 }
                 return false;

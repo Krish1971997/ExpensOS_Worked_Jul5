@@ -100,7 +100,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Scheduler (was Reports) -->
+            <!-- Reports -->
             <LinearLayout
                 android:id="@+id/navReports"
                 android:layout_width="0dp"
@@ -117,7 +117,7 @@
                     android:id="@+id/navReportsIcon"
                     android:layout_width="22dp"
                     android:layout_height="22dp"
-                    android:src="@drawable/ic_schedule"
+                    android:src="@drawable/ic_reports"
                     android:tint="@color/text_muted" />
 
                 <TextView
@@ -125,7 +125,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Scheduler"
+                    android:text="Reports"
                     android:textColor="@color/text_muted"
                     android:textSize="10sp" />
             </LinearLayout>

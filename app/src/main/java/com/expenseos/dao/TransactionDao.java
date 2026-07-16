@@ -643,7 +643,7 @@ public class TransactionDao {
             sql.append(" AND t.amount ").append(TransactionFilter.safeOp(f.getAmountOp2())).append(" ?");
             params.add(f.getAmount2().toString());
         }
-        // Note + custom field LIKE (SQLite LIKE is case-insensitive for ASCII, standing in for ILIKE)
+        // Note + amount +custom field LIKE (SQLite LIKE is case-insensitive for ASCII, standing in for ILIKE)
         if (f.getNoteSearch() != null && !f.getNoteSearch().isBlank()) {
             String[] split = f.getNoteSearch().split(";");
             if (split.length > 0)
@@ -653,10 +653,11 @@ public class TransactionDao {
                 String like = "%" + searchWord + "%";
                 if (i > 0)
                     sql.append(" OR ");
-                sql.append(" (t.note LIKE ? OR EXISTS ("
+                sql.append(" (t.note LIKE ? OR t.amount LIKE ? OR EXISTS ("
                         + "  SELECT 1 FROM transaction_custom_values tcv"
                         + "  WHERE tcv.transaction_id = t.id AND tcv.value LIKE ?"
                         + ")) ");
+                params.add(like);
                 params.add(like);
                 params.add(like);
             }
@@ -684,6 +685,14 @@ public class TransactionDao {
                 + "FROM transactions t "
                 + "LEFT JOIN categories c ON t.category_id=c.id "
                 + "LEFT JOIN sub_categories sc ON t.sub_categories_id=sc.id";
+    }
+
+    // Public entry point for callers that need to persist custom field
+    // values outside of insert() — update() doesn't touch custom values on
+    // its own, since a transaction's custom fields can be edited without
+    // any of its other columns changing.
+    public void saveCustomValues(int txnId, Map<String, String> values) {
+        insertCustomValues(txnId, values);
     }
 
     // Requires a UNIQUE(transaction_id, col_def_id) index on transaction_custom_values.

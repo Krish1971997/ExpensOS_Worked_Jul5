@@ -48,8 +48,9 @@ public class BulkAddActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_bulk_add);
 
-        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-        bookId = prefs.getInt("active_book_id", 0);
+//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+//        int bookId = prefs.getInt("active_book_id", 0);
+        int bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
 

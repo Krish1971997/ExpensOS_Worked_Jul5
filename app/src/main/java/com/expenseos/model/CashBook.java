@@ -15,6 +15,7 @@ public class CashBook {
     private String name;
     private String description;
     private String createdAt;
+    private String updatedAt;
     private boolean active = true;
 
     // Populated separately (per-book summary query), not always present
@@ -36,8 +37,7 @@ public class CashBook {
      * "2026-07-11" out of "2026-07-11 14:32:00" — mirrors the web view's book.formattedDate
      */
     public String getFormattedDate() {
-        if (createdAt == null || createdAt.isEmpty())
-            return "";
+        if (createdAt == null || createdAt.isEmpty()) return "";
         return createdAt.substring(0, Math.min(10, createdAt.length()));
     }
 
@@ -80,6 +80,14 @@ public class CashBook {
         this.createdAt = createdAt;
     }
 
+    public String getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(String updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     public boolean isActive() {
         return active;
     }
@@ -102,5 +110,18 @@ public class CashBook {
 
     public void setTotalExpense(BigDecimal totalExpense) {
         this.totalExpense = totalExpense;
+    }
+
+    /** "Updated on Jul 13 2026" or fallback "Created on ..." — mirrors reference app */
+    public String getStatusLabel() {
+        String src = (updatedAt != null && !updatedAt.isEmpty()) ? updatedAt : createdAt;
+        String prefix = (updatedAt != null && !updatedAt.isEmpty()) ? "Updated on " : "Created on ";
+        if (src == null || src.isEmpty()) return "";
+        try {
+            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(src.replace(" ", "T"));
+            return prefix + dt.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd yyyy"));
+        } catch (Exception e) {
+            return prefix + getFormattedDate();
+        }
     }
 }
