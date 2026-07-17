@@ -13,16 +13,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
 import com.expenseos.adapter.TransactionAdapter;
-import com.expenseos.dao.CategoryDao;
-import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.dao.TransactionDao;
-import com.expenseos.model.Category;
-import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,7 +25,6 @@ public class TransactionActivity extends AppCompatActivity {
 
     private int bookId;
     private TransactionDao txnDao;
-    private CategoryDao catDao;
 
     // Filter state
     private String filterType = null;
@@ -51,7 +45,6 @@ public class TransactionActivity extends AppCompatActivity {
 //        bookId = prefs.getInt("active_book_id", 0);
         bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
         txnDao = new TransactionDao(this);
-        catDao = new CategoryDao(this);
 
         // If launched with type (from Home + Income/Expense buttons)
         String initType = getIntent().getStringExtra("type");
@@ -301,70 +294,11 @@ public class TransactionActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ── Add Transaction dialog ────────────────────────────
+    // ── Add/Edit now open the dedicated full-screen entry activity
+    // instead of a popup dialog ────────────────────────────
     private void showAddDialog(String type) {
-        View v = LayoutInflater.from(this).inflate(R.layout.dialog_add_transaction, null);
-        boolean isIncome = "INCOME".equals(type);
-
-        EditText etAmount = v.findViewById(R.id.et_amount);
-        EditText etNote = v.findViewById(R.id.et_note);
-        EditText etDateTime = v.findViewById(R.id.et_date);
-        Spinner spCat = v.findViewById(R.id.sp_category);
-        Spinner spSubCat = v.findViewById(R.id.sp_subcategory);
-
-        etDateTime.setText(LocalDateTime.now()
-                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-
-        // Load categories (common + book-specific)
-        List<Category> cats = catDao.findByType(type, bookId);
-        spCat.setAdapter(new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, cats));
-
-        SubCategoryDao scDao = new SubCategoryDao(this);
-        spCat.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            public void onItemSelected(AdapterView<?> p, View vw, int pos, long id) {
-                int catId = cats.get(pos).getId();
-                List<SubCategory> subs = scDao.findByCategoryId(catId);
-                List<SubCategory> withNone = new ArrayList<>();
-                withNone.add(new SubCategory(0, "None", catId));
-                withNone.addAll(subs);
-                spSubCat.setAdapter(new ArrayAdapter<>(
-                        TransactionActivity.this,
-                        android.R.layout.simple_spinner_item, withNone));
-            }
-
-            public void onNothingSelected(AdapterView<?> p) {
-            }
-        });
-
-        new AlertDialog.Builder(this)
-                .setTitle(isIncome ? "+ Add Income" : "+ Add Expense")
-                .setView(v)
-                .setPositiveButton(isIncome ? "Save Income" : "Save Expense", (d, w) -> {
-                    String amtStr = etAmount.getText().toString().trim();
-                    if (amtStr.isEmpty() || spCat.getSelectedItem() == null) {
-                        Toast.makeText(this, "Amount and Category required",
-                                Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    Transaction t = new Transaction();
-                    t.setType(Transaction.Type.valueOf(type));
-                    t.setAmount(new BigDecimal(amtStr));
-                    t.setCategoryId(((Category) spCat.getSelectedItem()).getId());
-                    SubCategory sc = (SubCategory) spSubCat.getSelectedItem();
-                    if (sc != null && sc.getId() > 0) t.setSubCategoryId(sc.getId());
-                    t.setNote(etNote.getText().toString().trim());
-//                    t.setDateTime(etDateTime.getText().toString().trim());
-                    String dt = etDateTime.getText().toString().trim();
-                    if (dt != null) {
-                        t.setDateTime(LocalDateTime.parse(dt, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-                    }
-                    t.setBookId(bookId);
-                    txnDao.insert(t);
-                    loadData();
-                    Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+        Intent i = new Intent(this, com.expenseos.ui.TransactionEntryActivity.class);
+        i.putExtra("type", type);
+        startActivity(i);
     }
 }

@@ -1,19 +1,15 @@
 package com.expenseos.ui.home;
 
-import android.app.AlertDialog;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,31 +22,17 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.expenseos.ui.MainActivity;
 import com.expenseos.R;
 import com.expenseos.adapter.TransactionAdapter;
-import com.expenseos.dao.LocalDatabase;
 import com.expenseos.dao.TransactionDao;
-import com.expenseos.model.Category;
-import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
 import com.expenseos.sync.SyncManager;
 import com.expenseos.util.AppConfig;
 
 import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class HomeFragment extends Fragment {
-
-    // et_date/et_amount fields are filled as "yyyy-MM-dd HH:mm:ss" (space
-    // separator) — LocalDateTime.parse(String) with no formatter expects
-    // strict ISO-8601 (a literal 'T'), so it must be parsed with this
-    // explicit pattern to match.
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private TextView tvTotalIncome, tvTotalExpense, tvNetBalance;
     private RecyclerView rvTransactions;
@@ -82,7 +64,11 @@ public class HomeFragment extends Fragment {
         chipAmount = root.findViewById(R.id.chipAmount);
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
-        adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> showEditDialog(txn));
+        adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> {
+            Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
+            i.putExtra("txnId", txn.getId());
+            startActivity(i);
+        });
         rvTransactions.setAdapter(adapter);
 
         currentFilter.setPageSize(Integer.MAX_VALUE);
@@ -115,8 +101,8 @@ public class HomeFragment extends Fragment {
         Button btnSyncCloud = root.findViewById(R.id.btn_sync_cloud);
         Button btnFetchCloud = root.findViewById(R.id.btn_fetch_cloud);
 
-        btnIncome.setOnClickListener(v -> showAddDialog(Transaction.Type.INCOME));
-        btnExpense.setOnClickListener(v -> showAddDialog(Transaction.Type.EXPENSE));
+        btnIncome.setOnClickListener(v -> openEntryScreen(Transaction.Type.INCOME));
+        btnExpense.setOnClickListener(v -> openEntryScreen(Transaction.Type.EXPENSE));
 
         btnSyncCloud.setOnClickListener(v -> {
             btnSyncCloud.setEnabled(false);
@@ -250,137 +236,18 @@ public class HomeFragment extends Fragment {
         chip.setTypeface(null, active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
     }
 
-    private void showAddDialog(Transaction.Type type) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_add_transaction, null);
-        builder.setView(dialogView);
-        builder.setTitle("+ Add " + (type == Transaction.Type.INCOME ? "Income" : "Expense"));
 
-        EditText etAmount = dialogView.findViewById(R.id.et_amount);
-        EditText etNote = dialogView.findViewById(R.id.et_note);
-        EditText etDate = dialogView.findViewById(R.id.et_date);
-        Spinner spCategory = dialogView.findViewById(R.id.sp_category);
-        Spinner spSubCat = dialogView.findViewById(R.id.sp_subcategory);
-
-        // Set today
-        etDate.setText(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
-
-        // Load categories (filter by type)
-        List<Category> cats = loadCategories(type);
-        ArrayAdapter<Category> catAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, cats);
-        catAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spCategory.setAdapter(catAdapter);
-
-        // Load sub-categories
-        List<SubCategory> subCats = loadSubCategories();
-        ArrayAdapter<SubCategory> subAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, subCats);
-        subAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spSubCat.setAdapter(subAdapter);
-
-        builder.setPositiveButton("Save", (dlg, which) -> {
-            String amtStr = etAmount.getText().toString().trim();
-            if (amtStr.isEmpty()) {
-                Toast.makeText(getContext(), "Enter amount", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Transaction t = new Transaction();
-            t.setType(type);
-            t.setAmount(new BigDecimal(amtStr));
-            t.setNote(etNote.getText().toString().trim());
-            t.setDateTime(LocalDateTime.parse(etDate.getText().toString().trim(), DATE_FMT));
-            t.setBookId(AppConfig.get(requireContext()).getActiveBookId());
-
-            if (!cats.isEmpty() && spCategory.getSelectedItem() != null) {
-                Category cat = (Category) spCategory.getSelectedItem();
-                t.setCategoryId(cat.getId());
-            }
-            if (!subCats.isEmpty() && spSubCat.getSelectedItem() != null) {
-                SubCategory sub = (SubCategory) spSubCat.getSelectedItem();
-                t.setSubCategoryId(sub.getId());
-            }
-
-            new TransactionDao(requireContext()).insert(t);
-            Toast.makeText(getContext(), "Saved locally. Sync to upload.", Toast.LENGTH_SHORT).show();
-            loadTransactions();
-        });
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
+    private void openEntryScreen(Transaction.Type type) {
+        Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
+        i.putExtra("type", type.name());
+        startActivity(i);
     }
 
-    private void showEditDialog(Transaction txn) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_add_transaction, null);
-        builder.setView(dialogView);
-        builder.setTitle("Edit Transaction");
-
-        EditText etAmount = dialogView.findViewById(R.id.et_amount);
-        EditText etNote = dialogView.findViewById(R.id.et_note);
-        EditText etDate = dialogView.findViewById(R.id.et_date);
-        Spinner spCategory = dialogView.findViewById(R.id.sp_category);
-        Spinner spSubCat = dialogView.findViewById(R.id.sp_subcategory);
-
-        etAmount.setText(txn.getAmount() != null ? txn.getAmount().toPlainString() : "");
-        etNote.setText(txn.getNote());
-        etDate.setText(txn.getDateTime() != null ? txn.getDateTime().format(DATE_FMT) : "");
-
-        List<Category> cats = loadCategories(txn.getType());
-        ArrayAdapter<Category> catAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, cats);
-        catAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spCategory.setAdapter(catAdapter);
-        for (int i = 0; i < cats.size(); i++) {
-            if (cats.get(i).getId() == txn.getCategoryId()) {
-                spCategory.setSelection(i);
-                break;
-            }
-        }
-
-        List<SubCategory> subCats = loadSubCategories();
-        ArrayAdapter<SubCategory> subAdapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, subCats);
-        subAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spSubCat.setAdapter(subAdapter);
-
-        builder.setPositiveButton("Save", (dlg, which) -> {
-            TransactionDao dao = new TransactionDao(requireContext());
-            Transaction oldT = dao.findById(txn.getId());
-
-            txn.setAmount(new BigDecimal(etAmount.getText().toString().trim()));
-            txn.setNote(etNote.getText().toString().trim());
-            txn.setDateTime(LocalDateTime.parse(etDate.getText().toString().trim(), DATE_FMT));
-            if (!cats.isEmpty() && spCategory.getSelectedItem() != null)
-                txn.setCategoryId(((Category) spCategory.getSelectedItem()).getId());
-
-            dao.update(oldT, txn);
-            Toast.makeText(getContext(), "Updated locally.", Toast.LENGTH_SHORT).show();
-            loadTransactions();
-        });
-        builder.setNeutralButton("Delete", (dlg, which) -> new AlertDialog.Builder(requireContext()).setTitle("Delete?").setMessage("Delete this transaction?").setPositiveButton("Delete", (d2, w2) -> {
-            new TransactionDao(requireContext()).delete(txn.getId());
-            loadTransactions();
-        }).setNegativeButton("Cancel", null).show());
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
-    }
-
-    private List<Category> loadCategories(Transaction.Type type) {
-        List<Category> list = new ArrayList<>();
-        SQLiteDatabase db = LocalDatabase.get(requireContext()).getReadableDatabase();
-        String typeStr = (type == Transaction.Type.INCOME) ? "INCOME" : "EXPENSE";
-        Cursor c = db.rawQuery("SELECT id, name, type FROM categories WHERE type=?", new String[]{typeStr});
-        while (c.moveToNext()) {
-            list.add(new Category(c.getInt(0), c.getString(1), c.getString(2)));
-        }
-        c.close();
-        return list;
-    }
-
-    private List<SubCategory> loadSubCategories() {
-        List<SubCategory> list = new ArrayList<>();
-        SQLiteDatabase db = LocalDatabase.get(requireContext()).getReadableDatabase();
-        Cursor c = db.rawQuery("SELECT id, name, category_id FROM sub_categories", null);
-        while (c.moveToNext()) {
-            list.add(new SubCategory(c.getInt(0), c.getString(1), c.getInt(2), ""));
-        }
-        c.close();
-        return list;
+    // Refresh totals/list when returning from TransactionEntryActivity
+    // (add, edit, or delete-then-back all land here).
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadTransactions();
     }
 }
