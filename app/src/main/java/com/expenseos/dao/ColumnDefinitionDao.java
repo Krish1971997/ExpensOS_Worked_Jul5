@@ -47,6 +47,16 @@ public class ColumnDefinitionDao {
         db.insertWithOnConflict("column_definitions", null, cv, SQLiteDatabase.CONFLICT_IGNORE);
     }
 
+    // Renames the display label only — col_key is deliberately left
+    // unchanged, since TransactionDao looks up existing custom values by
+    // col_key. Changing it on rename would orphan every value already
+    // saved against this field.
+    public void update(int id, String newName) {
+        ContentValues cv = new ContentValues();
+        cv.put("col_name", newName.trim());
+        db.update("column_definitions", cv, "id = ?", new String[]{String.valueOf(id)});
+    }
+
     public void delete(int id) {
         db.beginTransaction();
         try {

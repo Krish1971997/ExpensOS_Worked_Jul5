@@ -24,6 +24,12 @@
     <color name="text_hint">#94A3B8</color>
     <color name="white">#FFFFFF</color>
 
+    <!-- Aliases used by some newer layouts (activity_transaction_entry.xml etc.) -->
+    <color name="background">#F8FAFC</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="text_primary">#1E293B</color>
+    <color name="text_secondary">#64748B</color>
+
     <!-- Transaction type badges -->
     <color name="income_badge_bg">#DCFCE7</color>
     <color name="income_badge_text">#15803D</color>

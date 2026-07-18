@@ -47,6 +47,12 @@ public class SubCategoryDao {
         db.insertOrThrow("sub_categories", null, cv);
     }
 
+    public void update(int id, String newName) {
+        ContentValues cv = new ContentValues();
+        cv.put("name", newName.trim());
+        db.update("sub_categories", cv, "id=?", new String[]{String.valueOf(id)});
+    }
+
     public void delete(int id) {
         db.execSQL("UPDATE transactions SET sub_cat_id=NULL WHERE sub_cat_id=?",
                 new Object[]{id});

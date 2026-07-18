@@ -122,7 +122,10 @@ public class HomeActivity extends AppCompatActivity {
         View drawerSettings = findViewById(R.id.drawerSettings);
         if (drawerSettings != null) drawerSettings.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
-            startActivity(new Intent(this, SettingsActivity.class));
+            Intent i = new Intent(this, SettingsActivity.class);
+            i.putExtra("bookScoped", true);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
         });
 
         View drawerAudit = findViewById(R.id.drawerAudit);

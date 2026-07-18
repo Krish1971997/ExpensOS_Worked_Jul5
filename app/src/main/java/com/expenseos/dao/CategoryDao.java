@@ -50,6 +50,12 @@ public class CategoryDao {
 
     public void insert(String name, String type) { insert(name, type, null); }
 
+    public void update(int id, String newName) {
+        ContentValues cv = new ContentValues();
+        cv.put("name", newName.trim());
+        db.update("categories", cv, "id=?", new String[]{String.valueOf(id)});
+    }
+
     public void delete(int id) {
         db.execSQL("UPDATE transactions SET category_id=NULL WHERE category_id=?", new Object[]{id});
         db.delete("categories", "id=?", new String[]{String.valueOf(id)});

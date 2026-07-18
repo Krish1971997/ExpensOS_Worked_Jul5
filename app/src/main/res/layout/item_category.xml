@@ -26,6 +26,15 @@
         android:textSize="10sp"
         android:textStyle="bold" />
 
+    <ImageButton
+        android:id="@+id/btnCatEdit"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Rename"
+        android:padding="6dp"
+        android:src="@android:drawable/ic_menu_edit" />
+
     <Button
         android:id="@+id/btnCatDel"
         style="@style/Widget.MaterialComponents.Button.TextButton"

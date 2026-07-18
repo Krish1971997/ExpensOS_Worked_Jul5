@@ -7,13 +7,35 @@
     android:paddingHorizontal="4dp"
     android:paddingVertical="8dp">
 
-    <TextView
-        android:id="@+id/tvSubCatName"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="@color/text"
-        android:textSize="13sp" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvSubCatCategory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text_muted"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/tvSubCatName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btnSubCatEdit"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Rename"
+        android:padding="6dp"
+        android:src="@android:drawable/ic_menu_edit" />
 
     <Button
         android:id="@+id/btnSubCatDel"

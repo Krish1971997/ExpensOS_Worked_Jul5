@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -46,7 +47,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +65,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");
     private static final int REQ_ATTACH = 1001;
     private static final int REQ_SPEECH = 1002;
+    private static final int REQ_CAMERA = 1003;
 
     private int bookId;
     private int txnId = -1; // -1 = add mode
@@ -86,21 +87,21 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // col_key -> input, for whichever custom fields are currently on screen
     private final Map<String, EditText> customFieldInputs = new LinkedHashMap<>();
     private final List<PendingAttachment> pendingAttachments = new ArrayList<>();
+    private Uri pendingCameraUri; // set right before launching the camera intent, consumed in onActivityResult
 
     private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic;
     private LinearLayout boxDate, boxTime, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
     private Spinner spCategory, spSubCategory;
-    private Button btnAddMoreFields, btnSaveAddNew, btnSave;
+    private Button btnSaveAddNew, btnSave;
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_transaction_entry);
 
-//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-//        int bookId = prefs.getInt("active_book_id", 0);
-        int bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
+        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+        bookId = prefs.getInt("active_book_id", 0);
 
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
@@ -120,8 +121,18 @@ public class TransactionEntryActivity extends AppCompatActivity {
             currentType = "EXPENSE".equals(typeExtra) ? Transaction.Type.EXPENSE : Transaction.Type.INCOME;
             applyTypeUI();
             loadCategoriesForType();
+            loadCustomFieldsForType(null);
             updateDateTimeText();
         }
+
+        // Land straight in "typing the amount" mode instead of requiring an
+        // extra tap — matches the old app's behavior.
+        etAmount.requestFocus();
+        etAmount.post(() -> {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
     }
 
     private void bindViews() {
@@ -143,15 +154,19 @@ public class TransactionEntryActivity extends AppCompatActivity {
         spSubCategory = findViewById(R.id.spSubCategory);
         tvSubCategoryLabel = findViewById(R.id.tvSubCategoryLabel);
         customFieldsContainer = findViewById(R.id.customFieldsContainer);
-        btnAddMoreFields = findViewById(R.id.btnAddMoreFields);
         btnSaveAddNew = findViewById(R.id.btnSaveAddNew);
         btnSave = findViewById(R.id.btnSave);
     }
 
     private void setupClicks() {
         btnBack.setOnClickListener(v -> finish());
-        btnFieldSettings.setOnClickListener(v ->
-                Toast.makeText(this, "Manage custom fields — coming soon", Toast.LENGTH_SHORT).show());
+        btnFieldSettings.setOnClickListener(v -> {
+            Intent i = new Intent(this, SettingsActivity.class);
+            i.putExtra("bookScoped", true);
+            i.putExtra("bookId", bookId);
+            i.putExtra("startTab", 2); // 0=Categories, 1=Sub-Categories, 2=Columns
+            startActivity(i);
+        });
 
         tabIncome.setOnClickListener(v -> switchType(Transaction.Type.INCOME));
         tabExpense.setOnClickListener(v -> switchType(Transaction.Type.EXPENSE));
@@ -161,8 +176,6 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         btnMic.setOnClickListener(v -> startVoiceInput());
         btnAttach.setOnClickListener(v -> pickAttachment());
-
-        btnAddMoreFields.setOnClickListener(v -> showAddFieldsPicker());
 
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));
@@ -179,6 +192,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         applyTypeUI();
         loadCategoriesForType();
         clearCustomFields();
+        loadCustomFieldsForType(null);
     }
 
     private void applyTypeUI() {
@@ -188,9 +202,9 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvTitle.setTextColor(getColor(income ? R.color.green : R.color.red));
         etAmount.setTextColor(getColor(income ? R.color.green : R.color.red));
 
-        tabIncome.setTextColor(getColor(income ? R.color.green : R.color.text_muted));
+        tabIncome.setTextColor(getColor(income ? R.color.green : R.color.text_secondary));
         tabIncome.setTypeface(null, income ? Typeface.BOLD : Typeface.NORMAL);
-        tabExpense.setTextColor(getColor(!income ? R.color.red : R.color.text_muted));
+        tabExpense.setTextColor(getColor(!income ? R.color.red : R.color.text_secondary));
         tabExpense.setTypeface(null, !income ? Typeface.BOLD : Typeface.NORMAL);
 
         if (txnId > 0) {
@@ -273,33 +287,16 @@ public class TransactionEntryActivity extends AppCompatActivity {
         }
     }
 
-    // ── Custom fields — "Add More Fields" only ever picks from fields that
-    // already exist in column_definitions; it never defines new ones ─────
-    private void showAddFieldsPicker() {
-        List<ColumnDefinition> all = colDefDao.findByType(currentType.name());
-        List<ColumnDefinition> available = new ArrayList<>();
-        for (ColumnDefinition cd : all)
-            if (!customFieldInputs.containsKey(cd.getColKey()))
-                available.add(cd);
-
-        if (available.isEmpty()) {
-            Toast.makeText(this, "No more fields available for this type.", Toast.LENGTH_SHORT).show();
-            return;
+    // ── Custom fields now auto-populate for whatever type is selected —
+    // there's no "Add More Fields" button anymore. existingValues is null
+    // in add mode (fields start empty) or the transaction's saved
+    // key->value map in edit mode (fields start pre-filled).
+    private void loadCustomFieldsForType(@Nullable Map<String, String> existingValues) {
+        List<ColumnDefinition> defs = colDefDao.findByType(currentType.name());
+        for (ColumnDefinition cd : defs) {
+            String existing = existingValues != null ? existingValues.get(cd.getColKey()) : null;
+            addCustomFieldRow(cd, existing);
         }
-
-        String[] names = new String[available.size()];
-        for (int i = 0; i < available.size(); i++) names[i] = available.get(i).getColName();
-        boolean[] checked = new boolean[available.size()];
-
-        new AlertDialog.Builder(this)
-                .setTitle("Add Fields")
-                .setMultiChoiceItems(names, checked, (dlg, which, isChecked) -> checked[which] = isChecked)
-                .setPositiveButton("Add", (dlg, w) -> {
-                    for (int i = 0; i < available.size(); i++)
-                        if (checked[i]) addCustomFieldRow(available.get(i), null);
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
     }
 
     private void addCustomFieldRow(ColumnDefinition cd, @Nullable String existingValue) {
@@ -349,13 +346,91 @@ public class TransactionEntryActivity extends AppCompatActivity {
         }
     }
 
-    // ── Attach Image or PDF ─────────────────────────────────
+    // ── Attach Image or PDF — 3-option bottom sheet, matching the old app
+    // (this used to jump straight to the system file manager) ───────────
     private void pickAttachment() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "application/pdf"});
-        startActivityForResult(Intent.createChooser(intent, "Attach Image or PDF"), REQ_ATTACH);
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(0, dp(8), 0, dp(16));
+
+        TextView title = new TextView(this);
+        title.setText("Attach Image or PDF");
+        title.setTextSize(16);
+        title.setTypeface(null, Typeface.BOLD);
+        title.setPadding(dp(20), dp(12), dp(20), dp(12));
+        container.addView(title);
+
+        container.addView(attachSheetOption("📷", "Take photo using camera", () -> {
+            sheet.dismiss();
+            launchCamera();
+        }));
+        container.addView(attachSheetOption("🖼", "Choose from gallery", () -> {
+            sheet.dismiss();
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            startActivityForResult(intent, REQ_ATTACH);
+        }));
+        container.addView(attachSheetOption("📄", "Choose PDF", () -> {
+            sheet.dismiss();
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("application/pdf");
+            startActivityForResult(intent, REQ_ATTACH);
+        }));
+
+        sheet.setContentView(container);
+        sheet.show();
+    }
+
+    private View attachSheetOption(String emoji, String label, Runnable onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), dp(14), dp(20), dp(14));
+        row.setClickable(true);
+        row.setFocusable(true);
+
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        row.setBackgroundResource(outValue.resourceId);
+
+        TextView tvEmoji = new TextView(this);
+        tvEmoji.setText(emoji);
+        tvEmoji.setTextSize(18);
+        tvEmoji.setLayoutParams(new LinearLayout.LayoutParams(dp(32), LinearLayout.LayoutParams.WRAP_CONTENT));
+        row.addView(tvEmoji);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(16);
+        tvLabel.setTextColor(getColor(R.color.text_primary));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = dp(16);
+        tvLabel.setLayoutParams(lp);
+        row.addView(tvLabel);
+
+        row.setOnClickListener(v -> onClick.run());
+        return row;
+    }
+
+    // Requires a FileProvider declared in AndroidManifest.xml with
+    // authorities="${applicationId}.fileprovider" — see file_paths.xml.
+    private void launchCamera() {
+        try {
+            java.io.File dir = new java.io.File(getCacheDir(), "receipts");
+            if (!dir.exists()) dir.mkdirs();
+            java.io.File photoFile = java.io.File.createTempFile("receipt_", ".jpg", dir);
+            pendingCameraUri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", photoFile);
+
+            Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingCameraUri);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            startActivityForResult(intent, REQ_CAMERA);
+        } catch (Exception e) {
+            Toast.makeText(this, "Camera not available: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -374,6 +449,19 @@ public class TransactionEntryActivity extends AppCompatActivity {
                 addPendingAttachmentRow(pa);
             } catch (Exception e) {
                 Toast.makeText(this, "Couldn't read file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == REQ_CAMERA) {
+            if (pendingCameraUri != null) {
+                try {
+                    byte[] bytes = readBytes(pendingCameraUri);
+                    String name = "receipt_" + System.currentTimeMillis() + ".jpg";
+                    PendingAttachment pa = new PendingAttachment(name, "image/jpeg", bytes);
+                    pendingAttachments.add(pa);
+                    addPendingAttachmentRow(pa);
+                } catch (Exception e) {
+                    Toast.makeText(this, "Couldn't read photo: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+                pendingCameraUri = null;
             }
         } else if (requestCode == REQ_SPEECH) {
             ArrayList<String> results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
@@ -440,7 +528,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextColor(getColor(R.color.text_muted));
+        tv.setTextColor(getColor(R.color.text_secondary));
         tv.setSingleLine(true);
         tv.setEllipsize(TextUtils.TruncateAt.MIDDLE);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -517,16 +605,9 @@ public class TransactionEntryActivity extends AppCompatActivity {
                 }
         }
 
-        // Pre-populate already-saved custom values
-        if (!editingOriginal.getCustomValues().isEmpty()) {
-            List<ColumnDefinition> defs = colDefDao.findByType(currentType.name());
-            Map<String, ColumnDefinition> byKey = new HashMap<>();
-            for (ColumnDefinition cd : defs) byKey.put(cd.getColKey(), cd);
-            for (Map.Entry<String, String> e : editingOriginal.getCustomValues().entrySet()) {
-                ColumnDefinition cd = byKey.get(e.getKey());
-                if (cd != null) addCustomFieldRow(cd, e.getValue());
-            }
-        }
+        // Show every field defined for this type — pre-filled where the
+        // transaction already has a saved value for it.
+        loadCustomFieldsForType(editingOriginal.getCustomValues());
 
         for (Receipt r : receiptDao.findMetaByTransactionId(txnId))
             addExistingReceiptRow(r);
@@ -609,12 +690,18 @@ public class TransactionEntryActivity extends AppCompatActivity {
         etAmount.setText("");
         etNote.setText("");
         clearCustomFields();
+        loadCustomFieldsForType(null); // re-show this type's fields — no button to bring them back otherwise
         attachmentList.removeAllViews();
         pendingAttachments.clear();
-        selectedDate = LocalDate.now();
-        selectedTime = LocalTime.now();
-        updateDateTimeText();
+        // Deliberately NOT resetting selectedDate/selectedTime — Save & Add
+        // New carries over the date/time just used, for quick back-to-back
+        // entries at the same timestamp.
         etAmount.requestFocus();
+        etAmount.post(() -> {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
     }
 
     private static class PendingAttachment {
