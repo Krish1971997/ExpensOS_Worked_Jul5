@@ -1,6 +1,8 @@
 package com.expenseos.model;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Android model for a cash book.
@@ -14,8 +16,8 @@ public class CashBook {
     private int id;
     private String name;
     private String description;
-    private String createdAt;
-    private String updatedAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private boolean active = true;
 
     // Populated separately (per-book summary query), not always present
@@ -25,7 +27,7 @@ public class CashBook {
     public CashBook() {
     }
 
-    public CashBook(int id, String name, String description, String createdAt, boolean active) {
+    public CashBook(int id, String name, String description, LocalDateTime createdAt, boolean active) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -37,8 +39,8 @@ public class CashBook {
      * "2026-07-11" out of "2026-07-11 14:32:00" — mirrors the web view's book.formattedDate
      */
     public String getFormattedDate() {
-        if (createdAt == null || createdAt.isEmpty()) return "";
-        return createdAt.substring(0, Math.min(10, createdAt.length()));
+        if (createdAt == null) return "";
+        return createdAt.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
     }
 
     public BigDecimal getNetBalance() {
@@ -72,19 +74,19 @@ public class CashBook {
         this.description = description;
     }
 
-    public String getCreatedAt() {
+    public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(String createdAt) {
+    public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
 
-    public String getUpdatedAt() {
+    public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(String updatedAt) {
+    public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
 
@@ -114,11 +116,11 @@ public class CashBook {
 
     /** "Updated on Jul 13 2026" or fallback "Created on ..." — mirrors reference app */
     public String getStatusLabel() {
-        String src = (updatedAt != null && !updatedAt.isEmpty()) ? updatedAt : createdAt;
-        String prefix = (updatedAt != null && !updatedAt.isEmpty()) ? "Updated on " : "Created on ";
-        if (src == null || src.isEmpty()) return "";
+        LocalDateTime src = (updatedAt != null) ? updatedAt : createdAt;
+        String prefix = (updatedAt != null) ? "Updated on " : "Created on ";
+        if (src == null) return "";
         try {
-            java.time.LocalDateTime dt = java.time.LocalDateTime.parse(src.replace(" ", "T"));
+            java.time.LocalDateTime dt = (updatedAt != null) ? updatedAt : createdAt;
             return prefix + dt.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd yyyy"));
         } catch (Exception e) {
             return prefix + getFormattedDate();

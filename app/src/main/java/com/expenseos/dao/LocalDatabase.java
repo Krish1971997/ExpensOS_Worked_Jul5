@@ -11,7 +11,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class LocalDatabase extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 9;
+    private static final int DB_VERSION = 11;
 
     private static LocalDatabase instance;
 
@@ -45,6 +45,8 @@ public class LocalDatabase extends SQLiteOpenHelper {
                 "name    TEXT NOT NULL," +
                 "type    TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE'))," +
                 "book_id INTEGER REFERENCES cash_books(id)," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "synced  INTEGER DEFAULT 0," +
                 "UNIQUE(name,type,book_id))");
 
@@ -53,6 +55,8 @@ public class LocalDatabase extends SQLiteOpenHelper {
                 "id          INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name        TEXT NOT NULL," +
                 "category_id INTEGER NOT NULL REFERENCES categories(id)," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "synced      INTEGER DEFAULT 0)");
 
         // column_definitions
@@ -61,6 +65,8 @@ public class LocalDatabase extends SQLiteOpenHelper {
                 "col_name TEXT NOT NULL," +
                 "col_key  TEXT NOT NULL," +
                 "type     TEXT NOT NULL," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "synced   INTEGER DEFAULT 0," +
                 "UNIQUE(col_key,type))");
 
@@ -74,6 +80,8 @@ public class LocalDatabase extends SQLiteOpenHelper {
                 "sub_categories_id INTEGER REFERENCES sub_categories(id)," +
                 "note              TEXT," +
                 "book_id           INTEGER REFERENCES cash_books(id)," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "synced            INTEGER DEFAULT 0)");
 
         // transaction_custom_values ← இது முக்கியம்!
@@ -82,6 +90,8 @@ public class LocalDatabase extends SQLiteOpenHelper {
                 "transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
                 "col_def_id     INTEGER NOT NULL REFERENCES column_definitions(id)," +
                 "value          TEXT," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "UNIQUE(transaction_id,col_def_id))");
 
         // deleted_records (tombstone)
@@ -97,6 +107,7 @@ public class LocalDatabase extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE IF NOT EXISTS app_config (" +
                 "key        TEXT PRIMARY KEY," +
                 "value      TEXT," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
                 "updated_at TEXT DEFAULT (datetime('now')))");
 
         // audit_log
@@ -206,6 +217,43 @@ public class LocalDatabase extends SQLiteOpenHelper {
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_changed ON transaction_audit_log(changed_at DESC);");
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_txn_id ON transaction_audit_log(transaction_id ASC);");
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_transaction_audit_log_updated ON transaction_audit_log(updated_at ASC);");
+        }
+        if (oldV < 11) {
+            db.execSQL("DROP TABLE IF EXISTS transactions;");
+
+            db.execSQL("CREATE TABLE IF NOT EXISTS transactions (" +
+                    "id                INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "type              TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE'))," +
+                    "txn_datetime      TEXT NOT NULL," +
+                    "amount            REAL NOT NULL," +
+                    "category_id       INTEGER REFERENCES categories(id)," +
+                    "sub_categories_id INTEGER REFERENCES sub_categories(id)," +
+                    "note              TEXT," +
+                    "book_id           INTEGER REFERENCES cash_books(id)," +
+                    "created_at        TEXT DEFAULT (datetime('now'))," +
+                    "updated_at        TEXT DEFAULT (datetime('now'))," +
+                    "synced            INTEGER DEFAULT 0)");
+
+        }
+
+        // v11 → v12: devices that already upgraded to the broken v11 schema
+        // (transactions table recreated WITHOUT created_at/updated_at) need
+        // those columns added back in place, without losing existing rows.
+        if (oldV < 14) {
+            try { db.execSQL("ALTER TABLE transactions ADD COLUMN created_at TEXT DEFAULT (datetime('now'))"); }
+            catch (Exception ignored) {}
+            try { db.execSQL("ALTER TABLE transactions ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))"); }
+            catch (Exception ignored) {}
+        }
+
+        if(oldV <14){
+            db.execSQL("CREATE TABLE IF NOT EXISTS deleted_records (" +
+                    "id         INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "table_name TEXT NOT NULL," +
+                    "record_id  INTEGER NOT NULL," +
+                    "deleted_at TEXT DEFAULT (datetime('now'))," +
+                    "synced     INTEGER DEFAULT 0," +
+                    "UNIQUE(table_name,record_id))");
         }
     }
 

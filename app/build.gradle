@@ -60,4 +60,7 @@ dependencies {
 
     // JSON
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // PDF report generation (Generate Report screen)
+    implementation 'com.itextpdf:itextpdf:5.5.13.3'
 }

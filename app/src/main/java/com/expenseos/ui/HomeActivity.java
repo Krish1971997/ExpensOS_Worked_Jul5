@@ -133,6 +133,12 @@ public class HomeActivity extends AppCompatActivity {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, AuditLogActivity.class));
         });
+
+        View drawerScheduler = findViewById(R.id.drawerScheduler);
+        if (drawerScheduler != null) drawerScheduler.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, SchedulerActivity.class));
+        });
     }
 
     // ── Sync Button ───────────────────────────────────────

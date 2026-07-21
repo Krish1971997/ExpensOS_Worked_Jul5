@@ -23,16 +23,20 @@ public class ReceiptDao {
     private static final String TAG = "ReceiptDao";
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final LocalDB helper;
     private final SQLiteDatabase db;
     private final AuditLogDao auditDao;
 
     public ReceiptDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
         auditDao = new AuditLogDao(ctx);
     }
 
     public void insert(Receipt r) {
+        long id = helper.getNextId("transaction_receipts");
         ContentValues cv = new ContentValues();
+        cv.put("id", id);
         cv.put("transaction_id", r.getTransactionId());
         cv.put("file_name", r.getFileName());
         cv.put("file_type", r.getFileType());

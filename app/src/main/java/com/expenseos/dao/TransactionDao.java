@@ -6,16 +6,20 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
-import com.expenseos.model.CashBook;
+import com.expenseos.db.LocalDB;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
-import com.expenseos.db.LocalDB;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.StringJoiner;
 
 /**
  * Android/SQLite port of the web TransactionDAO.
@@ -36,6 +40,8 @@ import java.util.*;
 public class TransactionDao {
 
     private static final String TAG = "TransactionDao";
+    private final LocalDB helper;
+    private final SQLiteDatabase db;
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
@@ -43,23 +49,24 @@ public class TransactionDao {
     private static final Map<String, String> SORT_COLUMNS = Map.of(
             "date", "t.txn_datetime", "type", "t.type", "category", "c.name",
             "subcategory", "sc.name", "amount", "t.amount", "note", "t.note");
-
-    private final SQLiteDatabase db;
     private final AuditLogDao auditDao;
     private final Context ctx;
 
     public TransactionDao(Context ctx) {
         this.ctx = ctx;
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
         auditDao = new AuditLogDao(ctx);
     }
 
     // ── INSERT ────────────────────────────────────────────
     public long insert(Transaction t) {
+        long id = helper.getNextId("transactions");
         long newId = -1;
         db.beginTransaction();
         try {
             ContentValues cv = new ContentValues();
+            cv.put("id", id);
             cv.put("type", t.getType().name());
             cv.put("txn_datetime", t.getDateTime().format(TS_FMT));
             cv.put("amount", t.getAmount().toString());
@@ -252,7 +259,8 @@ public class TransactionDao {
             List<Transaction> chronological = new ArrayList<>(list);
             chronological.sort((a, b) -> {
                 if (a.getDateTime() == null && b.getDateTime() == null) return 0;
-                if (a.getDateTime() == null) return -1; // nulls first, defensive only — shouldn't normally happen
+                if (a.getDateTime() == null)
+                    return -1; // nulls first, defensive only — shouldn't normally happen
                 if (b.getDateTime() == null) return 1;
                 int cmp = a.getDateTime().compareTo(b.getDateTime());
                 return cmp != 0 ? cmp : Integer.compare(a.getId(), b.getId());
@@ -706,7 +714,9 @@ public class TransactionDao {
             }
             if (colDefId == null)
                 continue;
+            long ccId = helper.getNextId("transaction_custom_values");
             ContentValues cv = new ContentValues();
+            cv.put("id", ccId);
             cv.put("transaction_id", txnId);
             cv.put("col_def_id", colDefId);
             cv.put("value", e.getValue());

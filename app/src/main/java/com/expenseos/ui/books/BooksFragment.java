@@ -27,6 +27,7 @@ import com.expenseos.util.AppConfig;
 
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -58,8 +59,16 @@ public class BooksFragment extends Fragment {
             b.setId(c.getInt(0));
             b.setName(c.getString(1));
             b.setDescription(c.getString(2));
-            b.setCreatedAt(c.getString(3));
-            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));
+//            b.setCreatedAt(c.getString(3));
+//            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));
+
+            String dateStr = c.getString(3);
+            b.setCreatedAt(dateStr != null ? LocalDateTime.parse(dateStr) : null);
+
+            // Handle updatedAt similarly if it's also a LocalDateTime now
+            String updatedStr = c.getString(4);
+            b.setUpdatedAt(updatedStr != null ? LocalDateTime.parse(updatedStr) : null);
+
             b.setActive(c.isNull(5) || c.getInt(5) == 1);
 
             // Calculate totals

@@ -34,20 +34,17 @@ public class Transaction {
     }
 
     public String getFormattedDate() {
-        if (dateTime == null)
-            return "";
+        if (dateTime == null) return "";
         return dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
     }
 
     public String getFormattedDateTime() {
-        if (dateTime == null)
-            return "";
+        if (dateTime == null) return "";
         return dateTime.format(DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm"));
     }
 
     public String getFormattedTime() {
-        if (dateTime == null)
-            return "";
+        if (dateTime == null) return "";
         return dateTime.format(DateTimeFormatter.ofPattern("hh:mm a"));
     }
 
@@ -162,10 +159,25 @@ public class Transaction {
     }
 
     public String getFormattedAmount() {
-        if (amount == null)
-            return "₹0.00";
+        if (amount == null) return "₹0.00";
         java.text.DecimalFormat df = new java.text.DecimalFormat("#,##0.00");
         return "₹" + df.format(amount);
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 
 }

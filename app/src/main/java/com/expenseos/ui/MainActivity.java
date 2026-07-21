@@ -126,18 +126,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openBook(int id, String name) {
-        // Guard: check active flag
         CashBook b = dao.findById(id);
         if (b != null && !b.isActive()) {
-            Toast.makeText(this,
-                    "This book is inactive. Edit it to activate.",
-                    Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
             return;
         }
-        getSharedPreferences("expenseos_prefs", MODE_PRIVATE).edit()
-                .putInt("active_book_id", id)
-                .putString("active_book_name", name)
-                .apply();
+        AppConfig.get(this).setActiveBook(id, name);   // <-- replace SharedPreferences block with this
         startActivity(new Intent(this, HomeActivity.class));
     }
 
@@ -179,7 +173,8 @@ public class MainActivity extends AppCompatActivity {
             BigDecimal net = income.subtract(expense);
 
             h.tvName.setText(b.getName());
-            h.tvCreated.setText(b.getFormattedDate() != null ? b.getFormattedDate() : "");
+//            h.tvCreated.setText(b.getFormattedDate() != null ? b.getFormattedDate() : "");
+            h.tvCreated.setText(b.getStatusLabel());
 
             boolean negative = net.signum() < 0;
             h.tvNet.setText((negative ? "-₹" : "₹") + String.format("%,.2f", net.abs()));
@@ -204,18 +199,17 @@ public class MainActivity extends AppCompatActivity {
                 PopupMenu popup = new PopupMenu(MainActivity.this, v);
                 popup.getMenu().add(0, 1, 0, "Open");
                 popup.getMenu().add(0, 2, 1, "Edit");
+                popup.getMenu().add(0, 3, 2, "Delete");   // <-- new
                 popup.setOnMenuItemClickListener(item -> {
                     if (item.getItemId() == 1) {
-                        if (b.isActive()) {
-                            openBook(b.getId(), b.getName());
-                        } else {
-                            Toast.makeText(MainActivity.this,
-                                    "This book is inactive. Edit it to activate.",
-                                    Toast.LENGTH_SHORT).show();
-                        }
+                        if (b.isActive()) openBook(b.getId(), b.getName());
+                        else Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
                         return true;
                     } else if (item.getItemId() == 2) {
                         showEditDialog(b);
+                        return true;
+                    } else if (item.getItemId() == 3) {          // <-- new
+                        showDeleteBookDialog(b);
                         return true;
                     }
                     return false;
@@ -255,6 +249,48 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void showDeleteBookDialog(CashBook book) {
+        View v = LayoutInflater.from(this).inflate(R.layout.dialog_delete_book, null);
+        TextView tvMsg = v.findViewById(R.id.tvDeleteConfirmMsg);
+        EditText etConfirm = v.findViewById(R.id.etDeleteBookName);
+        tvMsg.setText("Please type " + book.getName() + " to confirm");
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Delete " + book.getName() + " ?")
+                .setView(v)
+                .setPositiveButton("Delete", null)
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.setOnShowListener(d -> {
+            Button deleteBtn = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            deleteBtn.setEnabled(false);
+
+            etConfirm.addTextChangedListener(new TextWatcher() {
+                public void afterTextChanged(Editable s) {
+                    deleteBtn.setEnabled(s.toString().equals(book.getName()));
+                }
+                public void beforeTextChanged(CharSequence s, int a, int c, int cn) {}
+                public void onTextChanged(CharSequence s, int a, int b2, int c) {}
+            });
+
+            deleteBtn.setOnClickListener(view -> {
+                dao.deleteCascade(book.getId());
+
+                AppConfig cfg = AppConfig.get(this);
+                if (cfg.getActiveBookId() == book.getId()) {
+                    cfg.setActiveBook(0, null);
+                }
+
+                Toast.makeText(this, "Book deleted", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                loadBooks();
+            });
+        });
+
+        dialog.show();
     }
 
     public void updateBookLabel() {

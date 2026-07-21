@@ -4,19 +4,25 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.Category;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class CategoryDao {
+    private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public CategoryDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
     }
 
-    /** Common categories (book_id IS NULL) + book-specific categories */
+    /**
+     * Common categories (book_id IS NULL) + book-specific categories
+     */
     public List<Category> findByType(String type, Integer bookId) {
         String sql = "SELECT id, name, type, book_id FROM categories " +
                 "WHERE type=? AND (book_id IS NULL" +
@@ -33,22 +39,30 @@ public class CategoryDao {
         return list;
     }
 
-    /** Backward compat — common categories only */
+    /**
+     * Backward compat — common categories only
+     */
     public List<Category> findByType(String type) {
         return findByType(type, null);
     }
 
-    /** Insert with optional bookId (null = common) */
+    /**
+     * Insert with optional bookId (null = common)
+     */
     public void insert(String name, String type, Integer bookId) {
+        long id = helper.getNextId("categories");
         ContentValues cv = new ContentValues();
-        cv.put("name",   name.trim());
-        cv.put("type",   type);
+        cv.put("id", id);
+        cv.put("name", name.trim());
+        cv.put("type", type);
         if (bookId != null) cv.put("book_id", bookId);
-        else                cv.putNull("book_id");
+        else cv.putNull("book_id");
         db.insertWithOnConflict("categories", null, cv, SQLiteDatabase.CONFLICT_IGNORE);
     }
 
-    public void insert(String name, String type) { insert(name, type, null); }
+    public void insert(String name, String type) {
+        insert(name, type, null);
+    }
 
     public void update(int id, String newName) {
         ContentValues cv = new ContentValues();

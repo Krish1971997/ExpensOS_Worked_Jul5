@@ -65,7 +65,7 @@ public class HomeFragment extends Fragment {
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> {
-            Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
+            Intent i = new Intent(requireContext(), com.expenseos.ui.EntryDetailActivity.class);
             i.putExtra("txnId", txn.getId());
             startActivity(i);
         });

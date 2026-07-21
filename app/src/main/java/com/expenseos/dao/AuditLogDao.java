@@ -23,40 +23,54 @@ public class AuditLogDao {
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public AuditLogDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
     }
 
-    /** Log a CREATE event */
+    /**
+     * Log a CREATE event
+     */
     public void logCreate(int transactionId, String changedBy) {
         insert(transactionId, "CREATE", changedBy, null, null, null, "Transaction created");
     }
 
-    /** Log one field change */
+    /**
+     * Log one field change
+     */
     public void logUpdate(int transactionId, String changedBy, String fieldName, String oldValue, String newValue) {
         insert(transactionId, "UPDATE", changedBy, fieldName, oldValue, newValue, null);
     }
 
-    /** Log DELETE */
+    /**
+     * Log DELETE
+     */
     public void logDelete(int transactionId, String changedBy) {
         insert(transactionId, "DELETE", changedBy, null, null, null, "Transaction deleted");
     }
 
-    /** Log receipt upload */
+    /**
+     * Log receipt upload
+     */
     public void logReceiptUpload(int transactionId, String changedBy, String fileName) {
         insert(transactionId, "RECEIPT_ADD", changedBy, "receipt", null, fileName, "Receipt uploaded: " + fileName);
     }
 
-    /** Log receipt delete */
+    /**
+     * Log receipt delete
+     */
     public void logReceiptDelete(int transactionId, String changedBy, String fileName) {
         insert(transactionId, "RECEIPT_DEL", changedBy, "receipt", fileName, null, "Receipt deleted: " + fileName);
     }
 
     private void insert(int transactionId, String action, String changedBy, String fieldName, String oldValue,
-                         String newValue, String note) {
+                        String newValue, String note) {
+        long id = helper.getNextId("transaction_audit_log");
         ContentValues cv = new ContentValues();
+        cv.put("id", id);
         cv.put("transaction_id", transactionId);
         cv.put("action", action);
         cv.put("changed_by", changedBy != null ? changedBy : "user");
@@ -68,7 +82,9 @@ public class AuditLogDao {
         db.insert("transaction_audit_log", null, cv);
     }
 
-    /** All audit entries for a transaction */
+    /**
+     * All audit entries for a transaction
+     */
     public List<AuditLog> findByTransactionId(int transactionId) {
         String sql = "SELECT id, transaction_id, action, changed_by, changed_at, "
                 + "field_name, old_value, new_value, note "
@@ -81,7 +97,9 @@ public class AuditLogDao {
         return list;
     }
 
-    /** Book-scoped audit log with pagination */
+    /**
+     * Book-scoped audit log with pagination
+     */
     public List<AuditLog> findRecentByBook(int bookId, int page, int pageSize) {
         String sql = "SELECT a.id, a.transaction_id, a.action, a.changed_at, "
                 + "a.field_name, a.old_value, a.new_value, a.note, "
@@ -116,7 +134,9 @@ public class AuditLogDao {
         }
     }
 
-    /** Recent audit entries across all transactions (for admin view) */
+    /**
+     * Recent audit entries across all transactions (for admin view)
+     */
     public List<AuditLog> findRecent(int limit) {
         String sql = "SELECT id, transaction_id, action, changed_by, changed_at, "
                 + "field_name, old_value, new_value, note "

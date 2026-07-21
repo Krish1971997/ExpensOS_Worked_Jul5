@@ -3,6 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Only needed for the legacy pre-scoped-storage Downloads save path
+     (API 26-28) in DownloadsSaver — maxSdkVersion so it's a no-op
+     (and doesn't show in the Play Store permission list) on API 29+,
+     where MediaStore.Downloads is used instead. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -26,10 +33,15 @@
         <!-- Feature screens -->
         <activity android:name=".ui.TransactionActivity" />
         <activity android:name=".ui.TransactionEntryActivity" />
+        <activity android:name=".ui.GenerateReportActivity" />
         <activity android:name=".ui.TransactionDetailActivity" />
         <activity android:name=".ui.BulkAddActivity" />
         <activity android:name=".ui.SettingsActivity" />
         <activity android:name=".ui.AuditLogActivity" />
+        <activity android:name=".ui.EntryDetailActivity" />
+        <activity android:name=".ui.TxnEditHistoryActivity" />
+        <activity android:name=".ui.AttachmentPreviewActivity" />
+        <activity android:name=".ui.SchedulerActivity" />
 
         <!-- Needed for camera capture in TransactionEntryActivity — the
              camera app writes the photo to a content:// URI we hand it,

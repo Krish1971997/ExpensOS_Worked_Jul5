@@ -26,10 +26,12 @@ public class CashBookDao {
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public CashBookDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
     }
 
     // Keep old one for backward compatibility (other screens might call it)
@@ -43,11 +45,11 @@ public class CashBookDao {
      */
     public List<CashBook> findAll(String search, String sort) {
         StringBuilder sql = new StringBuilder(
-                "SELECT b.id, b.name, b.description, b.created_at, t.updated_at, b.is_active," +
+                "SELECT b.id, b.name, b.description, b.created_at, t.maxupdated as updated_at, b.is_active," +
                         " COALESCE(t.income,0) - COALESCE(t.expense,0) AS net_balance" +
                         " FROM cash_books b" +
                         " LEFT JOIN (" +
-                        "   SELECT book_id,  MAX(txn_datetime) as updated_at , " +
+                        "   SELECT book_id,  MAX(updated_at) as maxupdated , " +
 //                        "MAX(GREATEST(created_at, updated_at)) AS updated_at, " +
                         "     SUM(CASE WHEN type='INCOME'  THEN amount ELSE 0 END) AS income," +
                         "     SUM(CASE WHEN type='EXPENSE' THEN amount ELSE 0 END) AS expense" +
@@ -59,14 +61,14 @@ public class CashBookDao {
             sql.append(" WHERE LOWER(b.name) LIKE LOWER(?)");
             args.add("%" + search.trim() + "%");
         }
-        sql.append(" GROUP BY b.id");
+        sql.append(" GROUP BY b.id, t.maxupdated, t.income, t.expense");
 
         // Sort — updated_at இல்லாம created_at use பண்றோம்
         String order = switch (sort == null ? "" : sort) {
             case "name_asc"     -> " ORDER BY b.name ASC";
             case "balance_desc" -> " ORDER BY net_balance DESC";
             case "balance_asc"  -> " ORDER BY net_balance ASC";
-            default             -> " ORDER BY COALESCE(t.updated_at, b.created_at) DESC";
+            default             -> " ORDER BY COALESCE(t.maxupdated, b.created_at) DESC";
         };
         sql.append(order);
 
@@ -77,8 +79,14 @@ public class CashBookDao {
             b.setId(c.getInt(0));
             b.setName(c.getString(1));
             b.setDescription(c.getString(2));
-            b.setCreatedAt(c.getString(3));
-            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));   // <-- new, index shifted
+//            b.setCreatedAt(c.getString(3));
+//            b.setUpdatedAt(c.isNull(4) ? null : c.getString(4));   // <-- new, index shifted
+            String dateStr = c.getString(3);
+            b.setCreatedAt(dateStr != null ? LocalDateTime.parse(dateStr, TS_FMT) : null);
+
+            // Handle updatedAt similarly if it's also a LocalDateTime now
+            String updatedStr = c.getString(4);
+            b.setUpdatedAt(updatedStr != null ? LocalDateTime.parse(updatedStr, TS_FMT) : null);
             b.setActive(c.getInt(5) == 1);                          // <-- index shifted
             list.add(b);
         }
@@ -94,7 +102,9 @@ public class CashBookDao {
     }
 
     public long insert(String name, String description) {
+        long id = helper.getNextId("cash_books");
         ContentValues cv = new ContentValues();
+        cv.put("id", id);
         cv.put("name", name.trim());
         cv.put("description", description != null ? description.trim() : "");
         cv.put("created_at", LocalDateTime.now().format(TS_FMT));
@@ -143,7 +153,8 @@ public class CashBookDao {
                 c.getInt(c.getColumnIndexOrThrow("id")),
                 c.getString(c.getColumnIndexOrThrow("name")),
                 c.getString(c.getColumnIndexOrThrow("description")),
-                c.getString(c.getColumnIndexOrThrow("created_at")), // CashBook.createdAt is a String
+                LocalDateTime.parse(c.getString(c.getColumnIndexOrThrow("created_at")), TS_FMT),
+//                c.getString(c.getColumnIndexOrThrow("created_at")), // CashBook.createdAt is a String
                 c.getInt(c.getColumnIndexOrThrow("is_active")) == 1);
     }
 

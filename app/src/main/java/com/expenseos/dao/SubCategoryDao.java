@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SubCategoryDao {
+    private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public SubCategoryDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
     }
 
     public List<SubCategory> findAll() {
@@ -40,7 +42,9 @@ public class SubCategoryDao {
     }
 
     public void insert(String name, int catId) {
+        long id = helper.getNextId("sub_categories");
         ContentValues cv = new ContentValues();
+        cv.put("id", id);
         cv.put("name", name.trim());
         cv.put("category_id", catId);
         cv.put("synced", 0);

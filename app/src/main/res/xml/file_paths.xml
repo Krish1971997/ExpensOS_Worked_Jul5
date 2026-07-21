@@ -11,4 +11,9 @@
     <cache-path
         name="cache"
         path="." />
+    <!-- Matches new File(getCacheDir(), "reports") in
+         GenerateReportActivity.previewPdf() -->
+    <cache-path
+        name="reports"
+        path="reports/" />
 </paths>

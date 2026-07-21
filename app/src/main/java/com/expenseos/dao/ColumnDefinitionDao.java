@@ -18,10 +18,12 @@ import java.util.List;
  */
 public class ColumnDefinitionDao {
 
+    private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public ColumnDefinitionDao(Context ctx) {
-        db = LocalDB.getInstance(ctx).getWritableDatabase();
+        helper = LocalDB.getInstance(ctx);
+        db = helper.getWritableDatabase();
     }
 
     public List<ColumnDefinition> findByType(String type) {
@@ -40,7 +42,9 @@ public class ColumnDefinitionDao {
 
     public void insert(String colName, String type) {
         String colKey = colName.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_|_$", "");
+        long id = helper.getNextId("column_definitions");
         ContentValues cv = new ContentValues();
+        cv.put("id", id);
         cv.put("col_name", colName.trim());
         cv.put("col_key", colKey);
         cv.put("type", type);
