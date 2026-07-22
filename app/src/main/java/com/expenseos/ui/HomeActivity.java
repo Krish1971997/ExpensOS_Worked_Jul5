@@ -18,6 +18,7 @@ import androidx.fragment.app.Fragment;
 import com.expenseos.R;
 import com.expenseos.sync.SyncManager;
 import com.expenseos.ui.home.HomeFragment;
+import com.expenseos.ui.backup.BackupFragment;
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -37,9 +38,12 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_home);
 
-        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-        bookId = prefs.getInt("active_book_id", 0);
-        bookName = prefs.getString("active_book_name", "");
+//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+//        bookId = prefs.getInt("active_book_id", 0);
+//        bookName = prefs.getString("active_book_name", "");
+        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(this);
+        bookId = cfg.getActiveBookId();
+        bookName = cfg.getActiveBookName();
 
         if (bookId <= 0) {
             startActivity(new Intent(this, MainActivity.class));
@@ -50,6 +54,8 @@ public class HomeActivity extends AppCompatActivity {
         drawerLayout = findViewById(R.id.drawerLayout);
         ((TextView) findViewById(R.id.tvBookTitle)).setText(bookName);
         ((TextView) findViewById(R.id.drawerBookName)).setText("📒 " + bookName);
+
+        com.expenseos.sync.BackupScheduler.scheduleDaily(this);
 
         setupBottomNav();
         setupDrawer();

@@ -155,7 +155,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Log"
+                    android:text="Backup"
                     android:textColor="@color/text_muted"
                     android:textSize="10sp" />
             </LinearLayout>
@@ -185,7 +185,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Settings"
+                    android:text="Config"
                     android:textColor="@color/text_muted"
                     android:textSize="10sp" />
             </LinearLayout>

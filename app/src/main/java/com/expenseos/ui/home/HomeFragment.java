@@ -43,6 +43,8 @@ public class HomeFragment extends Fragment {
     private EditText etSearch;
     private ImageButton btnFilter;
     private TextView chipDate, chipCategory, chipSubCategory, chipAmount;
+    private View rowViewReports;
+    private TextView tvEntryCount;
 
     // Persists across searches/filter-dialog opens for this fragment instance.
     private final TransactionFilter currentFilter = new TransactionFilter();
@@ -62,10 +64,12 @@ public class HomeFragment extends Fragment {
         chipCategory = root.findViewById(R.id.chipCategory);
         chipSubCategory = root.findViewById(R.id.chipSubCategory);
         chipAmount = root.findViewById(R.id.chipAmount);
+        rowViewReports = root.findViewById(R.id.rowViewReports);
+        tvEntryCount = root.findViewById(R.id.tvEntryCount);
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> {
-            Intent i = new Intent(requireContext(), com.expenseos.ui.EntryDetailActivity.class);
+            Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
             i.putExtra("txnId", txn.getId());
             startActivity(i);
         });
@@ -95,6 +99,8 @@ public class HomeFragment extends Fragment {
         chipCategory.setOnClickListener(v -> openFilterDialog(1, true));
         chipSubCategory.setOnClickListener(v -> openFilterDialog(2, true));
         chipAmount.setOnClickListener(v -> openFilterDialog(3, true));
+        rowViewReports.setOnClickListener(v ->
+                startActivity(new Intent(requireContext(), com.expenseos.ui.GenerateReportActivity.class)));
 
         Button btnIncome = root.findViewById(R.id.btn_add_income);
         Button btnExpense = root.findViewById(R.id.btn_add_expense);
@@ -165,6 +171,7 @@ public class HomeFragment extends Fragment {
         transactions.addAll(all);
         adapter.setData(transactions);
         refreshFilterChips();
+        tvEntryCount.setText("Showing " + all.size() + " entries");
 
         // Update toolbar book label
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();

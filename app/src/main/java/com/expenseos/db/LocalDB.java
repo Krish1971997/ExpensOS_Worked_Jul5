@@ -9,7 +9,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 16; // bumped: fixed v11 migration that dropped created_at/updated_at from transactions
+    private static final int DB_VERSION = 17; // bumped: fixed v11 migration that dropped created_at/updated_at from transactions
     private static LocalDB instance;
     // Every table that has a manually-assigned "id" column now gets a row
     // here so its next id can be reserved before insert. Keep this list in
@@ -181,6 +181,20 @@ public class LocalDB extends SQLiteOpenHelper {
                 "updated_at   TEXT DEFAULT (datetime('now')))");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sched_log_id ON scheduler_log(scheduler_id ASC, started_at DESC)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_scheduler_log_updated ON scheduler_log(updated_at ASC)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS backup_history (" +
+                "id              INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "file_name       TEXT NOT NULL," +
+                "file_path       TEXT," +                    // local path; CLOUD-only entries can be empty after upload
+                "file_size_bytes INTEGER DEFAULT 0," +
+                "backup_type     TEXT DEFAULT 'MANUAL'," +
+                "backup_mode     TEXT NOT NULL DEFAULT 'LOCAL'," +   // LOCAL | CLOUD
+                "status          TEXT DEFAULT 'SUCCESS'," +
+                "description     TEXT," +
+                "income_count    INTEGER DEFAULT 0," +
+                "expense_count   INTEGER DEFAULT 0," +
+                "external_id     TEXT," +                     // Zoho WorkDrive resource_id, null for LOCAL
+                "created_at      TEXT DEFAULT (datetime('now')))");
 
         // id_sequences — app-controlled "next id" per table, replacing
         // AUTOINCREMENT so that ids stay predictable/reservable and won't
@@ -358,8 +372,26 @@ public class LocalDB extends SQLiteOpenHelper {
             initSequences(db);
         }
 
-        if(oldV<16){
+        if (oldV < 16) {
             SchedulerSeedData.insert(db);
+        }
+
+        if (oldV < 17) {
+            if (oldV < 10) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS backup_history (" +
+                        "id              INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "file_name       TEXT NOT NULL," +
+                        "file_path       TEXT," +
+                        "file_size_bytes INTEGER DEFAULT 0," +
+                        "backup_type     TEXT DEFAULT 'MANUAL'," +
+                        "backup_mode     TEXT NOT NULL DEFAULT 'LOCAL'," +
+                        "status          TEXT DEFAULT 'SUCCESS'," +
+                        "description     TEXT," +
+                        "income_count    INTEGER DEFAULT 0," +
+                        "expense_count   INTEGER DEFAULT 0," +
+                        "external_id     TEXT," +
+                        "created_at      TEXT DEFAULT (datetime('now')))");
+            }
         }
     }
 

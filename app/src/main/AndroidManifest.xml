@@ -7,8 +7,11 @@
      (API 26-28) in DownloadsSaver — maxSdkVersion so it's a no-op
      (and doesn't show in the Play Store permission list) on API 29+,
      where MediaStore.Downloads is used instead. -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -16,6 +19,10 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.ExpenseOS"
         android:usesCleartextTraffic="true">
+
+        <receiver
+            android:name="com.expenseos.sync.BackupScheduler$AutoBackupReceiver"
+            android:exported="false" />
 
         <!-- Launch: Book Selector -->
         <activity

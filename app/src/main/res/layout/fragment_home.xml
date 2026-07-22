@@ -249,6 +249,51 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!-- View Reports link -->
+    <LinearLayout
+        android:id="@+id/rowViewReports"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@android:color/white"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="14dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="VIEW REPORTS"
+            android:textColor="#1565C0"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="›"
+            android:textColor="#1565C0"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Entry count -->
+    <TextView
+        android:id="@+id/tvEntryCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:gravity="center"
+        android:paddingVertical="6dp"
+        android:text="Showing 0 entries"
+        android:textColor="#888"
+        android:textSize="12sp" />
+
     <!-- Transaction list -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipe_refresh"

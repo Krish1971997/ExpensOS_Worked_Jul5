@@ -40,6 +40,8 @@ public class ConfigFragment extends Fragment {
     private EditText etBackupHour, etBackupMinute, etSessionTimeout, etAppName;
     private Switch swAutoSync;
 
+    private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
+
     // Status views — keep references to avoid findViewById on wrong view
     private Button btnTestConnection, btnSyncConfigToDb;
     private TextView tvConnectionResult, tvSyncConfigStatus;
@@ -72,6 +74,11 @@ public class ConfigFragment extends Fragment {
         etAppName = v.findViewById(R.id.etCfgAppName);
         swAutoSync = v.findViewById(R.id.swAutoSync);
 
+        etZohoClientId = v.findViewById(R.id.etCfgZohoClientId);
+        etZohoClientSecret = v.findViewById(R.id.etCfgZohoClientSecret);
+        etZohoRefreshToken = v.findViewById(R.id.etCfgZohoRefreshToken);
+        etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
+
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
@@ -89,6 +96,16 @@ public class ConfigFragment extends Fragment {
         etSessionTimeout.setText(prefs.getString("session_timeout", "60"));
         etAppName.setText(prefs.getString("app_name", "ExpenseOS"));
         swAutoSync.setChecked(prefs.getBoolean("auto_sync", false));
+        etZohoClientId.setText(prefs.getString("zoho_client_id", ""));
+        etZohoClientSecret.setText(prefs.getString("zoho_secret", ""));
+        etZohoRefreshToken.setText(prefs.getString("zoho_refresh", ""));
+        etWorkdriveFolderId.setText(prefs.getString("workdrive_folder", ""));
+
+//        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(requireContext());
+//        etZohoClientId.setText(cfg.getZohoClientId());
+//        etZohoClientSecret.setText(cfg.getZohoClientSecret());
+//        etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
+//        etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
     }
 
     private void setupButtons() {
@@ -112,6 +129,15 @@ public class ConfigFragment extends Fragment {
                     saveAppPrefs();
                     toast("✓ App Config saved!");
                 });
+
+        requireView().findViewById(R.id.btnSaveCfgZoho).setOnClickListener(v -> {
+            com.expenseos.util.AppConfig.get(requireContext()).setZoho(
+                    etZohoClientId.getText().toString().trim(),
+                    etZohoClientSecret.getText().toString().trim(),
+                    etZohoRefreshToken.getText().toString().trim(),
+                    etWorkdriveFolderId.getText().toString().trim());
+            toast("✓ Zoho Config saved!");
+        });
 
         // ── Test DB Connection ──────────────────────────────
         btnTestConnection.setOnClickListener(v -> testConnection());
