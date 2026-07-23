@@ -448,4 +448,17 @@ public class LocalDB extends SQLiteOpenHelper {
             wdb.endTransaction();
         }
     }
+
+    /**
+     * Recomputes next_id = MAX(id)+1 for the given tables. Call this after any
+     * bulk cloud-fetch/replace that inserts rows with server-assigned ids, so
+     * subsequent local getNextId() calls never collide with them.
+     */
+    public void resyncSequences(String... tables) {
+        SQLiteDatabase wdb = getWritableDatabase();
+        for (String table : tables) {
+            wdb.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
+                    "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
+        }
+    }
 }

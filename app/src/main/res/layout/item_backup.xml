@@ -115,7 +115,7 @@
                 android:layout_width="0dp"
                 android:layout_height="38dp"
                 android:layout_weight="1"
-                android:text="↓ Download"
+                android:text="↗ Share"
                 android:textSize="12sp"
                 android:backgroundTint="#1565C0"
                 android:textColor="@android:color/white" />

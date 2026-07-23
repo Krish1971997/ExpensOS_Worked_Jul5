@@ -53,7 +53,11 @@ dependencies {
     implementation 'androidx.work:work-runtime:2.9.0'
 
     // PostgreSQL JDBC - direct connection to Neon
-    implementation 'org.postgresql:postgresql:42.7.3'
+    // 42.7.13+ required — earlier versions crash on Android with
+    // NoClassDefFoundError on java.lang.management.ManagementFactory
+    // (not present on Android) inside the maxResultBuffer connection-open
+    // path; fixed upstream in pgjdbc PR #4069.
+    implementation 'org.postgresql:postgresql:42.7.13'
 
     // Charts
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'

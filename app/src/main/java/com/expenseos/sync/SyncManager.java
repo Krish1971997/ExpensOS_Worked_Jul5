@@ -176,15 +176,21 @@ public class SyncManager {
                 // Fetch categories
                 fetchCategoriesAndStore(conn, ctx);
 
-                // Fetch sub-categories
+// Fetch sub-categories
                 fetchSubCategoriesAndStore(conn, ctx);
 
-                // Fetch cash books
+// Fetch cash books
                 fetchBooksAndStore(conn, ctx);
 
-                // Replace local
+// Replace local
                 new TransactionDao(ctx).replaceAllFromRemote(bookId, remote);
                 log.success("Local DB updated with " + remote.size() + " records.");
+
+// ── NEW: resync id_sequences so local inserts never collide with
+// the server ids we just pulled in ──────────────────────────────
+                com.expenseos.db.LocalDB.getInstance(ctx)
+                        .resyncSequences("cash_books", "categories", "sub_categories", "transactions");
+                log.info("id_sequences resynced after pull.");
 
             } catch (Exception e) {
                 log.error("Fetch failed: " + e.getMessage());
@@ -278,11 +284,11 @@ public class SyncManager {
         android.database.sqlite.SQLiteDatabase sdb = LocalDatabase.get(ctx).getWritableDatabase();
         sdb.delete("sub_categories", null, null);
         try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT sub_categories_id, name, category_id FROM sub_categories");
+                "SELECT id, name, category_id FROM sub_categories");   // <-- id, not sub_categories_id
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 cv = new android.content.ContentValues();
-                cv.put("sub_categories_id", rs.getInt("sub_categories_id"));
+                cv.put("id", rs.getInt("id"));                          // <-- id
                 cv.put("name", rs.getString("name"));
                 cv.put("category_id", rs.getInt("category_id"));
                 sdb.insert("sub_categories", null, cv);
