@@ -4,7 +4,6 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -92,6 +91,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic;
     private LinearLayout boxDate, boxTime, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
+    private View btnCalculator;
     private Spinner spCategory, spSubCategory;
     private Button btnSaveAddNew, btnSave;
 
@@ -133,7 +133,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
         etAmount.post(() -> {
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            if (imm != null)
+                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
@@ -148,6 +149,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvDate = findViewById(R.id.tvDate);
         tvTime = findViewById(R.id.tvTime);
         etAmount = findViewById(R.id.etAmount);
+        btnCalculator = findViewById(R.id.btnCalculator);
         etNote = findViewById(R.id.etNote);
         btnMic = findViewById(R.id.btnMic);
         btnAttach = findViewById(R.id.btnAttach);
@@ -178,6 +180,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         btnMic.setOnClickListener(v -> startVoiceInput());
         btnAttach.setOnClickListener(v -> pickAttachment());
+
+        btnCalculator.setOnClickListener(v ->
+                CalculatorDialog.show(this, etAmount.getText().toString(),
+                        amountText -> etAmount.setText(amountText)));
 
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));
@@ -702,18 +708,11 @@ public class TransactionEntryActivity extends AppCompatActivity {
         etAmount.post(() -> {
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            if (imm != null)
+                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
-    private static class PendingAttachment {
-        final String name, mimeType;
-        final byte[] bytes;
-
-        PendingAttachment(String name, String mimeType, byte[] bytes) {
-            this.name = name;
-            this.mimeType = mimeType;
-            this.bytes = bytes;
-        }
+    private record PendingAttachment(String name, String mimeType, byte[] bytes) {
     }
 }

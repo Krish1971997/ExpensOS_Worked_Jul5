@@ -175,18 +175,37 @@
                 android:textColor="@color/primary"
                 android:textSize="13sp" />
 
-            <EditText
-                android:id="@+id/etAmount"
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="4dp"
-                android:background="@drawable/bg_input_box"
-                android:hint="0"
-                android:inputType="numberDecimal"
-                android:paddingHorizontal="12dp"
-                android:textColor="@color/green"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:layout_marginTop="4dp">
+
+                <EditText
+                    android:id="@+id/etAmount"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_input_box"
+                    android:hint="0"
+                    android:inputType="numberDecimal"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="52dp"
+                    android:textColor="@color/green"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btnCalculator"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="6dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="🧮"
+                    android:textSize="20sp" />
+            </FrameLayout>
 
             <!-- Remark -->
             <LinearLayout

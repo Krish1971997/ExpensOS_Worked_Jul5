@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters;
 import com.expenseos.dao.SchedulerDao;
 import com.expenseos.model.SchedulerConfig;
 import com.expenseos.sync.SyncManager;
+import com.expenseos.util.ConsoleLogger;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -32,6 +33,8 @@ public class SchedulerWorker extends Worker {
     public static final String WORK_NAME = "scheduler_periodic_tick";
     private static final String KEY_RUN_ONLY = "run_only_name";
 
+    private final ConsoleLogger log = ConsoleLogger.get();
+
     public SchedulerWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
     }
@@ -44,18 +47,28 @@ public class SchedulerWorker extends Worker {
         String runOnly = getInputData().getString(KEY_RUN_ONLY);
         LocalDateTime now = LocalDateTime.now();
 
+        log.info(runOnly != null
+                ? "Scheduler tick — manual run requested: " + runOnly
+                : "Scheduler tick — checking due jobs at " + now);
+
+        int dueCount = 0;
         for (SchedulerConfig s : dao.findAll()) {
             boolean shouldRun = (runOnly != null)
                     ? runOnly.equals(s.getName())
                     : SchedulerTimeUtil.isDue(s, now);
             if (shouldRun) {
+                dueCount++;
                 runScheduler(ctx, dao, s);
             }
         }
+
+        if (dueCount == 0) log.info("Scheduler tick — nothing due right now.");
+
         return Result.success();
     }
 
     private void runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
+        log.info("▶ Running scheduler: " + s.getDisplayName() + " (" + s.getName() + ")");
         long logId = dao.logStart(s.getId());
         String message;
         int rows = 0;
@@ -63,9 +76,6 @@ public class SchedulerWorker extends Worker {
         try {
             switch (s.getName()) {
                 case "BACKUP": {
-                    CountDownLatch latch = new CountDownLatch(1);
-                    boolean[] okHolder = {false};
-                    String[] msgHolder = {""};
                     com.expenseos.sync.BackupManager.get().createBackupScheduled(ctx.getApplicationContext());
                     // createBackupScheduled() already runs its own background task with a
                     // silent no-op callback (see BackupManager) — treat enqueue as success here,
@@ -89,14 +99,16 @@ public class SchedulerWorker extends Worker {
                     break;
                 }
                 case "NEON_SYNC_PUSH": {
-                    SyncOutcome o = runSync(ctx, true);
+                    LocalDateTime fromDate = computeFromDate(s);
+                    SyncOutcome o = runSync(ctx, true, fromDate);
                     ok = o.ok;
                     message = o.summary;
                     rows = o.rows;
                     break;
                 }
                 case "NEON_SYNC_PULL": {
-                    SyncOutcome o = runSync(ctx, false);
+                    LocalDateTime fromDate = computeFromDate(s);
+                    SyncOutcome o = runSync(ctx, false, fromDate);
                     ok = o.ok;
                     message = o.summary;
                     rows = o.rows;
@@ -110,9 +122,12 @@ public class SchedulerWorker extends Worker {
 
             LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
             dao.logFinish((int) logId, s.getId(), "SUCCESS", message, rows, nextRun);
+            log.success("✔ " + s.getDisplayName() + " — " + message
+                    + (rows > 0 ? " (" + rows + " rows)" : ""));
         } catch (Exception e) {
             LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
             dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
+            log.error("✘ " + s.getDisplayName() + " failed: " + e.getMessage());
         }
     }
 
@@ -133,16 +148,40 @@ public class SchedulerWorker extends Worker {
     private static class CashBookResult {
         boolean created;
         String message;
+
         CashBookResult(boolean created, String message) {
             this.created = created;
             this.message = message;
         }
     }
 
+    // ── Windowing — mirrors web SchedulerEngine.execute()'s NEON_SYNC_PUSH/
+    // PULL block: sync from max(7-days-ago, last successful run), so a
+    // scheduler that hasn't run in a while doesn't try to resync everything
+    // since day one, but also never has a gap longer than 7 days even if
+    // last_run_at is missing/very old. Passing this fromDate into
+    // SyncManager makes it filter every table's push/pull by updated_at,
+    // instead of the previous "always push/pull literally everything".
+    private LocalDateTime computeFromDate(SchedulerConfig s) {
+        LocalDateTime oneWeekAgo = LocalDateTime.now().minusDays(7);
+        LocalDateTime lastRun = s.getLastRunAt();
+        // First-ever run for this scheduler: lastRunAt is null. Without this
+        // guard, lastRun.isBefore(...) below throws an NPE and the sync
+        // silently fails every time.
+        if (lastRun == null) lastRun = oneWeekAgo;
+        return lastRun.isBefore(oneWeekAgo) ? lastRun : oneWeekAgo;
+    }
+
     // ── Blocking wrapper around SyncManager's callback-based API ────
     // Worker.doWork() already runs on a background thread supplied by
     // WorkManager, so blocking here with a latch is safe and simplest.
-    private SyncOutcome runSync(Context ctx, boolean push) {
+    // NOTE: SyncManager/its DAOs already push their own detailed step-by-step
+    // ConsoleLogger lines (connecting, pushing each row, etc.) — we only add
+    // the start/end markers here so scheduled runs are easy to spot in the
+    // console among manual ones.
+    private SyncOutcome runSync(Context ctx, boolean push, LocalDateTime fromDate) {
+        log.info((push ? "↑ Scheduled push" : "↓ Scheduled pull") + " starting (since " + fromDate + ")…");
+
         CountDownLatch latch = new CountDownLatch(1);
         SyncOutcome outcome = new SyncOutcome();
 
@@ -155,12 +194,17 @@ public class SchedulerWorker extends Worker {
             }
         };
 
-        if (push) SyncManager.get().syncToCloud(ctx, cb);
-        else SyncManager.get().fetchFromCloud(ctx, cb);
+        if (push) SyncManager.get().syncToCloud(ctx, fromDate, cb);
+        else SyncManager.get().fetchFromCloud(ctx, fromDate, cb);
 
         try {
-            latch.await(2, TimeUnit.MINUTES);
+            if (!latch.await(2, TimeUnit.MINUTES)) {
+                outcome.ok = false;
+                outcome.summary = "Timed out after 2 minutes";
+                log.error((push ? "↑ Scheduled push" : "↓ Scheduled pull") + " timed out");
+            }
         } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
         return outcome;
     }
@@ -181,12 +225,14 @@ public class SchedulerWorker extends Worker {
                 SchedulerWorker.class, 15, TimeUnit.MINUTES).build();
         WorkManager.getInstance(ctx)
                 .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, req);
+        ConsoleLogger.get().info("Scheduler periodic tick registered (every 15 min).");
     }
 
     /**
      * Force-run one scheduler immediately, regardless of its next_run_at.
      */
     public static void runNow(Context ctx, String schedulerName) {
+        ConsoleLogger.get().info("Manual run requested: " + schedulerName);
         Data input = new Data.Builder().putString(KEY_RUN_ONLY, schedulerName).build();
         OneTimeWorkRequest req = new OneTimeWorkRequest.Builder(SchedulerWorker.class)
                 .setInputData(input)

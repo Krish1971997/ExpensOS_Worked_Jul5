@@ -2,61 +2,48 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#1A1A2E">
-    <!-- Header -->
+    android:background="#1E1E1E"
+    android:orientation="vertical">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical"
-        android:background="#16213E">
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="⬛ Sync Console"
-            android:textColor="#E0E0E0"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btn_copy_console"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:text="📋 Copy"
-            android:textSize="12sp"
-            android:backgroundTint="#546E7A"
-            android:textColor="@android:color/white"
-            android:layout_marginEnd="6dp" />
+        android:padding="10dp">
 
         <Button
             android:id="@+id/btn_clear_console"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
             android:text="🗑 Clear"
             android:textSize="12sp"
-            android:backgroundTint="#B71C1C"
+            android:backgroundTint="#C0392B"
+            android:textColor="@android:color/white" />
+
+        <Button
+            android:id="@+id/btn_copy_console"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:text="📋 Copy"
+            android:textSize="12sp"
+            android:backgroundTint="#1565C0"
             android:textColor="@android:color/white" />
     </LinearLayout>
-    <!-- Console output -->
+
     <ScrollView
         android:id="@+id/scroll_console"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="8dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="10dp">
 
         <TextView
             android:id="@+id/tv_console_output"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="No logs yet. Start a sync to see output here.\n"
-            android:textColor="#E0E0E0"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:lineSpacingExtra="4dp"
-            android:padding="8dp" />
+            android:text="No logs yet. Start a sync to see output here.\n" />
     </ScrollView>
 </LinearLayout>

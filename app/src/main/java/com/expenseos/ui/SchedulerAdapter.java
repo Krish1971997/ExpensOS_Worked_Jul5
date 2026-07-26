@@ -21,9 +21,15 @@ public class SchedulerAdapter extends RecyclerView.Adapter<SchedulerAdapter.VH> 
 
     public interface Listener {
         void onToggleEnabled(SchedulerConfig s, boolean enabled);
+
         void onRunNow(SchedulerConfig s);
+
         void onEdit(SchedulerConfig s);
+
+        void onViewHistory(SchedulerConfig s);   // <-- new
+
     }
+
 
     private final List<SchedulerConfig> items;
     private final Listener listener;
@@ -85,6 +91,10 @@ public class SchedulerAdapter extends RecyclerView.Adapter<SchedulerAdapter.VH> 
         h.btnEdit.setOnClickListener(v -> {
             if (listener != null) listener.onEdit(s);
         });
+
+        h.btnHistory.setOnClickListener(v -> {
+            if (listener != null) listener.onViewHistory(s);
+        });
     }
 
     @Override
@@ -97,6 +107,7 @@ public class SchedulerAdapter extends RecyclerView.Adapter<SchedulerAdapter.VH> 
         Switch swEnabled;
         Button btnRunNow;
         ImageButton btnEdit;
+        ImageButton btnHistory;
 
         VH(@NonNull View v) {
             super(v);
@@ -108,6 +119,7 @@ public class SchedulerAdapter extends RecyclerView.Adapter<SchedulerAdapter.VH> 
             swEnabled = v.findViewById(R.id.swSchedEnabled);
             btnRunNow = v.findViewById(R.id.btnSchedRunNow);
             btnEdit = v.findViewById(R.id.btnSchedEdit);
+            btnHistory = v.findViewById(R.id.btnSchedHistory);   // <-- new
         }
     }
 }

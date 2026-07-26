@@ -687,12 +687,12 @@ public class TransactionDao {
     }
 
     private String baseSelect() {
-        return "SELECT t.id, t.type, t.txn_datetime, t.amount, t.note, t.book_id, "
-                + "c.id AS cat_id, c.name AS cat_name, "
-                + "sc.id AS subcat_id, sc.name AS subcat_name "
-                + "FROM transactions t "
-                + "LEFT JOIN categories c ON t.category_id=c.id "
-                + "LEFT JOIN sub_categories sc ON t.sub_categories_id=sc.id";
+        return "SELECT t.id, t.type, t.txn_datetime, t.amount, t.note, t.book_id, t.synced," +   // <-- t.synced added
+                " c.id AS cat_id, c.name AS cat_name," +
+                " sc.id AS subcat_id, sc.name AS subcat_name" +
+                " FROM transactions t" +
+                " LEFT JOIN categories c ON t.category_id = c.id" +
+                " LEFT JOIN sub_categories sc ON t.sub_categories_id = sc.id";
     }
 
     // Public entry point for callers that need to persist custom field
@@ -748,6 +748,7 @@ public class TransactionDao {
         t.setSubCategoryId(c.getInt(c.getColumnIndexOrThrow("subcat_id")));
         t.setSubCategoryName(c.getString(c.getColumnIndexOrThrow("subcat_name")));
         t.setBookId(c.getInt(c.getColumnIndexOrThrow("book_id")));
+        t.setSynced(c.getInt(c.getColumnIndexOrThrow("synced")) == 1);   // <-- new
         return t;
     }
 

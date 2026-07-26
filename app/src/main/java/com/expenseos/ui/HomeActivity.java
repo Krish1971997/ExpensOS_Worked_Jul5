@@ -1,7 +1,6 @@
 package com.expenseos.ui;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,8 +16,8 @@ import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
 import com.expenseos.sync.SyncManager;
-import com.expenseos.ui.home.HomeFragment;
 import com.expenseos.ui.backup.BackupFragment;
+import com.expenseos.ui.home.HomeFragment;
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -55,7 +54,7 @@ public class HomeActivity extends AppCompatActivity {
         ((TextView) findViewById(R.id.tvBookTitle)).setText(bookName);
         ((TextView) findViewById(R.id.drawerBookName)).setText("📒 " + bookName);
 
-        com.expenseos.sync.BackupScheduler.scheduleDaily(this);
+//        com.expenseos.sync.BackupScheduler.scheduleDaily(this);
 
         setupBottomNav();
         setupDrawer();
@@ -140,10 +139,24 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, AuditLogActivity.class));
         });
 
+        View drawerBudget = findViewById(R.id.drawerBudget);
+        if (drawerBudget != null) drawerBudget.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            Intent i = new Intent(this, BudgetActivity.class);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
+        });
+
         View drawerScheduler = findViewById(R.id.drawerScheduler);
         if (drawerScheduler != null) drawerScheduler.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, SchedulerActivity.class));
+        });
+
+        View drawerConsoleLog = findViewById(R.id.drawerConsoleLog);
+        if (drawerConsoleLog != null) drawerConsoleLog.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, LogActivity.class));
         });
     }
 

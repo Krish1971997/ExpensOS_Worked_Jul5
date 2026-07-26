@@ -2,7 +2,6 @@ package com.expenseos.ui;
 
 import android.Manifest;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -81,8 +80,9 @@ public class GenerateReportActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_generate_report);
 
-        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-        bookId = prefs.getInt("active_book_id", 0);
+//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+//        bookId = prefs.getInt("active_book_id", 0);
+        bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
         subCatDao = new SubCategoryDao(this);
@@ -350,6 +350,7 @@ public class GenerateReportActivity extends AppCompatActivity {
                 })
                 .show();
     }
+
     private void showSearchDialog() {
         android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("Search by remark or amount");

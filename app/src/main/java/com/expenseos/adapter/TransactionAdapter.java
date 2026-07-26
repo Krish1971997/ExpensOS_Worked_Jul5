@@ -1,6 +1,8 @@
 package com.expenseos.adapter;
 
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -11,6 +13,7 @@ import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
+import com.expenseos.db.LocalDB;
 import com.expenseos.model.Transaction;
 
 import java.time.LocalDate;
@@ -68,6 +71,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     private final Context ctx;
+    private final SQLiteDatabase readDb;
     private final List<Row> rows = new ArrayList<>();
     private final OnTxnLongClick onLongClick; // long-press → options (edit/dup/del)
     private final OnTxnClick onClick;     // tap → detail
@@ -77,6 +81,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                               OnTxnLongClick onLongClick,
                               OnTxnClick onClick) {
         this.ctx = ctx;
+        this.readDb = LocalDB.getInstance(ctx).getReadableDatabase();
         this.onLongClick = onLongClick;
         this.onClick = onClick;
         setData(list);
@@ -121,7 +126,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TxnVH extends RecyclerView.ViewHolder {
-        TextView tvDate, tvCat, tvSubCat, tvAmount, tvNote, tvBalance, tvSyncDot;
+        TextView tvDate, tvCat, tvSubCat, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments;
         View typeBadge;
 
         TxnVH(View v) {
@@ -133,6 +138,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvNote = v.findViewById(R.id.tvTxnNote);
             tvBalance = v.findViewById(R.id.tvTxnBalance);
             tvSyncDot = v.findViewById(R.id.tvTxnSyncDot);
+            tvAttachments = v.findViewById(R.id.tvTxnAttachments);
             typeBadge = v.findViewById(R.id.viewTypeBadge);
         }
     }
@@ -193,8 +199,24 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             h.tvBalance.setText("");
         }
 
-        // Sync pending dot — small amber indicator if not synced
-        h.tvSyncDot.setVisibility(t.isSynced() ? View.GONE : View.VISIBLE);
+        // Sync status dot — always visible: green when synced=1, red when synced=0.
+        h.tvSyncDot.setVisibility(View.VISIBLE);
+        if (t.isSynced()) {
+            h.tvSyncDot.setText("● synced");
+            h.tvSyncDot.setTextColor(ContextCompat.getColor(ctx, R.color.green));
+        } else {
+            h.tvSyncDot.setText("● sync");
+            h.tvSyncDot.setTextColor(ContextCompat.getColor(ctx, R.color.red));
+        }
+
+        // Attachment count — 📎 N Attachments, hidden when there are none
+        int attCount = getAttachmentCount(t.getId());
+        if (attCount > 0) {
+            h.tvAttachments.setText("📎 " + attCount + (attCount == 1 ? " Attachment" : " Attachments"));
+            h.tvAttachments.setVisibility(View.VISIBLE);
+        } else {
+            h.tvAttachments.setVisibility(View.GONE);
+        }
 
         // Click → detail
         if (onClick != null)
@@ -211,5 +233,17 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     @Override
     public int getItemCount() {
         return rows.size();
+    }
+
+    // ── Attachment count (📎 N Attachments) ──────────────────────────
+    // Per-row lightweight query, same pattern as MainActivity's BookAdapter
+    // calling dao.getSummary(id) per bind — kept consistent with that
+    // existing style rather than introducing a separate batch-loading path.
+    private int getAttachmentCount(int transactionId) {
+        try (Cursor c = readDb.rawQuery(
+                "SELECT COUNT(*) FROM transaction_receipts WHERE transaction_id = ?",
+                new String[]{String.valueOf(transactionId)})) {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        }
     }
 }

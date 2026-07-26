@@ -65,10 +65,10 @@ public class CashBookDao {
 
         // Sort — updated_at இல்லாம created_at use பண்றோம்
         String order = switch (sort == null ? "" : sort) {
-            case "name_asc"     -> " ORDER BY b.name ASC";
+            case "name_asc" -> " ORDER BY b.name ASC";
             case "balance_desc" -> " ORDER BY net_balance DESC";
-            case "balance_asc"  -> " ORDER BY net_balance ASC";
-            default             -> " ORDER BY COALESCE(t.maxupdated, b.created_at) DESC";
+            case "balance_asc" -> " ORDER BY net_balance ASC";
+            default -> " ORDER BY COALESCE(t.maxupdated, b.created_at) DESC";
         };
         sql.append(order);
 
@@ -108,6 +108,7 @@ public class CashBookDao {
         cv.put("name", name.trim());
         cv.put("description", description != null ? description.trim() : "");
         cv.put("created_at", LocalDateTime.now().format(TS_FMT));
+        cv.put("updated_at", LocalDateTime.now().format(TS_FMT));
         return db.insert("cash_books", null, cv); // returns new row id, or -1 on failure
     }
 
@@ -162,7 +163,9 @@ public class CashBookDao {
      * Force delete: removes all transactions + categories (scoped to this book) + the book itself.
      * Call only after the user has explicitly confirmed via exact-name match.
      */
-    /** Cascade delete: transactions → sub_categories(book-specific) → categories(book-specific) → the book itself. */
+    /**
+     * Cascade delete: transactions → sub_categories(book-specific) → categories(book-specific) → the book itself.
+     */
     public void deleteCascade(int bookId) {
         db.beginTransaction();
         try {

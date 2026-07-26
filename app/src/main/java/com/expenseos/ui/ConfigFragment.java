@@ -1,7 +1,5 @@
 package com.expenseos.ui;
 
-import com.expenseos.R;
-
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
@@ -11,13 +9,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
+import com.expenseos.R;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -36,10 +35,6 @@ public class ConfigFragment extends Fragment {
     private EditText etDbUrl, etDbUser, etDbPass;
     // Gmail Config
     private EditText etGmailFrom, etGmailPass;
-    // App Config
-    private EditText etBackupHour, etBackupMinute, etSessionTimeout, etAppName;
-    private Switch swAutoSync;
-
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
 
     // Status views — keep references to avoid findViewById on wrong view
@@ -68,11 +63,6 @@ public class ConfigFragment extends Fragment {
         etDbPass = v.findViewById(R.id.etCfgDbPass);
         etGmailFrom = v.findViewById(R.id.etCfgGmailFrom);
         etGmailPass = v.findViewById(R.id.etCfgGmailPass);
-        etBackupHour = v.findViewById(R.id.etCfgBackupHour);
-        etBackupMinute = v.findViewById(R.id.etCfgBackupMinute);
-        etSessionTimeout = v.findViewById(R.id.etCfgSessionTimeout);
-        etAppName = v.findViewById(R.id.etCfgAppName);
-        swAutoSync = v.findViewById(R.id.swAutoSync);
 
         etZohoClientId = v.findViewById(R.id.etCfgZohoClientId);
         etZohoClientSecret = v.findViewById(R.id.etCfgZohoClientSecret);
@@ -91,21 +81,16 @@ public class ConfigFragment extends Fragment {
         etDbPass.setText(prefs.getString("db_pass", ""));
         etGmailFrom.setText(prefs.getString("gmail_from", ""));
         etGmailPass.setText(prefs.getString("gmail_pass", ""));
-        etBackupHour.setText(prefs.getString("backup_hour", "0"));
-        etBackupMinute.setText(prefs.getString("backup_minute", "0"));
-        etSessionTimeout.setText(prefs.getString("session_timeout", "60"));
-        etAppName.setText(prefs.getString("app_name", "ExpenseOS"));
-        swAutoSync.setChecked(prefs.getBoolean("auto_sync", false));
-        etZohoClientId.setText(prefs.getString("zoho_client_id", ""));
-        etZohoClientSecret.setText(prefs.getString("zoho_secret", ""));
-        etZohoRefreshToken.setText(prefs.getString("zoho_refresh", ""));
-        etWorkdriveFolderId.setText(prefs.getString("workdrive_folder", ""));
 
-//        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(requireContext());
-//        etZohoClientId.setText(cfg.getZohoClientId());
-//        etZohoClientSecret.setText(cfg.getZohoClientSecret());
-//        etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
-//        etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
+        // Zoho fields are saved via AppConfig.setZoho() (see btnSaveCfgZoho
+        // handler below), never to `prefs` — so they must be loaded from
+        // AppConfig too, or this always reads back empty after leaving and
+        // returning to this screen even though the save itself succeeded.
+        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(requireContext());
+        etZohoClientId.setText(cfg.getZohoClientId());
+        etZohoClientSecret.setText(cfg.getZohoClientSecret());
+        etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
+        etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
     }
 
     private void setupButtons() {
@@ -121,13 +106,6 @@ public class ConfigFragment extends Fragment {
                 .setOnClickListener(v -> {
                     saveGmailPrefs();
                     toast("✓ Gmail Config saved!");
-                });
-
-        // ── Save App Config ─────────────────────────────────
-        requireView().findViewById(R.id.btnSaveCfgApp)
-                .setOnClickListener(v -> {
-                    saveAppPrefs();
-                    toast("✓ App Config saved!");
                 });
 
         requireView().findViewById(R.id.btnSaveCfgZoho).setOnClickListener(v -> {
@@ -202,7 +180,7 @@ public class ConfigFragment extends Fragment {
         // Save all locally first
         saveDbPrefs();
         saveGmailPrefs();
-        saveAppPrefs();
+//        saveAppPrefs();
 
         String url = prefs.getString("db_url", "");
         String user = prefs.getString("db_user", "");
@@ -237,7 +215,7 @@ public class ConfigFragment extends Fragment {
                         {"backup.schedule.hour", prefs.getString("backup_hour", "0")},
                         {"backup.schedule.minute", prefs.getString("backup_minute", "0")},
                         {"session.timeout", prefs.getString("session_timeout", "60")},
-                        {"auto.sync.enabled", prefs.getBoolean("auto_sync", false) ? "true" : "false"},
+                        {"auto.sync.enabled", Boolean.toString(prefs.getBoolean("auto_sync", false))},
                         {"app.display.name", prefs.getString("app_name", "ExpenseOS")},
                         {"gmail.from", prefs.getString("gmail_from", "")},
                 };
@@ -274,10 +252,17 @@ public class ConfigFragment extends Fragment {
 
     // ── SharedPreferences helpers ─────────────────────────
     private void saveDbPrefs() {
+        String url = etDbUrl.getText().toString().trim();
+        String user = etDbUser.getText().toString().trim();
+        String pass = etDbPass.getText().toString().trim();
+
+        // Save to BOTH — AppConfig (used by SyncManager/Restore dialog) is the
+        // source of truth; keep the old prefs write too so nothing else silently breaks.
+        com.expenseos.util.AppConfig.get(requireContext()).setDb(url, user, pass);
         prefs.edit()
-                .putString("db_url", etDbUrl.getText().toString().trim())
-                .putString("db_user", etDbUser.getText().toString().trim())
-                .putString("db_pass", etDbPass.getText().toString().trim())
+                .putString("db_url", url)
+                .putString("db_user", user)
+                .putString("db_pass", pass)
                 .apply();
     }
 
@@ -285,16 +270,6 @@ public class ConfigFragment extends Fragment {
         prefs.edit()
                 .putString("gmail_from", etGmailFrom.getText().toString().trim())
                 .putString("gmail_pass", etGmailPass.getText().toString().trim())
-                .apply();
-    }
-
-    private void saveAppPrefs() {
-        prefs.edit()
-                .putString("backup_hour", etBackupHour.getText().toString().trim())
-                .putString("backup_minute", etBackupMinute.getText().toString().trim())
-                .putString("session_timeout", etSessionTimeout.getText().toString().trim())
-                .putBoolean("auto_sync", swAutoSync.isChecked())
-                .putString("app_name", etAppName.getText().toString().trim())
                 .apply();
     }
 

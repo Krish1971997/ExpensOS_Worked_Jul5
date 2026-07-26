@@ -6,11 +6,14 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import com.expenseos.util.ConsoleLogger;
+
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 17; // bumped: fixed v11 migration that dropped created_at/updated_at from transactions
+    private static final int DB_VERSION = 28; // bumped: added budgets, budget_categories
     private static LocalDB instance;
+    private final ConsoleLogger log = ConsoleLogger.get();
     // Every table that has a manually-assigned "id" column now gets a row
     // here so its next id can be reserved before insert. Keep this list in
     // sync with the id-bearing tables created below.
@@ -18,7 +21,7 @@ public class LocalDB extends SQLiteOpenHelper {
             "cash_books", "categories", "sub_categories", "column_definitions",
             "transactions", "transaction_custom_values", "deleted_records",
             "transaction_audit_log", "transaction_receipts",
-            "schedulers", "scheduler_log"
+            "schedulers", "scheduler_log", "budgets", "budget_categories"
     };
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -194,7 +197,44 @@ public class LocalDB extends SQLiteOpenHelper {
                 "income_count    INTEGER DEFAULT 0," +
                 "expense_count   INTEGER DEFAULT 0," +
                 "external_id     TEXT," +                     // Zoho WorkDrive resource_id, null for LOCAL
-                "created_at      TEXT DEFAULT (datetime('now')))");
+                "created_at      TEXT DEFAULT (datetime('now'))," +
+                "updated_at     TEXT NOT NULL DEFAULT (datetime('now')))");
+
+        // budgets — mirrors public.budgets (Postgres)
+        db.execSQL("CREATE TABLE IF NOT EXISTS budgets (" +
+                "id             INTEGER PRIMARY KEY," +
+                "book_id        INTEGER NOT NULL," +
+                "year           INTEGER NOT NULL," +
+                "month          INTEGER NOT NULL," +
+                "overall_limit  REAL NOT NULL DEFAULT 0," +
+                "created_at     TEXT NOT NULL DEFAULT (datetime('now'))," +
+                "updated_at     TEXT NOT NULL DEFAULT (datetime('now'))," +
+                "UNIQUE(book_id, year, month))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_budgets_book_ym ON budgets(book_id, year, month)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_budgets_updated ON budgets(updated_at)");
+
+        // budget_categories — mirrors public.budget_categories (Postgres)
+        db.execSQL("CREATE TABLE IF NOT EXISTS budget_categories (" +
+                "id          INTEGER PRIMARY KEY," +
+                "budget_id   INTEGER NOT NULL REFERENCES budgets(id) ON DELETE CASCADE," +
+                "category_id INTEGER NOT NULL," +
+                "cat_limit   REAL NOT NULL DEFAULT 0," +
+                "alert_pct   INTEGER NOT NULL DEFAULT 80," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
+                "UNIQUE(budget_id, category_id))");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_budcat_budget ON budget_categories(budget_id)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_budget_categories_updated ON budget_categories(updated_at)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS passbook_entries (" +
+                "sms_id           INTEGER PRIMARY KEY," +
+                "type             TEXT NOT NULL," +
+                "amount           TEXT NOT NULL," +
+                "sender           TEXT," +
+                "raw_body         TEXT," +
+                "remark           TEXT," +          // <-- new
+                "timestamp_millis INTEGER NOT NULL," +
+                "copied           INTEGER DEFAULT 0)");
 
         // id_sequences — app-controlled "next id" per table, replacing
         // AUTOINCREMENT so that ids stay predictable/reservable and won't
@@ -393,21 +433,185 @@ public class LocalDB extends SQLiteOpenHelper {
                         "created_at      TEXT DEFAULT (datetime('now')))");
             }
         }
+
+        // v17 → v18: add budgets, budget_categories for existing installs
+        if (oldV < 19) {
+
+            try {
+                db.execSQL("ALTER TABLE backup_history ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+
+            db.execSQL("CREATE TABLE IF NOT EXISTS budgets (" +
+                    "id             INTEGER PRIMARY KEY," +
+                    "book_id        INTEGER NOT NULL," +
+                    "year           INTEGER NOT NULL," +
+                    "month          INTEGER NOT NULL," +
+                    "overall_limit  REAL NOT NULL DEFAULT 0," +
+                    "created_at     TEXT NOT NULL DEFAULT (datetime('now'))," +
+                    "updated_at     TEXT NOT NULL DEFAULT (datetime('now'))," +
+                    "UNIQUE(book_id, year, month))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_budgets_book_ym ON budgets(book_id, year, month)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_budgets_updated ON budgets(updated_at)");
+
+            db.execSQL("CREATE TABLE IF NOT EXISTS budget_categories (" +
+                    "id          INTEGER PRIMARY KEY," +
+                    "budget_id   INTEGER NOT NULL REFERENCES budgets(id) ON DELETE CASCADE," +
+                    "category_id INTEGER NOT NULL," +
+                    "cat_limit   REAL NOT NULL DEFAULT 0," +
+                    "alert_pct   INTEGER NOT NULL DEFAULT 80," +
+                    "created_at  TEXT DEFAULT (datetime('now'))," +
+                    "updated_at  TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(budget_id, category_id))");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_budcat_budget ON budget_categories(budget_id)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_budget_categories_updated ON budget_categories(updated_at)");
+
+            // Seed next_id rows for the two new tables (safe to re-run for
+            // existing tables too — it just recomputes MAX(id)+1, which is
+            // already correct for anything with rows in it).
+            initSequences(db);
+        }
+
+        if (oldV < 22) {
+            // v18 → v19: defensive repair — some upgrade paths left cash_books
+// (and potentially other tables) missing columns that onCreate() always
+// includes for fresh installs. ALTER TABLE ADD COLUMN is safe to retry:
+// it throws (caught + ignored) if the column already exists, so this
+// runs harmlessly on every already-healthy device too.
+            try {
+                db.execSQL("ALTER TABLE cash_books ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE cash_books ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE cash_books ADD COLUMN is_active INTEGER DEFAULT 1");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE cash_books ADD COLUMN synced INTEGER DEFAULT 0");
+            } catch (Exception ignored) {
+            }
+
+            // Same defensive pattern for categories/sub_categories/transactions —
+            // covers any device that hit the same partial-migration gap.
+            try {
+                db.execSQL("ALTER TABLE categories ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE categories ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE sub_categories ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+            try {
+                db.execSQL("ALTER TABLE sub_categories ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (oldV < 28) {
+            for (String table : ID_TABLES) {
+                // 1. created_at காலம் சேர்த்தல்
+                try {
+                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN created_at TEXT DEFAULT ''");
+                } catch (Exception e) {
+                    log.error("DB_UPGRADE " + table + " --> column created_at already exists or error: " + e.getMessage());
+                }
+
+                // 2. updated_at காலம் சேர்த்தல்
+                try {
+                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN updated_at TEXT DEFAULT ''");
+                } catch (Exception e) {
+                    log.error("DB_UPGRADE " + table + " --> column updated_at already exists or error: " + e.getMessage());
+                }
+            }
+        }
+
+        if (oldV < 27) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS passbook_entries (" +
+                    "sms_id           INTEGER PRIMARY KEY," +
+                    "type             TEXT NOT NULL," +
+                    "amount           TEXT NOT NULL," +
+                    "sender           TEXT," +
+                    "raw_body         TEXT," +
+                    "remark           TEXT," +          // <-- new
+                    "timestamp_millis INTEGER NOT NULL," +
+                    "copied           INTEGER DEFAULT 0)");
+        }
     }
 
     @Override
     public void onOpen(SQLiteDatabase db) {
         super.onOpen(db);
         db.execSQL("PRAGMA foreign_keys = ON;");
+        repairSchema(db);   // <-- runs on EVERY app launch, regardless of version tracking
     }
+
+    /**
+     * Defensive column repair — runs unconditionally on every DB open (not
+     * gated by onUpgrade's oldV check), because a device can end up with
+     * PRAGMA user_version already bumped past the migration that was supposed
+     * to add these columns (e.g. a broken/partial earlier run), which makes
+     * onUpgrade's "if (oldV < N)" block permanently skip on that device.
+     * ALTER TABLE ADD COLUMN is safe to call repeatedly — it just throws
+     * (caught + ignored) once the column already exists.
+     */
+    private void repairSchema(SQLiteDatabase db) {
+        String[][] repairs = {
+                {"cash_books", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"cash_books", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"cash_books", "is_active", "INTEGER DEFAULT 1"},
+                {"cash_books", "synced", "INTEGER DEFAULT 0"},
+                {"categories", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"categories", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"sub_categories", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"sub_categories", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"column_definitions", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"column_definitions", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"transactions", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"transactions", "updated_at", "TEXT DEFAULT (datetime('now'))"}
+        };
+        for (String[] r : repairs) {
+            try {
+                db.execSQL("ALTER TABLE " + r[0] + " ADD COLUMN " + r[1] + " " + r[2]);
+            } catch (Exception ignored) {
+                // காலம் ஏற்கனவே இருந்தால் இந்த Exception புறக்கணிக்கப்படும்
+            }
+        }
+    }
+
 
     /**
      * Sets each table's next_id to MAX(id)+1 (or 1 if the table is empty).
      */
+    /**
+     * Sets each table's next_id to MAX(id)+1 (or 1 if the table is empty).
+     * Skips any table that doesn't exist yet — ID_TABLES is one flat list
+     * shared by every version's migration block, but a table added in a
+     * later version block (e.g. "budgets") genuinely doesn't exist yet
+     * when an *earlier* version block's initSequences() call runs during
+     * the same onUpgrade() pass on an old device. Without this check,
+     * that earlier call crashes with "no such table".
+     */
     private void initSequences(SQLiteDatabase db) {
         for (String table : ID_TABLES) {
+            if (!tableExists(db, table)) continue;
             db.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
                     "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
+        }
+    }
+
+    private boolean tableExists(SQLiteDatabase db, String tableName) {
+        try (Cursor c = db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                new String[]{tableName})) {
+            return c.moveToFirst();
         }
     }
 
@@ -457,6 +661,7 @@ public class LocalDB extends SQLiteOpenHelper {
     public void resyncSequences(String... tables) {
         SQLiteDatabase wdb = getWritableDatabase();
         for (String table : tables) {
+            if (!tableExists(wdb, table)) continue;
             wdb.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
                     "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
         }

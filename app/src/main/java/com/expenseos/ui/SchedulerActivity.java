@@ -5,8 +5,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Switch;
@@ -77,6 +77,11 @@ public class SchedulerActivity extends AppCompatActivity {
             @Override
             public void onEdit(SchedulerConfig sc) {
                 showEditDialog(sc);
+            }
+
+            @Override
+            public void onViewHistory(SchedulerConfig s) {
+                showHistoryDialog(s);
             }
         }));
     }
@@ -173,6 +178,34 @@ public class SchedulerActivity extends AppCompatActivity {
                     Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showHistoryDialog(SchedulerConfig sc) {
+        List<com.expenseos.model.SchedulerLog> logs = dao.recentLogs(sc.getId(), 20);
+
+        if (logs.isEmpty()) {
+            Toast.makeText(this, "No run history yet for " + sc.getDisplayName(), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd MMM, HH:mm:ss");
+        for (com.expenseos.model.SchedulerLog l : logs) {
+            String icon = "SUCCESS".equals(l.getStatus()) ? "✔" : "RUNNING".equals(l.getStatus()) ? "⏳" : "✘";
+            sb.append(icon).append(" ").append(l.getStatus());
+            if (l.getStartedAt() != null) sb.append("  —  ").append(l.getStartedAt().format(fmt));
+            if (l.getRowsSynced() > 0) sb.append("  (").append(l.getRowsSynced()).append(" rows)");
+            sb.append("\n");
+            if (l.getMessage() != null && !l.getMessage().isEmpty())
+                sb.append("    ").append(l.getMessage()).append("\n");
+            sb.append("\n");
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(sc.getDisplayName() + " — Run History")
+                .setMessage(sb.toString().trim())
+                .setPositiveButton("Close", null)
                 .show();
     }
 }

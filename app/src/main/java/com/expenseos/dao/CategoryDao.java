@@ -27,7 +27,7 @@ public class CategoryDao {
         String sql = "SELECT id, name, type, book_id FROM categories " +
                 "WHERE type=? AND (book_id IS NULL" +
                 (bookId != null ? " OR book_id=" + bookId : "") +
-                ") ORDER BY book_id IS NOT NULL, name";
+                ") ORDER BY book_id IS NOT NULL, id";
         List<Category> list = new ArrayList<>();
         Cursor c = db.rawQuery(sql, new String[]{type});
         while (c.moveToNext()) {

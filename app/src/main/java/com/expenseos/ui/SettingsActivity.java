@@ -1,11 +1,11 @@
 package com.expenseos.ui;
 
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -34,29 +34,29 @@ import java.util.Map;
 
 /**
  * Two launch modes, controlled by Intent extras:
- *
- *  GLOBAL (default — launched from the Cashbooks list, no book context yet):
- *    new Intent(this, SettingsActivity.class)
- *    -> only common (book_id IS NULL) categories/sub-categories are shown or
- *       addable. The "This book only" scope option never appears.
- *
- *  CASHBOOK-SCOPED (launched from inside a cashbook, e.g. HomeActivity or the
- *  transaction entry screen's gear icon):
- *    new Intent(this, SettingsActivity.class)
- *        .putExtra("bookScoped", true)
- *        .putExtra("bookId", activeBookId)   // must be > 0
- *        .putExtra("startTab", 2)            // optional: 0=Cat,1=Sub-Cat,2=Columns
- *    -> category "Add" dialog shows a scope dropdown: "Common (all books)"
- *       (default/first option) and "This book only" (second option).
- *       If bookId isn't a valid positive number, this activity shows an
- *       error and finishes immediately.
- *
+ * <p>
+ * GLOBAL (default — launched from the Cashbooks list, no book context yet):
+ * new Intent(this, SettingsActivity.class)
+ * -> only common (book_id IS NULL) categories/sub-categories are shown or
+ * addable. The "This book only" scope option never appears.
+ * <p>
+ * CASHBOOK-SCOPED (launched from inside a cashbook, e.g. HomeActivity or the
+ * transaction entry screen's gear icon):
+ * new Intent(this, SettingsActivity.class)
+ * .putExtra("bookScoped", true)
+ * .putExtra("bookId", activeBookId)   // must be > 0
+ * .putExtra("startTab", 2)            // optional: 0=Cat,1=Sub-Cat,2=Columns
+ * -> category "Add" dialog shows a scope dropdown: "Common (all books)"
+ * (default/first option) and "This book only" (second option).
+ * If bookId isn't a valid positive number, this activity shows an
+ * error and finishes immediately.
+ * <p>
  * Sub-categories aren't separately book-scoped in the schema (they belong
  * to a category, which is itself common or book-specific) — no scope
  * dropdown for them, but the Add dialog does let you pick which parent
  * category a new sub-category belongs to (this was previously easy to lose
  * track of, so the list now also shows the parent category name on each row).
- *
+ * <p>
  * Custom columns (column_definitions) have no book_id column in the current
  * schema, so they're global-only regardless of launch mode.
  */
@@ -159,9 +159,16 @@ public class SettingsActivity extends AppCompatActivity {
         tabCatExpense.setOnClickListener(v -> setCatSubTab(1));
 
         etCatSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void afterTextChanged(Editable e) {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
                 catSearch = e.toString().trim();
                 loadCategoryList();
             }
@@ -281,8 +288,15 @@ public class SettingsActivity extends AppCompatActivity {
                                     "Transactions using it won't be affected.")
                             .setPositiveButton("Delete", (d, w) -> {
                                 catDao.delete(c.getId());
-                                list.remove(pos);
-                                notifyItemRemoved(pos);
+                                // Use c's CURRENT index, not the bind-time `pos` — RecyclerView
+                                // doesn't rebind surviving rows after notifyItemRemoved, so a
+                                // row's closure can go stale as soon as any earlier row is
+                                // removed, causing the wrong item to be removed from `list`.
+                                int idx = list.indexOf(c);
+                                if (idx >= 0) {
+                                    list.remove(idx);
+                                    notifyItemRemoved(idx);
+                                }
                             })
                             .setNegativeButton("Cancel", null)
                             .show());
@@ -307,9 +321,16 @@ public class SettingsActivity extends AppCompatActivity {
         tabSubExpense.setOnClickListener(v -> setSubCatSubTab(1));
 
         etSubCatSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void afterTextChanged(Editable e) {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
                 subCatSearch = e.toString().trim();
                 loadSubCategoryList();
             }
@@ -329,8 +350,10 @@ public class SettingsActivity extends AppCompatActivity {
         loadSubCategoryList();
     }
 
-    /** Categories of the active sub-tab's type, used both for the list's
-     * category-name lookup and for the Add dialog's parent-category spinner. */
+    /**
+     * Categories of the active sub-tab's type, used both for the list's
+     * category-name lookup and for the Add dialog's parent-category spinner.
+     */
     private List<Category> categoriesForSubCatTab() {
         String type = subCatSubTab == 0 ? "INCOME" : "EXPENSE";
         return catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
@@ -451,8 +474,11 @@ public class SettingsActivity extends AppCompatActivity {
                             .setMessage("Delete \"" + sc.getName() + "\"?")
                             .setPositiveButton("Delete", (d, w) -> {
                                 scDao.delete(sc.getId());
-                                list.remove(pos);
-                                notifyItemRemoved(pos);
+                                int idx = list.indexOf(sc);
+                                if (idx >= 0) {
+                                    list.remove(idx);
+                                    notifyItemRemoved(idx);
+                                }
                             })
                             .setNegativeButton("Cancel", null)
                             .show());
@@ -536,8 +562,11 @@ public class SettingsActivity extends AppCompatActivity {
                                     "Existing values for it will also be removed.")
                             .setPositiveButton("Delete", (d, w) -> {
                                 colDao.delete(col.getId());
-                                list.remove(pos);
-                                notifyItemRemoved(pos);
+                                int idx = list.indexOf(col);
+                                if (idx >= 0) {
+                                    list.remove(idx);
+                                    notifyItemRemoved(idx);
+                                }
                             })
                             .setNegativeButton("Cancel", null)
                             .show());

@@ -1,7 +1,10 @@
 package com.expenseos.ui;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -17,6 +20,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -35,6 +40,8 @@ public class MainActivity extends AppCompatActivity {
     private List<CashBook> books;
     private String search = null;
     private String sort = null; // null=updated, name_asc, balance_desc, balance_asc, created
+    private static final int REQ_SMS_PERMISSION = 101;
+
 
     @Override
     protected void onCreate(Bundle s) {
@@ -42,9 +49,34 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         dao = new CashBookDao(this);
 
+        com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
+        requestNotificationPermissionIfNeeded();
+
         // Settings
-        findViewById(R.id.btnSettings).setOnClickListener(v ->
+//        findViewById(R.id.btnSettings).setOnClickListener(v ->
+//                startActivity(new Intent(this, SettingsActivity.class)));
+
+        // ADD — bottom nav:
+        findViewById(R.id.navCashbooks).setOnClickListener(v -> {
+            // already on this screen — just refresh
+            loadBooks();
+        });
+
+        findViewById(R.id.navPassbook).setOnClickListener(v -> {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this,
+                    android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
+            } else {
+                startActivity(new Intent(this, PassbookActivity.class));
+            }
+        });
+
+        findViewById(R.id.navSettings).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
+
+        // Restore from Cloud — works even with zero local books
+        findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
         // New Book
         findViewById(R.id.btnNewBook).setOnClickListener(v -> showNewBookDialog());
@@ -74,6 +106,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         loadBooks();
+    }
+
+    // API 33+ requires POST_NOTIFICATIONS to be granted at runtime, or the
+    // daily reminder notification silently won't show (guarded, not a crash).
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1001);
+        }
     }
 
     private void loadBooks() {
@@ -203,7 +246,8 @@ public class MainActivity extends AppCompatActivity {
                 popup.setOnMenuItemClickListener(item -> {
                     if (item.getItemId() == 1) {
                         if (b.isActive()) openBook(b.getId(), b.getName());
-                        else Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
+                        else
+                            Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
                         return true;
                     } else if (item.getItemId() == 2) {
                         showEditDialog(b);
@@ -272,8 +316,12 @@ public class MainActivity extends AppCompatActivity {
                 public void afterTextChanged(Editable s) {
                     deleteBtn.setEnabled(s.toString().equals(book.getName()));
                 }
-                public void beforeTextChanged(CharSequence s, int a, int c, int cn) {}
-                public void onTextChanged(CharSequence s, int a, int b2, int c) {}
+
+                public void beforeTextChanged(CharSequence s, int a, int c, int cn) {
+                }
+
+                public void onTextChanged(CharSequence s, int a, int b2, int c) {
+                }
             });
 
             deleteBtn.setOnClickListener(view -> {
@@ -297,6 +345,53 @@ public class MainActivity extends AppCompatActivity {
         String bookName = AppConfig.get(this).getActiveBookName();
         if (getSupportActionBar() != null) {
             getSupportActionBar().setSubtitle("● " + bookName);
+        }
+    }
+
+    private void showRestoreCloudDialog() {
+        com.expenseos.util.AppConfig cfg = AppConfig.get(this);
+        View v = LayoutInflater.from(this).inflate(R.layout.dialog_cloud_restore, null);
+        EditText etUrl = v.findViewById(R.id.etRestoreDbUrl);
+        EditText etUser = v.findViewById(R.id.etRestoreDbUser);
+        EditText etPass = v.findViewById(R.id.etRestoreDbPass);
+
+        // Pre-fill if already configured before (e.g. re-entering after a cancel)
+        etUrl.setText(cfg.getDbUrl());
+        etUser.setText(cfg.getDbUser());
+        etPass.setText(cfg.getDbPassword());
+
+        new AlertDialog.Builder(this)
+                .setTitle("☁ Restore from Cloud")
+                .setMessage("Enter your Neon DB credentials to pull down all cash books, categories, and transactions.")
+                .setView(v)
+                .setPositiveButton("Restore", (d, w) -> {
+                    String url = etUrl.getText().toString().trim();
+                    String user = etUser.getText().toString().trim();
+                    String pass = etPass.getText().toString().trim();
+                    if (url.isEmpty()) {
+                        Toast.makeText(this, "DB URL is required", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    cfg.setDb(url, user, pass); // saved to AppConfig — Config tab will show these too, once inside a book
+                    doCloudRestore();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void doCloudRestore() {
+        Toast.makeText(this, "Restoring from cloud…", Toast.LENGTH_SHORT).show();
+        com.expenseos.sync.SyncManager.get().restoreAllFromCloud(this, (ok, summary) -> {
+            Toast.makeText(this, ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
+            if (ok) loadBooks(); // refresh the list — restored books now appear
+        });
+    }
+
+    private void requestSmsPermissionIfNeeded() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            androidx.core.app.ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
         }
     }
 }
