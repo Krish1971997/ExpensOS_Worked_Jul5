@@ -181,9 +181,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
         btnMic.setOnClickListener(v -> startVoiceInput());
         btnAttach.setOnClickListener(v -> pickAttachment());
 
+        btnCalculator = findViewById(R.id.btnCalculator);
         btnCalculator.setOnClickListener(v ->
-                CalculatorDialog.show(this, etAmount.getText().toString(),
-                        amountText -> etAmount.setText(amountText)));
+                CalculatorDialog.show(this, etAmount.getText().toString(), resultText ->
+                        etAmount.setText(resultText)));
 
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));

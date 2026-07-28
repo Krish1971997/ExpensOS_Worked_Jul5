@@ -904,4 +904,57 @@ public class TransactionDao {
             db.endTransaction();
         }
     }
+
+    /**
+     * Same as categoryBreakdown() but includes category id — needed for drill-down navigation.
+     */
+    public List<Map<String, Object>> categoryBreakdownWithId(String type, Integer bookId) {
+        List<String> params = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT c.id AS cat_id, c.name AS cat_name, COALESCE(SUM(t.amount),0) AS total "
+                        + "FROM transactions t JOIN categories c ON t.category_id = c.id "
+                        + "WHERE t.type=? ");
+        params.add(type);
+        if (bookId != null && bookId > 0) {
+            sql.append(" AND t.book_id=? ");
+            params.add(String.valueOf(bookId));
+        }
+        sql.append("GROUP BY c.id, c.name ORDER BY total DESC");
+        try (Cursor c = db.rawQuery(sql.toString(), params.toArray(new String[0]))) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (c.moveToNext()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", c.getInt(c.getColumnIndexOrThrow("cat_id")));
+                m.put("name", c.getString(c.getColumnIndexOrThrow("cat_name")));
+                m.put("total", toBigDecimal(c, "total"));
+                rows.add(m);
+            }
+            return rows;
+        }
+    }
+
+    /**
+     * Monthly trend for ONE category across ALL books (i.e. all months, since
+     * this app is one-book-per-month) — works directly because global/common
+     * categories (book_id IS NULL, seeded in LocalDB.onCreate()) share the SAME
+     * category id across every book. Powers the line graph in the category
+     * drill-down screen (Image 2).
+     */
+    public List<Map<String, Object>> categoryMonthlyTrend(int categoryId, int months) {
+        String sql = "SELECT strftime('%Y-%m', txn_datetime) AS ym, SUM(amount) AS total " +
+                "FROM transactions WHERE category_id=? " +
+                "AND txn_datetime >= datetime('now', '-' || ? || ' months') " +
+                "GROUP BY ym ORDER BY ym";
+        List<Map<String, Object>> rows = new ArrayList<>();
+        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(categoryId), String.valueOf(months)})) {
+            while (c.moveToNext()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                String ym = c.getString(c.getColumnIndexOrThrow("ym"));
+                m.put("month", ym != null ? YearMonth.parse(ym).format(DateTimeFormatter.ofPattern("MMM")) : "");
+                m.put("total", toBigDecimal(c, "total"));
+                rows.add(m);
+            }
+        }
+        return rows;
+    }
 }

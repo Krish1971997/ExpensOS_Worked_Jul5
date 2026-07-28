@@ -57,6 +57,8 @@
         <activity android:name=".ui.PassbookActivity" />
         <activity android:name=".ui.LogActivity" />
         <activity android:name=".ui.BudgetActivity" />
+        <activity android:name=".ui.StatsActivity" />
+        <activity android:name=".ui.CategoryStatsActivity" />
 
         <!-- Needed for camera capture in TransactionEntryActivity — the
              camera app writes the photo to a content:// URI we hand it,
