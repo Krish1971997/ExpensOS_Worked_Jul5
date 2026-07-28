@@ -515,23 +515,23 @@ public class LocalDB extends SQLiteOpenHelper {
             }
         }
 
-        if (oldV < 28) {
-            for (String table : ID_TABLES) {
-                // 1. created_at காலம் சேர்த்தல்
-                try {
-                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN created_at TEXT DEFAULT ''");
-                } catch (Exception e) {
-                    log.error("DB_UPGRADE " + table + " --> column created_at already exists or error: " + e.getMessage());
-                }
-
-                // 2. updated_at காலம் சேர்த்தல்
-                try {
-                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN updated_at TEXT DEFAULT ''");
-                } catch (Exception e) {
-                    log.error("DB_UPGRADE " + table + " --> column updated_at already exists or error: " + e.getMessage());
-                }
-            }
-        }
+//        if (oldV < 28) {
+//            for (String table : ID_TABLES) {
+//                // 1. created_at காலம் சேர்த்தல்
+//                try {
+//                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN created_at TEXT DEFAULT ''");
+//                } catch (Exception e) {
+//                    log.error("DB_UPGRADE " + table + " --> column created_at already exists or error: " + e.getMessage());
+//                }
+//
+//                // 2. updated_at காலம் சேர்த்தல்
+//                try {
+//                    db.execSQL("ALTER TABLE " + table + " ADD COLUMN updated_at TEXT DEFAULT ''");
+//                } catch (Exception e) {
+//                    log.error("DB_UPGRADE " + table + " --> column updated_at already exists or error: " + e.getMessage());
+//                }
+//            }
+//        }
 
         if (oldV < 27) {
             db.execSQL("CREATE TABLE IF NOT EXISTS passbook_entries (" +
@@ -577,13 +577,42 @@ public class LocalDB extends SQLiteOpenHelper {
                 {"transactions", "created_at", "TEXT DEFAULT (datetime('now'))"},
                 {"transactions", "updated_at", "TEXT DEFAULT (datetime('now'))"}
         };
+
         for (String[] r : repairs) {
-            try {
-                db.execSQL("ALTER TABLE " + r[0] + " ADD COLUMN " + r[1] + " " + r[2]);
-            } catch (Exception ignored) {
-                // காலம் ஏற்கனவே இருந்தால் இந்த Exception புறக்கணிக்கப்படும்
+            String tableName = r[0];
+            String columnName = r[1];
+            String columnDef = r[2];
+
+            // Column ஏற்கனவே உள்ளதா என்று செக் செய்கிறோம்
+            if (!isColumnExists(db, tableName, columnName)) {
+                try {
+                    db.execSQL("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDef);
+                } catch (Exception e) {
+                    log.error("repairSchema failed for " + tableName + "." + columnName + ": " + e.getMessage());
+                }
             }
         }
+    }
+
+    // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க
+    private boolean isColumnExists(SQLiteDatabase db, String tableName, String columnName) {
+        android.database.Cursor cursor = null;
+        try {
+            cursor = db.rawQuery("PRAGMA table_info(" + tableName + ")", null);
+            if (cursor != null) {
+                int nameIndex = cursor.getColumnIndex("name");
+                while (cursor.moveToNext()) {
+                    if (nameIndex != -1 && columnName.equalsIgnoreCase(cursor.getString(nameIndex))) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Check column exists failed: " + e.getMessage());
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return false;
     }
 
 

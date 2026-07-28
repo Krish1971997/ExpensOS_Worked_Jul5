@@ -43,15 +43,17 @@
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
-            <!-- Sync button -->
-            <Button
-                android:id="@+id/btnSync"
-                style="@style/BtnPrimary"
-                android:layout_width="wrap_content"
+            <!-- Calendar view button (was Sync — sync is still available via
+                 the "Sync to Cloud"/"Fetch from Cloud" buttons inside the
+                 Home tab itself) -->
+            <ImageButton
+                android:id="@+id/btnCalendarView"
+                android:layout_width="36dp"
                 android:layout_height="36dp"
-                android:paddingHorizontal="14dp"
-                android:text="⟳ Sync"
-                android:textSize="12sp" />
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Calendar view"
+                android:src="@android:drawable/ic_menu_my_calendar"
+                android:tint="@color/primary" />
         </LinearLayout>
 
         <!-- Fragment container — each bottom tab loads here -->

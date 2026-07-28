@@ -5,9 +5,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.GravityCompat;
@@ -15,7 +14,6 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
-import com.expenseos.sync.SyncManager;
 import com.expenseos.ui.backup.BackupFragment;
 import com.expenseos.ui.home.HomeFragment;
 
@@ -58,7 +56,7 @@ public class HomeActivity extends AppCompatActivity {
 
         setupBottomNav();
         setupDrawer();
-        setupSync();
+        setupCalendarButton();
 
         // Load HOME tab by default
         loadTab(NAV_HOME);
@@ -161,7 +159,7 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     // ── Sync Button ───────────────────────────────────────
-    private void setupSync() {
+  /*  private void setupSync() {
         Button btnSync = findViewById(R.id.btnSync);
         if (btnSync == null) return;
 
@@ -204,12 +202,35 @@ public class HomeActivity extends AppCompatActivity {
                 }
             });
         });
-    }
+    } */
+
+    // ── Calendar View Button ──────────────────────────────
+    // Was the header "Sync" button — sync is still reachable via the
+    // "Sync to Cloud"/"Fetch from Cloud" buttons inside the Home tab itself.
+//    private void setupCalendarButton() {
+//        Button btnCalendar = findViewById(R.id.btnCalendarView);
+//        if (btnCalendar == null) return;
+//        btnCalendar.setOnClickListener(v -> {
+//            Intent i = new Intent(this, CalendarViewActivity.class);
+//            i.putExtra("bookId", bookId);
+//            startActivity(i);
+//        });
+//    }
 
     @Override
     public void onBackPressed() {
         if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START))
             drawerLayout.closeDrawer(GravityCompat.START);
         else super.onBackPressed();
+    }
+
+    private void setupCalendarButton() {
+        ImageButton btnCalendar = findViewById(R.id.btnCalendarView);
+        if (btnCalendar == null) return;
+        btnCalendar.setOnClickListener(v -> {
+            Intent i = new Intent(this, CalendarViewActivity.class);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
+        });
     }
 }

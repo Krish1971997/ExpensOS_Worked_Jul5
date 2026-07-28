@@ -121,6 +121,7 @@
     </LinearLayout>
 
     <!-- Bottom nav — Cashbooks / PassBook / Settings -->
+    <!-- Bottom nav — Cashbooks / Stats / PassBook / Settings -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="60dp"
@@ -153,6 +154,33 @@
                 android:textColor="@color/primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- NEW: Stats tab -->
+        <LinearLayout
+            android:id="@+id/navStats"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/navStatsLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Stats"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout

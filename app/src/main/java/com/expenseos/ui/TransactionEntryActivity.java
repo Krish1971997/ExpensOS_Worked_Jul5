@@ -89,7 +89,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private Uri pendingCameraUri; // set right before launching the camera intent, consumed in onActivityResult
 
     private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic;
-    private LinearLayout boxDate, boxTime, btnAttach, attachmentList, customFieldsContainer;
+    private LinearLayout boxDate, boxTime, boxAmount, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
     private View btnCalculator;
     private Spinner spCategory, spSubCategory;
@@ -146,10 +146,11 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tabExpense = findViewById(R.id.tabExpense);
         boxDate = findViewById(R.id.boxDate);
         boxTime = findViewById(R.id.boxTime);
+        boxAmount = findViewById(R.id.boxAmount);
         tvDate = findViewById(R.id.tvDate);
         tvTime = findViewById(R.id.tvTime);
         etAmount = findViewById(R.id.etAmount);
-        btnCalculator = findViewById(R.id.btnCalculator);
+        btnCalculator = findViewById(R.id.btnCalc);
         etNote = findViewById(R.id.etNote);
         btnMic = findViewById(R.id.btnMic);
         btnAttach = findViewById(R.id.btnAttach);
@@ -181,7 +182,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         btnMic.setOnClickListener(v -> startVoiceInput());
         btnAttach.setOnClickListener(v -> pickAttachment());
 
-        btnCalculator = findViewById(R.id.btnCalculator);
+        btnCalculator = findViewById(R.id.btnCalc);
         btnCalculator.setOnClickListener(v ->
                 CalculatorDialog.show(this, etAmount.getText().toString(), resultText ->
                         etAmount.setText(resultText)));
@@ -223,12 +224,14 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         // Tint just this EditText's border — mutate() so it doesn't affect
         // the other views sharing the same bg_input_box drawable resource.
-        Object bg = etAmount.getBackground();
+        Object bg = boxAmount.getBackground();
+        //Object bg = etAmount.getBackground();
         if (bg instanceof GradientDrawable) {
             GradientDrawable gd = (GradientDrawable) ((GradientDrawable) bg).mutate();
             gd.setStroke((int) (1.5f * getResources().getDisplayMetrics().density),
                     getColor(income ? R.color.green : R.color.red));
-            etAmount.setBackground(gd);
+            boxAmount.setBackground(gd);
+            //etAmount.setBackground(gd);
         }
     }
 

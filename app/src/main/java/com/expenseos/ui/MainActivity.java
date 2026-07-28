@@ -62,6 +62,9 @@ public class MainActivity extends AppCompatActivity {
             loadBooks();
         });
 
+        findViewById(R.id.navStats).setOnClickListener(v ->
+                startActivity(new Intent(this, StatsActivity.class)));
+
         findViewById(R.id.navPassbook).setOnClickListener(v -> {
             if (androidx.core.content.ContextCompat.checkSelfPermission(this,
                     android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
