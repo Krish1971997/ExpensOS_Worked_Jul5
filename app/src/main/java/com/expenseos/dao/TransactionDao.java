@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -956,5 +957,30 @@ public class TransactionDao {
             }
         }
         return rows;
+    }
+
+    public List<Map<String, Object>> categoryBreakdownByDateRange(String type, long startMillis, long endMillis) {
+        List<Map<String, Object>> list = new ArrayList<>();
+//        SQLiteDatabase db = db.getReadableDatabase();
+
+        String query = "SELECT c.id, c.name, SUM(t.amount) as total " +
+                "FROM transactions t " +
+                "JOIN categories c ON t.category_id = c.id " +
+                "WHERE t.type = ? AND t.created_at >= ? AND t.created_at <= ? " +
+                "GROUP BY c.id, c.name";
+
+        Cursor cursor = db.rawQuery(query, new String[]{type, String.valueOf(startMillis), String.valueOf(endMillis)});
+
+        if (cursor.moveToFirst()) {
+            do {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                map.put("name", cursor.getString(cursor.getColumnIndexOrThrow("name")));
+                map.put("total", new BigDecimal(cursor.getString(cursor.getColumnIndexOrThrow("total"))));
+                list.add(map);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        return list;
     }
 }

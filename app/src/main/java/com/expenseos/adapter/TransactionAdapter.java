@@ -3,6 +3,14 @@ package com.expenseos.adapter;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.AbsoluteSizeSpan;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,25 +30,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Groups transactions by date (like the old app): a date header row,
- * followed by each transaction for that date showing
- * category/subcategory ....... amount
- * note ....................... balance
- * ............................ time
- * <p>
- * IMPORTANT: assumes the incoming `list` is already sorted so that
- * transactions on the same date are adjacent (e.g. newest-first, which
- * is how "Showing N entries" screens are usually sorted). If your DAO
- * doesn't guarantee that ordering, sort by dateTime desc before passing
- * the list in.
- */
 public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private static final int TYPE_HEADER = 0;
     private static final int TYPE_TXN = 1;
 
-    private static final DateTimeFormatter HEADER_FMT = DateTimeFormatter.ofPattern("d MMMM yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("h:mm a");
 
     public interface OnTxnClick {
@@ -51,13 +45,13 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         void onLongClick(Transaction t);
     }
 
-    // Sealed-ish row model: either a date header (String) or a Transaction
+    // Sealed-ish row model: either a date header (CharSequence) or a Transaction
     private static class Row {
         final int type;
-        final String headerText;
+        final CharSequence headerText;
         final Transaction txn;
 
-        Row(String headerText) {
+        Row(CharSequence headerText) {
             this.type = TYPE_HEADER;
             this.headerText = headerText;
             this.txn = null;
@@ -73,10 +67,9 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private final Context ctx;
     private final SQLiteDatabase readDb;
     private final List<Row> rows = new ArrayList<>();
-    private final OnTxnLongClick onLongClick; // long-press → options (edit/dup/del)
-    private final OnTxnClick onClick;     // tap → detail
+    private final OnTxnLongClick onLongClick;
+    private final OnTxnClick onClick;
 
-    // ── Constructor with both callbacks ──────────────────
     public TransactionAdapter(Context ctx, List<Transaction> list,
                               OnTxnLongClick onLongClick,
                               OnTxnClick onClick) {
@@ -87,7 +80,6 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         setData(list);
     }
 
-    // ── Backward-compat constructor (tap only) ────────────
     public TransactionAdapter(Context ctx, List<Transaction> list) {
         this(ctx, list, null, null);
     }
@@ -100,9 +92,11 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         LocalDate lastDate = null;
         if (list != null) {
             for (Transaction t : list) {
-                LocalDate d = t.getDateTime() != null ? t.getDateTime().toLocalDate() : null;
+                LocalDateTime dt = t.getDateTime();
+                LocalDate d = dt != null ? dt.toLocalDate() : null;
                 if (d != null && !d.equals(lastDate)) {
-                    rows.add(new Row(d.format(HEADER_FMT)));
+                    // 🔥 NEW: formatHeaderDate method மூலம் "19 Tue 05.2026" Style-ல் Header உருவாக்கப்படுகிறது
+                    rows.add(new Row(formatHeaderDate(dt)));
                     lastDate = d;
                 }
                 rows.add(new Row(t));
@@ -131,7 +125,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         TxnVH(View v) {
             super(v);
-            tvDate = v.findViewById(R.id.tvTxnDate); // repurposed to show TIME only
+            tvDate = v.findViewById(R.id.tvTxnDate);
             tvCat = v.findViewById(R.id.tvTxnCat);
             tvSubCat = v.findViewById(R.id.tvTxnSubCat);
             tvAmount = v.findViewById(R.id.tvTxnAmount);
@@ -167,39 +161,30 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         Transaction t = row.txn;
         boolean isIncome = t.getType() == Transaction.Type.INCOME;
 
-        // Time only (date is already shown in the header above)
         LocalDateTime dt = t.getDateTime();
         h.tvDate.setText(dt != null ? dt.format(TIME_FMT) : "");
 
-        // Color strip
         int badgeBg = isIncome ? R.color.income_badge_bg : R.color.expense_badge_bg;
         h.typeBadge.setBackgroundColor(ContextCompat.getColor(ctx, badgeBg));
 
-        // Category chip
         h.tvCat.setText(t.getCategoryName() != null ? t.getCategoryName() : "");
 
-        // Sub-category chip (hide if empty)
         String sub = t.getSubCategoryName();
         h.tvSubCat.setText(sub != null ? sub : "");
         h.tvSubCat.setVisibility(sub != null && !sub.isEmpty() ? View.VISIBLE : View.GONE);
 
-        // Amount
         h.tvAmount.setText(t.getFormattedAmount());
         h.tvAmount.setTextColor(ContextCompat.getColor(ctx,
                 isIncome ? R.color.green : R.color.red));
 
-        // Note
         h.tvNote.setText(t.getNote() != null ? t.getNote() : "");
 
-//         Running balance — populated by the DAO/service layer via
-//         Transaction.setRunningBalance(...) before this list is passed in.
         if (t.getRunningBalance() != null) {
             h.tvBalance.setText("Balance: " + t.getRunningBalance().toPlainString());
         } else {
             h.tvBalance.setText("");
         }
 
-        // Sync status dot — always visible: green when synced=1, red when synced=0.
         h.tvSyncDot.setVisibility(View.VISIBLE);
         if (t.isSynced()) {
             h.tvSyncDot.setText("● synced");
@@ -209,7 +194,6 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             h.tvSyncDot.setTextColor(ContextCompat.getColor(ctx, R.color.red));
         }
 
-        // Attachment count — 📎 N Attachments, hidden when there are none
         int attCount = getAttachmentCount(t.getId());
         if (attCount > 0) {
             h.tvAttachments.setText("📎 " + attCount + (attCount == 1 ? " Attachment" : " Attachments"));
@@ -218,11 +202,9 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             h.tvAttachments.setVisibility(View.GONE);
         }
 
-        // Click → detail
         if (onClick != null)
             h.itemView.setOnClickListener(v -> onClick.onClick(t));
 
-        // Long-click → options menu (edit/duplicate/delete)
         if (onLongClick != null)
             h.itemView.setOnLongClickListener(v -> {
                 onLongClick.onLongClick(t);
@@ -235,15 +217,46 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         return rows.size();
     }
 
-    // ── Attachment count (📎 N Attachments) ──────────────────────────
-    // Per-row lightweight query, same pattern as MainActivity's BookAdapter
-    // calling dao.getSummary(id) per bind — kept consistent with that
-    // existing style rather than introducing a separate batch-loading path.
     private int getAttachmentCount(int transactionId) {
         try (Cursor c = readDb.rawQuery(
                 "SELECT COUNT(*) FROM transaction_receipts WHERE transaction_id = ?",
                 new String[]{String.valueOf(transactionId)})) {
             return c.moveToFirst() ? c.getInt(0) : 0;
         }
+    }
+
+    // ── Header Date Formatting: "19 Tue 05.2026" ─────────────────────
+    public CharSequence formatHeaderDate(LocalDateTime dateTime) {
+        if (dateTime == null) return "";
+
+        String dayNumber = dateTime.format(DateTimeFormatter.ofPattern("dd"));       // e.g., "19"
+        String dayName = " " + dateTime.format(DateTimeFormatter.ofPattern("EEE")) + " "; // e.g., " Tue "
+        String monthYear = " " + dateTime.format(DateTimeFormatter.ofPattern("MM.yyyy")); // e.g., " 05.2026"
+
+        SpannableStringBuilder builder = new SpannableStringBuilder();
+
+        // 1. Date Number (19) - Bold & Big
+        int start = builder.length();
+        builder.append(dayNumber);
+        builder.setSpan(new AbsoluteSizeSpan(18, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(Color.BLACK), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        // 2. Day Badge ( Tue ) - Highlight Background
+        builder.append(" ");
+        start = builder.length();
+        builder.append(dayName);
+        builder.setSpan(new BackgroundColorSpan(Color.parseColor("#808080")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(Color.WHITE), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new AbsoluteSizeSpan(12, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        // 3. Month.Year (05.2026) - Small Grey Text
+        start = builder.length();
+        builder.append(monthYear);
+        builder.setSpan(new AbsoluteSizeSpan(13, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(Color.parseColor("#6B7280")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        return builder;
     }
 }

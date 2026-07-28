@@ -37,6 +37,7 @@ import com.expenseos.model.ColumnDefinition;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
+import com.expenseos.util.ConsoleLogger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -62,6 +63,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");
+    private final ConsoleLogger log = ConsoleLogger.get();
+
     private static final int REQ_ATTACH = 1001;
     private static final int REQ_SPEECH = 1002;
     private static final int REQ_CAMERA = 1003;
@@ -566,6 +569,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
     // ── Edit mode ────────────────────────────────────────────
     private void loadForEdit() {
+        log.info("method call loadforEdit");
         editingOriginal = txnDao.findById(txnId);
         if (editingOriginal == null) {
             finish();
