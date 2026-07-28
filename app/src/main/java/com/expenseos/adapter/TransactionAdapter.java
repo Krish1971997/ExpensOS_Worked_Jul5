@@ -250,7 +250,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         builder.setSpan(new ForegroundColorSpan(Color.WHITE), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new AbsoluteSizeSpan(12, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
+        
         // 3. Month.Year (05.2026) - Small Grey Text
         start = builder.length();
         builder.append(monthYear);
