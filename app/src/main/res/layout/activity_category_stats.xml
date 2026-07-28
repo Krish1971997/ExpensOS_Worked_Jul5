@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@android:color/white">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp">
+
+        <ImageButton
+            android:id="@+id/btnCategoryStatsBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_revert" />
+
+        <TextView
+            android:id="@+id/tvCategoryStatsTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E5E7EB" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Subcategory split — hidden entirely when there's ≤1 subcategory in use -->
+            <LinearLayout
+                android:id="@+id/llSubcategorySplit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="#F8FAFC"
+                android:paddingVertical="4dp" />
+
+            <!-- Monthly trend line for this category — hidden if <2 months of data -->
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/lineCategoryTrend"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:layout_margin="12dp" />
+
+            <View android:layout_width="match_parent" android:layout_height="8dp" android:background="#F1F5F9" />
+
+            <!-- Transactions for this category this month — tap → edit -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvCategoryTxns"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
