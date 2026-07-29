@@ -25,7 +25,9 @@ public class HomeActivity extends AppCompatActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private static final int NAV_HOME = 0;
-    private static final int NAV_REPORTS = 1;
+    //    private static final int NAV_REPORTS = 1;
+    private static final int NAV_LOG = 1;           // <-- replaces Reports slot
+
     private static final int NAV_BACKUP = 2;
     private static final int NAV_CONFIG = 3;
     private int currentNav = NAV_HOME;
@@ -65,7 +67,8 @@ public class HomeActivity extends AppCompatActivity {
     // ── Bottom Navigation ─────────────────────────────────
     private void setupBottomNav() {
         findViewById(R.id.navHome).setOnClickListener(v -> loadTab(NAV_HOME));
-        findViewById(R.id.navReports).setOnClickListener(v -> loadTab(NAV_REPORTS));
+//        findViewById(R.id.navReports).setOnClickListener(v -> loadTab(NAV_REPORTS));
+        findViewById(R.id.navLog).setOnClickListener(v -> loadTab(NAV_LOG));               // <-- new
         findViewById(R.id.navBackup).setOnClickListener(v -> loadTab(NAV_BACKUP));
         findViewById(R.id.navConfig).setOnClickListener(v -> loadTab(NAV_CONFIG));
     }
@@ -77,8 +80,11 @@ public class HomeActivity extends AppCompatActivity {
         // ── Use HomeFragment / ReportsFragment / BackupFragment / ConfigFragment
         Fragment frag;
         switch (tab) {
-            case NAV_REPORTS:
-                frag = new ReportsFragment();
+//            case NAV_REPORTS:
+//                frag = new ReportsFragment();
+//                break;
+            case NAV_LOG:
+                frag = new com.expenseos.ui.settings.ConsoleFragment();   // <-- reuse existing fragment
                 break;
             case NAV_BACKUP:
                 frag = new BackupFragment();
@@ -95,14 +101,16 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void updateNavHighlight(int tab) {
-        int[][] navLabelSets = {{R.id.navHomeLabel, NAV_HOME}, {R.id.navReportsLabel, NAV_REPORTS}, {R.id.navBackupLabel, NAV_BACKUP}, {R.id.navConfigLabel, NAV_CONFIG}};
+        int[][] navLabelSets = {{R.id.navHomeLabel, NAV_HOME}, {R.id.navLogLabel, NAV_LOG},
+                {R.id.navBackupLabel, NAV_BACKUP}, {R.id.navConfigLabel, NAV_CONFIG}};
         for (int[] set : navLabelSets) {
             TextView lbl = findViewById(set[0]);
             if (lbl != null)
                 lbl.setTextColor(getResources().getColor(set[1] == tab ? R.color.primary : R.color.text_muted, null));
         }
 
-        int[][] navIconSets = {{R.id.navHomeIcon, NAV_HOME}, {R.id.navReportsIcon, NAV_REPORTS}, {R.id.navBackupIcon, NAV_BACKUP}, {R.id.navConfigIcon, NAV_CONFIG}};
+        int[][] navIconSets = {{R.id.navHomeIcon, NAV_HOME}, {R.id.navLogIcon, NAV_LOG},
+                {R.id.navBackupIcon, NAV_BACKUP}, {R.id.navConfigIcon, NAV_CONFIG}};
         for (int[] set : navIconSets) {
             android.widget.ImageView icon = findViewById(set[0]);
             if (icon != null)
@@ -151,11 +159,11 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, SchedulerActivity.class));
         });
 
-        View drawerConsoleLog = findViewById(R.id.drawerConsoleLog);
-        if (drawerConsoleLog != null) drawerConsoleLog.setOnClickListener(v -> {
-            drawerLayout.closeDrawer(GravityCompat.START);
-            startActivity(new Intent(this, LogActivity.class));
-        });
+//        View drawerConsoleLog = findViewById(R.id.drawerConsoleLog);
+//        if (drawerConsoleLog != null) drawerConsoleLog.setOnClickListener(v -> {
+//            drawerLayout.closeDrawer(GravityCompat.START);
+//            startActivity(new Intent(this, LogActivity.class));
+//        });
     }
 
     // ── Sync Button ───────────────────────────────────────
