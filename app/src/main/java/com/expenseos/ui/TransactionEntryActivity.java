@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -37,7 +38,6 @@ import com.expenseos.model.ColumnDefinition;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
-import com.expenseos.util.ConsoleLogger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -63,8 +63,6 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");
-    private final ConsoleLogger log = ConsoleLogger.get();
-
     private static final int REQ_ATTACH = 1001;
     private static final int REQ_SPEECH = 1002;
     private static final int REQ_CAMERA = 1003;
@@ -92,9 +90,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private Uri pendingCameraUri; // set right before launching the camera intent, consumed in onActivityResult
 
     private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic;
-    private LinearLayout boxDate, boxTime, boxAmount, btnAttach, attachmentList, customFieldsContainer;
+    private LinearLayout boxDate, boxTime, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
-    private View btnCalculator;
     private Spinner spCategory, spSubCategory;
     private Button btnSaveAddNew, btnSave;
 
@@ -103,10 +100,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_transaction_entry);
 
-//        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
-//        bookId = prefs.getInt("active_book_id", 0);
-
-        bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
+        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
+        bookId = prefs.getInt("active_book_id", 0);
 
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
@@ -136,8 +131,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         etAmount.post(() -> {
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null)
-                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
@@ -149,11 +143,9 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tabExpense = findViewById(R.id.tabExpense);
         boxDate = findViewById(R.id.boxDate);
         boxTime = findViewById(R.id.boxTime);
-        boxAmount = findViewById(R.id.boxAmount);
         tvDate = findViewById(R.id.tvDate);
         tvTime = findViewById(R.id.tvTime);
         etAmount = findViewById(R.id.etAmount);
-        btnCalculator = findViewById(R.id.btnCalc);
         etNote = findViewById(R.id.etNote);
         btnMic = findViewById(R.id.btnMic);
         btnAttach = findViewById(R.id.btnAttach);
@@ -185,21 +177,12 @@ public class TransactionEntryActivity extends AppCompatActivity {
         btnMic.setOnClickListener(v -> startVoiceInput());
         btnAttach.setOnClickListener(v -> pickAttachment());
 
-        btnCalculator = findViewById(R.id.btnCalc);
-        btnCalculator.setOnClickListener(v ->
-                CalculatorDialog.show(this, etAmount.getText().toString(), resultText ->
-                        etAmount.setText(resultText)));
-
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));
     }
 
-    // ── Income/Expense tab switch (add mode only) ──────────
+    // ── Income/Expense tab switch ────────────────────────────
     private void switchType(Transaction.Type type) {
-        if (txnId > 0) {
-            Toast.makeText(this, "Type can't be changed while editing", Toast.LENGTH_SHORT).show();
-            return;
-        }
         if (type == currentType) return;
         currentType = type;
         applyTypeUI();
@@ -220,21 +203,14 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tabExpense.setTextColor(getColor(!income ? R.color.red : R.color.text_secondary));
         tabExpense.setTypeface(null, !income ? Typeface.BOLD : Typeface.NORMAL);
 
-        if (txnId > 0) {
-            tabIncome.setAlpha(0.4f);
-            tabExpense.setAlpha(0.4f);
-        }
-
         // Tint just this EditText's border — mutate() so it doesn't affect
         // the other views sharing the same bg_input_box drawable resource.
-        Object bg = boxAmount.getBackground();
-        //Object bg = etAmount.getBackground();
+        Object bg = etAmount.getBackground();
         if (bg instanceof GradientDrawable) {
             GradientDrawable gd = (GradientDrawable) ((GradientDrawable) bg).mutate();
             gd.setStroke((int) (1.5f * getResources().getDisplayMetrics().density),
                     getColor(income ? R.color.green : R.color.red));
-            boxAmount.setBackground(gd);
-            //etAmount.setBackground(gd);
+            etAmount.setBackground(gd);
         }
     }
 
@@ -262,15 +238,29 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // ── Category -> Sub-category cascade ───────────────────
     private void loadCategoriesForType() {
         currentCategories = catDao.findByType(currentType.name(), bookId);
-        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentCategories);
+
+        // Placeholder first item (id=0) so the Spinner doesn't silently
+        // default to a real category — nothing is pre-selected until the
+        // user actually picks one. save() rejects id==0 as "not selected".
+        List<Category> withPlaceholder = new ArrayList<>();
+        withPlaceholder.add(new Category(0, "Select Category", currentType.name(), null));
+        withPlaceholder.addAll(currentCategories);
+
+        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, withPlaceholder);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spCategory.setAdapter(adp);
+        spCategory.setSelection(0);
 
         spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (pos >= 0 && pos < currentCategories.size())
-                    loadSubCategoriesFor(currentCategories.get(pos).getId());
+                if (pos == 0) {
+                    // Placeholder selected — no real category yet, hide sub-category field.
+                    spSubCategory.setVisibility(View.GONE);
+                    tvSubCategoryLabel.setVisibility(View.GONE);
+                } else if (pos - 1 < currentCategories.size()) {
+                    loadSubCategoriesFor(currentCategories.get(pos - 1).getId());
+                }
             }
 
             @Override
@@ -278,12 +268,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
             }
         });
 
-        if (!currentCategories.isEmpty())
-            loadSubCategoriesFor(currentCategories.get(0).getId());
-        else {
-            spSubCategory.setVisibility(View.GONE);
-            tvSubCategoryLabel.setVisibility(View.GONE);
-        }
+        // Don't auto-load sub-categories here — the placeholder is selected
+        // by default, so there's no real category yet to load them for.
+        spSubCategory.setVisibility(View.GONE);
+        tvSubCategoryLabel.setVisibility(View.GONE);
     }
 
     // Only shows the sub-category field when the chosen category actually
@@ -569,7 +557,6 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
     // ── Edit mode ────────────────────────────────────────────
     private void loadForEdit() {
-        log.info("method call loadforEdit");
         editingOriginal = txnDao.findById(txnId);
         if (editingOriginal == null) {
             finish();
@@ -638,8 +625,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (spCategory.getSelectedItem() == null) {
-            Toast.makeText(this, "Select a category", Toast.LENGTH_SHORT).show();
+        if (spCategory.getSelectedItem() == null || ((Category) spCategory.getSelectedItem()).getId() == 0) {
+            Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -716,11 +703,18 @@ public class TransactionEntryActivity extends AppCompatActivity {
         etAmount.post(() -> {
             android.view.inputmethod.InputMethodManager imm =
                     (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            if (imm != null)
-                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            if (imm != null) imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
-    private record PendingAttachment(String name, String mimeType, byte[] bytes) {
+    private static class PendingAttachment {
+        final String name, mimeType;
+        final byte[] bytes;
+
+        PendingAttachment(String name, String mimeType, byte[] bytes) {
+            this.name = name;
+            this.mimeType = mimeType;
+            this.bytes = bytes;
+        }
     }
 }
