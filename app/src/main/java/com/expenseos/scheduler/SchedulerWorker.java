@@ -133,8 +133,8 @@ public class SchedulerWorker extends Worker {
 
     // ── CASHBOOK: create next month's cash book if it doesn't exist ────
     private CashBookResult runCashBook(Context ctx) {
-        java.time.LocalDate nextMonth = java.time.LocalDate.now().plusMonths(1).withDayOfMonth(1);
-        String name = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
+        java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
+        String name = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
 
         com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);
         for (com.expenseos.model.CashBook b : bookDao.findAll()) {

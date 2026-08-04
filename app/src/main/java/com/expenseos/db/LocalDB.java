@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 28; // bumped: added budgets, budget_categories
+    private static final int DB_VERSION = 29; // bumped: added budgets, budget_categories
     private static LocalDB instance;
     private final ConsoleLogger log = ConsoleLogger.get();
     // Every table that has a manually-assigned "id" column now gets a row
@@ -20,8 +20,8 @@ public class LocalDB extends SQLiteOpenHelper {
     private static final String[] ID_TABLES = {
             "cash_books", "categories", "sub_categories", "column_definitions",
             "transactions", "transaction_custom_values", "deleted_records",
-            "transaction_audit_log", "transaction_receipts",
-            "schedulers", "scheduler_log", "budgets", "budget_categories"
+            "transaction_audit_log", "transaction_receipts", "schedulers",
+            "scheduler_log", "budgets", "budget_categories", "payment_types"
     };
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -91,6 +91,7 @@ public class LocalDB extends SQLiteOpenHelper {
                 "book_id           INTEGER REFERENCES cash_books(id)," +
                 "created_at  TEXT DEFAULT (datetime('now'))," +
                 "updated_at  TEXT DEFAULT (datetime('now'))," +
+                "payment_type      TEXT NOT NULL DEFAULT 'UPI'," +
                 "synced            INTEGER DEFAULT 0)");
 
         // transaction_custom_values ← இது முக்கியம்!
@@ -225,6 +226,15 @@ public class LocalDB extends SQLiteOpenHelper {
                 "UNIQUE(budget_id, category_id))");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_budcat_budget ON budget_categories(budget_id)");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_budget_categories_updated ON budget_categories(updated_at)");
+
+        // payment_types — UPI, Cash, credit/debit cards etc. (universal, not income/expense-specific)
+        db.execSQL("CREATE TABLE IF NOT EXISTS payment_types (" +
+                "id         INTEGER PRIMARY KEY," +
+                "name       TEXT NOT NULL UNIQUE," +
+                "created_at TEXT DEFAULT (datetime('now'))," +
+                "updated_at TEXT DEFAULT (datetime('now'))," +
+                "synced     INTEGER DEFAULT 0)");
+        seedDefaultPaymentTypes(db);
 
         db.execSQL("CREATE TABLE IF NOT EXISTS passbook_entries (" +
                 "sms_id           INTEGER PRIMARY KEY," +
@@ -544,6 +554,27 @@ public class LocalDB extends SQLiteOpenHelper {
                     "timestamp_millis INTEGER NOT NULL," +
                     "copied           INTEGER DEFAULT 0)");
         }
+
+        if (oldV < 29) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS payment_types (" +
+                    "id         INTEGER PRIMARY KEY," +
+                    "name       TEXT NOT NULL UNIQUE," +
+                    "created_at TEXT DEFAULT (datetime('now'))," +
+                    "updated_at TEXT DEFAULT (datetime('now'))," +
+                    "synced     INTEGER DEFAULT 0)");
+            seedDefaultPaymentTypes(db);
+
+            try {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN payment_type TEXT NOT NULL DEFAULT 'UPI'");
+            } catch (Exception ignored) {
+            }
+
+            // Existing rows created before this column existed — explicit default,
+            // in case the ALTER's DEFAULT clause doesn't backfill on this device.
+            db.execSQL("UPDATE transactions SET payment_type='UPI' WHERE payment_type IS NULL OR payment_type=''");
+
+            initSequences(db);
+        }
     }
 
     @Override
@@ -575,7 +606,8 @@ public class LocalDB extends SQLiteOpenHelper {
                 {"column_definitions", "created_at", "TEXT DEFAULT (datetime('now'))"},
                 {"column_definitions", "updated_at", "TEXT DEFAULT (datetime('now'))"},
                 {"transactions", "created_at", "TEXT DEFAULT (datetime('now'))"},
-                {"transactions", "updated_at", "TEXT DEFAULT (datetime('now'))"}
+                {"transactions", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"transactions", "payment_type", "TEXT NOT NULL DEFAULT 'UPI'"}
         };
 
         for (String[] r : repairs) {
@@ -592,6 +624,20 @@ public class LocalDB extends SQLiteOpenHelper {
                 }
             }
         }
+
+        // Ensure payment_types table + seed rows exist even on devices whose
+        // onUpgrade() version-gate got skipped for some reason (same defensive
+        // pattern as the column repairs above).
+        if (!tableExists(db, "payment_types")) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS payment_types (" +
+                    "id         INTEGER PRIMARY KEY," +
+                    "name       TEXT NOT NULL UNIQUE," +
+                    "created_at TEXT DEFAULT (datetime('now'))," +
+                    "updated_at TEXT DEFAULT (datetime('now'))," +
+                    "synced     INTEGER DEFAULT 0)");
+        }
+        seedDefaultPaymentTypes(db);
+        db.execSQL("UPDATE transactions SET payment_type='UPI' WHERE payment_type IS NULL OR payment_type=''");
     }
 
     // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க
@@ -693,6 +739,13 @@ public class LocalDB extends SQLiteOpenHelper {
             if (!tableExists(wdb, table)) continue;
             wdb.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
                     "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
+        }
+    }
+
+    private void seedDefaultPaymentTypes(SQLiteDatabase db) {
+        String[] defaults = {"UPI", "Cash", "SBI Credit Card", "Axis Credit Card", "Debit Card"};
+        for (String name : defaults) {
+            db.execSQL("INSERT OR IGNORE INTO payment_types(name) VALUES(?)", new Object[]{name});
         }
     }
 }

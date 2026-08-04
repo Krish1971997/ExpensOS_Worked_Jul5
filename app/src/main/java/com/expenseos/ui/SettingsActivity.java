@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
+import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
@@ -68,6 +69,7 @@ public class SettingsActivity extends AppCompatActivity {
     private CategoryDao catDao;
     private SubCategoryDao scDao;
     private ColumnDefinitionDao colDao;
+    private PaymentTypeDao payDao;
 
     // ── Categories tab state ──
     private int catSubTab = 0; // 0=INCOME, 1=EXPENSE
@@ -89,6 +91,7 @@ public class SettingsActivity extends AppCompatActivity {
         catDao = new CategoryDao(this);
         scDao = new SubCategoryDao(this);
         colDao = new ColumnDefinitionDao(this);
+        payDao = new PaymentTypeDao(this);
 
         bookScoped = getIntent().getBooleanExtra("bookScoped", false);
 
@@ -125,25 +128,31 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btnTabCat).setOnClickListener(v -> switchTab(0));
         findViewById(R.id.btnTabSub).setOnClickListener(v -> switchTab(1));
         findViewById(R.id.btnTabColumns).setOnClickListener(v -> switchTab(2));
+        findViewById(R.id.btnTabPaymentTypes).setOnClickListener(v -> switchTab(3));
     }
 
     private void switchTab(int tab) {
         findViewById(R.id.panelCategories).setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
         findViewById(R.id.panelSubCategories).setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
         findViewById(R.id.panelColumns).setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
+        findViewById(R.id.panelPaymentTypes).setVisibility(tab == 3 ? View.VISIBLE : View.GONE);
 
         Button btnCat = findViewById(R.id.btnTabCat);
         Button btnSub = findViewById(R.id.btnTabSub);
         Button btnCol = findViewById(R.id.btnTabColumns);
+        Button btnPay = findViewById(R.id.btnTabPaymentTypes);
+
         int activeColor = getColor(R.color.primary);
         int inactiveColor = getColor(R.color.text_muted);
         btnCat.setTextColor(tab == 0 ? activeColor : inactiveColor);
         btnSub.setTextColor(tab == 1 ? activeColor : inactiveColor);
         btnCol.setTextColor(tab == 2 ? activeColor : inactiveColor);
+        btnPay.setTextColor(tab == 3 ? activeColor : inactiveColor);
 
         if (tab == 0) loadCategoryList();
         if (tab == 1) loadSubCategoryList();
         if (tab == 2) loadColumnsTab();
+        if (tab == 3) loadPaymentTypesTab();
     }
 
     // ══════════════════════════════════════════════════════
@@ -597,5 +606,84 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    // ══════════════════════════════════════════════════════
+// PAYMENT TYPES TAB
+// ══════════════════════════════════════════════════════
+
+    private void loadPaymentTypesTab() {
+        List<com.expenseos.model.PaymentType> list = payDao.findAll();
+        RecyclerView rv = findViewById(R.id.rvPaymentTypes);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        rv.setAdapter(new PaymentTypeAdapter(list));
+
+        findViewById(R.id.btnAddPaymentType).setOnClickListener(v -> {
+            EditText et = findViewById(R.id.etNewPaymentType);
+            String name = et.getText().toString().trim();
+            if (name.isEmpty()) return;
+            payDao.insert(name);
+            et.setText("");
+            loadPaymentTypesTab();
+            Toast.makeText(this, "Payment type added!", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    class PaymentTypeAdapter extends RecyclerView.Adapter<PaymentTypeAdapter.VH> {
+        private final List<com.expenseos.model.PaymentType> list;
+
+        PaymentTypeAdapter(List<com.expenseos.model.PaymentType> list) {
+            this.list = list;
+        }
+
+        class VH extends RecyclerView.ViewHolder {
+            TextView tvName;
+            View btnEdit;
+            Button btnDel;
+
+            VH(View v) {
+                super(v);
+                tvName = v.findViewById(R.id.tvColName);   // reusing item_column_definition.xml ids
+                btnEdit = v.findViewById(R.id.btnColEdit);
+                btnDel = v.findViewById(R.id.btnColDel);
+            }
+        }
+
+        @Override
+        public VH onCreateViewHolder(ViewGroup p, int t) {
+            return new VH(LayoutInflater.from(p.getContext())
+                    .inflate(R.layout.item_column_definition, p, false)); // reuse same row layout
+        }
+
+        @Override
+        public void onBindViewHolder(VH h, int pos) {
+            com.expenseos.model.PaymentType pt = list.get(pos);
+            h.tvName.setText(pt.getName());
+
+            h.btnEdit.setOnClickListener(v ->
+                    showRenameDialog("Rename Payment Type", pt.getName(),
+                            SettingsActivity.this::loadPaymentTypesTab,
+                            newName -> payDao.update(pt.getId(), newName)));
+
+            h.btnDel.setOnClickListener(v ->
+                    new AlertDialog.Builder(SettingsActivity.this)
+                            .setTitle("Delete Payment Type")
+                            .setMessage("Delete \"" + pt.getName() + "\"?")
+                            .setPositiveButton("Delete", (d, w) -> {
+                                payDao.delete(pt.getId());
+                                int idx = list.indexOf(pt);
+                                if (idx >= 0) {
+                                    list.remove(idx);
+                                    notifyItemRemoved(idx);
+                                }
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show());
+        }
+
+        @Override
+        public int getItemCount() {
+            return list.size();
+        }
     }
 }

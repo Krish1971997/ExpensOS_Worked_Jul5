@@ -62,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
             loadBooks();
         });
 
+        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);   // <-- add this too
+
         findViewById(R.id.navStats).setOnClickListener(v ->
                 startActivity(new Intent(this, StatsActivity.class)));
 

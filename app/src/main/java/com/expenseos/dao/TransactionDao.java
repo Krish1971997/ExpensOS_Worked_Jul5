@@ -77,6 +77,7 @@ public class TransactionDao {
             else
                 cv.putNull("sub_categories_id");
             cv.put("note", t.getNote());
+            cv.put("payment_type", t.getPaymentType() != null ? t.getPaymentType() : "UPI");
             if (t.getBookId() > 0)
                 cv.put("book_id", t.getBookId());
             else
@@ -111,6 +112,21 @@ public class TransactionDao {
         cv.put("note", newT.getNote());
         cv.put("book_id", newT.getBookId());
         cv.put("updated_at", LocalDateTime.now().format(TS_FMT));
+        cv.put("payment_type", newT.getPaymentType() != null ? newT.getPaymentType() : "UPI");
+
+        // An edit means this row no longer matches what's on the cloud —
+        // mark it unsynced so the next sync actually pushes the change.
+        // (Previously this was never touched, so an edited-but-already-synced
+        // row stayed marked synced=1 forever and its edit never went up.)
+        cv.put("synced", 0);
+        //if (oldT.isSynced()) {
+        // Already exists remotely — push this as an UPDATE. If it was
+        // never synced yet, leave sync_action alone (still NULL/INSERT)
+        // so it goes up as its original pending create, not an update
+        // against a remote row that was never created in the first place.
+//            cv.put("sync_action", "UPDATE");
+//        }
+
         db.update("transactions", cv, "id = ?", new String[]{String.valueOf(oldT.getId())});
 
         if (oldT.getAmount().compareTo(newT.getAmount()) != 0)
@@ -688,7 +704,7 @@ public class TransactionDao {
     }
 
     private String baseSelect() {
-        return "SELECT t.id, t.type, t.txn_datetime, t.amount, t.note, t.book_id, t.synced," +   // <-- t.synced added
+        return "SELECT t.id, t.type, t.txn_datetime, t.amount, t.note, t.book_id, t.synced, t.payment_type," +   // <-- t.synced added
                 " c.id AS cat_id, c.name AS cat_name," +
                 " sc.id AS subcat_id, sc.name AS subcat_name" +
                 " FROM transactions t" +
@@ -748,6 +764,7 @@ public class TransactionDao {
         t.setCategoryName(c.getString(c.getColumnIndexOrThrow("cat_name")));
         t.setSubCategoryId(c.getInt(c.getColumnIndexOrThrow("subcat_id")));
         t.setSubCategoryName(c.getString(c.getColumnIndexOrThrow("subcat_name")));
+        t.setPaymentType(c.getString(c.getColumnIndexOrThrow("payment_type")));
         t.setBookId(c.getInt(c.getColumnIndexOrThrow("book_id")));
         t.setSynced(c.getInt(c.getColumnIndexOrThrow("synced")) == 1);   // <-- new
         return t;

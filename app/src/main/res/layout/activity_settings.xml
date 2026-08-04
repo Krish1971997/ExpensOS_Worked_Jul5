@@ -88,6 +88,15 @@
             android:text="Columns"
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnTabPaymentTypes"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Payment Types"
+            android:textSize="11sp"
+            style="?android:attr/borderlessButtonStyle" />
     </LinearLayout>
 
     <ScrollView
@@ -395,6 +404,42 @@
                             android:nestedScrollingEnabled="false" />
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/panelPaymentTypes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="10dp">
+
+                    <EditText
+                        android:id="@+id/etNewPaymentType"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="e.g. HDFC Credit Card"
+                        android:layout_marginEnd="8dp" />
+
+                    <Button
+                        android:id="@+id/btnAddPaymentType"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="+ Add" />
+                </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvPaymentTypes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
             </LinearLayout>
 
         </LinearLayout>

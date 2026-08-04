@@ -21,7 +21,7 @@ import java.util.Calendar;
 public class ReminderScheduler {
 
     private static final int REQUEST_CODE = 9001;
-    private static final int REMINDER_HOUR = 9; // 9 PM
+    private static final int REMINDER_HOUR = 21; // 9 PM
 
     public static void scheduleDaily9PM(Context ctx) {
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);

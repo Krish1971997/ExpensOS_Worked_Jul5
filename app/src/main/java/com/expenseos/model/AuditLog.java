@@ -43,6 +43,7 @@ public class AuditLog {
             case "datetime" -> "Date & Time";
             case "type" -> "Type";
             case "book" -> "Book";
+            case "paymenttype" -> "Payment Type";
             default -> fieldName;
         };
     }

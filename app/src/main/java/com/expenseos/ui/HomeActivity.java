@@ -56,6 +56,8 @@ public class HomeActivity extends AppCompatActivity {
 
 //        com.expenseos.sync.BackupScheduler.scheduleDaily(this);
 
+        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);   // <-- add this
+
         setupBottomNav();
         setupDrawer();
         setupCalendarButton();

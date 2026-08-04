@@ -29,11 +29,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
+import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.ReceiptDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
+import com.expenseos.model.PaymentType;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
@@ -79,6 +81,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private SubCategoryDao subCatDao;
     private ColumnDefinitionDao colDefDao;
     private ReceiptDao receiptDao;
+    private PaymentTypeDao payDao;
 
     private LocalDate selectedDate = LocalDate.now();
     private LocalTime selectedTime = LocalTime.now();
@@ -95,7 +98,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private LinearLayout boxDate, boxTime, boxAmount, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
     private View btnCalculator;
-    private Spinner spCategory, spSubCategory;
+    private Spinner spCategory, spSubCategory, spPaymentType;
     private Button btnSaveAddNew, btnSave;
 
     @Override
@@ -113,6 +116,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         subCatDao = new SubCategoryDao(this);
         colDefDao = new ColumnDefinitionDao(this);
         receiptDao = new ReceiptDao(this);
+        payDao = new PaymentTypeDao(this);
 
         bindViews();
         setupClicks();
@@ -127,6 +131,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
             applyTypeUI();
             loadCategoriesForType();
             loadCustomFieldsForType(null);
+            loadPaymentTypes(null); // defaults to UPI
             updateDateTimeText();
         }
 
@@ -154,6 +159,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvTime = findViewById(R.id.tvTime);
         etAmount = findViewById(R.id.etAmount);
         btnCalculator = findViewById(R.id.btnCalc);
+        spPaymentType = findViewById(R.id.spPaymentType);
         etNote = findViewById(R.id.etNote);
         btnMic = findViewById(R.id.btnMic);
         btnAttach = findViewById(R.id.btnAttach);
@@ -196,10 +202,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
     // ── Income/Expense tab switch (add mode only) ──────────
     private void switchType(Transaction.Type type) {
-        if (txnId > 0) {
+        /*if (txnId > 0) {
             Toast.makeText(this, "Type can't be changed while editing", Toast.LENGTH_SHORT).show();
             return;
-        }
+        } */
         if (type == currentType) return;
         currentType = type;
         applyTypeUI();
@@ -220,10 +226,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tabExpense.setTextColor(getColor(!income ? R.color.red : R.color.text_secondary));
         tabExpense.setTypeface(null, !income ? Typeface.BOLD : Typeface.NORMAL);
 
-        if (txnId > 0) {
+        /*if (txnId > 0) {
             tabIncome.setAlpha(0.4f);
             tabExpense.setAlpha(0.4f);
-        }
+        } */
 
         // Tint just this EditText's border — mutate() so it doesn't affect
         // the other views sharing the same bg_input_box drawable resource.
@@ -262,15 +268,27 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // ── Category -> Sub-category cascade ───────────────────
     private void loadCategoriesForType() {
         currentCategories = catDao.findByType(currentType.name(), bookId);
-        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentCategories);
+        // Placeholder first item (id=0) so the Spinner doesn't silently
+        // default to a real category — nothing is pre-selected until the
+        // user actually picks one. save() rejects id==0 as "not selected".
+        List<Category> withPlaceholder = new ArrayList<>();
+        withPlaceholder.add(new Category(0, "Select Category", currentType.name(), null));
+        withPlaceholder.addAll(currentCategories);
+        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, withPlaceholder);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spCategory.setAdapter(adp);
+        spCategory.setSelection(0);
 
         spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (pos >= 0 && pos < currentCategories.size())
-                    loadSubCategoriesFor(currentCategories.get(pos).getId());
+                if (pos == 0) {
+                    // Placeholder selected — no real category yet, hide sub-category field.
+                    spSubCategory.setVisibility(View.GONE);
+                    tvSubCategoryLabel.setVisibility(View.GONE);
+                } else if (pos - 1 < currentCategories.size()) {
+                    loadSubCategoriesFor(currentCategories.get(pos - 1).getId());
+                }
             }
 
             @Override
@@ -584,6 +602,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         etAmount.setText(editingOriginal.getAmount().toPlainString());
         etNote.setText(editingOriginal.getNote());
+        // Old transactions created before this column existed have payment_type=NULL
+        // in the Java object if the DB row somehow predates the migration — default
+        // to "UPI" so the spinner always has a valid selection.
+        loadPaymentTypes(editingOriginal.getPaymentType());
 
         currentCategories = catDao.findByType(currentType.name(), bookId);
         ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentCategories);
@@ -591,35 +613,58 @@ public class TransactionEntryActivity extends AppCompatActivity {
         spCategory.setAdapter(adp);
 
         int catPos = 0;
-        for (int i = 0; i < currentCategories.size(); i++)
+        for (int i = 0; i < currentCategories.size(); i++) {
             if (currentCategories.get(i).getId() == editingOriginal.getCategoryId()) {
                 catPos = i;
                 break;
             }
-        spCategory.setSelection(catPos);
+        }
+        spCategory.setSelection(catPos, false);
 
-        if (!currentCategories.isEmpty())
+        if (!currentCategories.isEmpty()) {
             loadSubCategoriesFor(currentCategories.get(catPos).getId());
+        }
 
+//        spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+//            @Override
+//            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+//                if (pos >= 0 && pos < currentCategories.size())
+//                    loadSubCategoriesFor(currentCategories.get(pos).getId());
+//            }
+//
+//            @Override
+//            public void onNothingSelected(AdapterView<?> p) {
+//            }
+//        });
+
+        if (editingOriginal.getSubCategoryId() > 0 && !currentSubCategories.isEmpty()) {
+            for (int i = 0; i < currentSubCategories.size(); i++) {
+                if (currentSubCategories.get(i).getId() == editingOriginal.getSubCategoryId()) {
+                    spSubCategory.setSelection(i);
+                    break;
+                }
+            }
+        }
+
+        // 5. Attach OnItemSelectedListener LAST (User manually Category change pannum podhu mattum load aaga)
         spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            private boolean isInitial = true;
+
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (pos >= 0 && pos < currentCategories.size())
+                if (isInitial) {
+                    isInitial = false; // Initial programmatic trigger-ஐ skip பண்ணும்
+                    return;
+                }
+                if (pos >= 0 && pos < currentCategories.size()) {
                     loadSubCategoriesFor(currentCategories.get(pos).getId());
+                }
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> p) {
             }
         });
-
-        if (editingOriginal.getSubCategoryId() > 0) {
-            for (int i = 0; i < currentSubCategories.size(); i++)
-                if (currentSubCategories.get(i).getId() == editingOriginal.getSubCategoryId()) {
-                    spSubCategory.setSelection(i);
-                    break;
-                }
-        }
 
         // Show every field defined for this type — pre-filled where the
         // transaction already has a saved value for it.
@@ -638,8 +683,13 @@ public class TransactionEntryActivity extends AppCompatActivity {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (spCategory.getSelectedItem() == null) {
-            Toast.makeText(this, "Select a category", Toast.LENGTH_SHORT).show();
+        if (spCategory.getSelectedItem() == null || ((Category) spCategory.getSelectedItem()).getId() == 0) {
+            Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (spPaymentType.getSelectedItem() == null) {
+            Toast.makeText(this, "Select a payment type", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -663,6 +713,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         t.setSubCategoryId(sub != null ? sub.getId() : 0);
         t.setNote(etNote.getText().toString().trim());
         t.setBookId(bookId);
+        t.setPaymentType(((PaymentType) spPaymentType.getSelectedItem()).getName());
 
         Map<String, String> customValues = new LinkedHashMap<>();
         for (Map.Entry<String, EditText> e : customFieldInputs.entrySet())
@@ -719,6 +770,23 @@ public class TransactionEntryActivity extends AppCompatActivity {
             if (imm != null)
                 imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
         });
+    }
+
+    private void loadPaymentTypes(String preselect) {
+        List<com.expenseos.model.PaymentType> types = payDao.findAll();
+        ArrayAdapter<com.expenseos.model.PaymentType> adp =
+                new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, types);
+        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spPaymentType.setAdapter(adp);
+
+        int pos = 0;
+        String target = (preselect != null && !preselect.isEmpty()) ? preselect : "UPI"; // default UPI
+        for (int i = 0; i < types.size(); i++)
+            if (types.get(i).getName().equalsIgnoreCase(target)) {
+                pos = i;
+                break;
+            }
+        spPaymentType.setSelection(pos);
     }
 
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {

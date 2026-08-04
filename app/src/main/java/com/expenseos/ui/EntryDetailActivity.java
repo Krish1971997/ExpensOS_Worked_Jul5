@@ -4,9 +4,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -19,15 +17,18 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.expenseos.R;
 import com.expenseos.dao.AuditLogDao;
 import com.expenseos.dao.CashBookDao;
+import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.ReceiptDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.AuditLog;
 import com.expenseos.model.CashBook;
+import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.Transaction;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
@@ -106,7 +107,7 @@ public class EntryDetailActivity extends AppCompatActivity {
                 txn.getDateTime() != null ? "On " + txn.getDateTime().format(DISPLAY_FMT) : "");
 
         TextView tvAmount = findViewById(R.id.tvEntryAmount);
-        tvAmount.setText((isIncome ? "" : "") + txn.getAmount().toPlainString());
+        tvAmount.setText(txn.getAmount().toPlainString());
         tvAmount.setTextColor(getColor(isIncome ? R.color.green : R.color.red));
 
         findViewById(R.id.viewTypeStrip).setBackgroundColor(getColor(isIncome ? R.color.green : R.color.red));
@@ -266,10 +267,12 @@ public class EntryDetailActivity extends AppCompatActivity {
         menu.getMenu().add(0, 1, 0, "📦 Move Entry");
         menu.getMenu().add(0, 2, 1, "📋 Copy Entry");
         menu.getMenu().add(0, 3, 2, "🗑 Delete Entry");
+        menu.getMenu().add(0, 4, 3, "↩ Refund Entry");
         menu.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == 1) showMoveDialog();
             else if (item.getItemId() == 2) showCopyDialog();
             else if (item.getItemId() == 3) showDeleteConfirm();
+            else if (item.getItemId() == 4) showRefundConfirm();
             return true;
         });
         menu.show();
@@ -340,6 +343,69 @@ public class EntryDetailActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    // ── Refund: creates a reverse-type entry, dated now ──────
+    // EXPENSE -> new INCOME entry, category "Refund"
+    // INCOME  -> new EXPENSE entry, category "Others" (falls back to the
+    //            seeded "Other" category if "Others" doesn't exist)
+    private void showRefundConfirm() {
+        boolean wasExpense = txn.getType() == Transaction.Type.EXPENSE;
+        new AlertDialog.Builder(this)
+                .setTitle("Refund Entry")
+                .setMessage("Create a reverse " + (wasExpense ? "income" : "expense") +
+                        " entry of ₹" + txn.getAmount().toPlainString() + " dated today?")
+                .setPositiveButton("Create Refund", (d, w) -> createRefundEntry())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void createRefundEntry() {
+        boolean wasExpense = txn.getType() == Transaction.Type.EXPENSE;
+        Transaction.Type refundType = wasExpense ? Transaction.Type.INCOME : Transaction.Type.EXPENSE;
+        String targetCategoryName = wasExpense ? "Refund" : "Others";
+
+        CategoryDao catDao = new CategoryDao(this);
+        Category cat = findOrCreateCategory(catDao, refundType.name(), targetCategoryName);
+        if (cat == null) {
+            Toast.makeText(this, "Couldn't find/create the \"" + targetCategoryName + "\" category", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Transaction refund = new Transaction();
+        refund.setType(refundType);
+        refund.setDateTime(LocalDateTime.now());
+        refund.setAmount(txn.getAmount());
+        refund.setCategoryId(cat.getId());
+        refund.setBookId(txn.getBookId());
+        String originalNote = txn.getNote() != null ? txn.getNote() : "";
+        refund.setNote("Refund : " + originalNote);
+
+        long newId = txnDao.insert(refund);
+        Toast.makeText(this, newId != -1 ? "Refund entry created!" : "Failed to create refund entry", Toast.LENGTH_SHORT).show();
+    }
+
+    // Case-insensitive lookup by name within the given type; creates the
+    // category (common/global scope) if genuinely missing so this never
+    // silently fails just because the category hasn't been set up yet.
+    private Category findOrCreateCategory(CategoryDao catDao, String type, String name) {
+        List<Category> cats = catDao.findByType(type, txn.getBookId());
+        for (Category c : cats)
+            if (c.getName() != null && c.getName().equalsIgnoreCase(name))
+                return c;
+
+        // "Others" specifically also matches the app's seeded "Other" category.
+        if ("Others".equalsIgnoreCase(name)) {
+            for (Category c : cats)
+                if (c.getName() != null && c.getName().equalsIgnoreCase("Other"))
+                    return c;
+        }
+
+        catDao.insert(name, type, null);
+        for (Category c : catDao.findByType(type, txn.getBookId()))
+            if (c.getName() != null && c.getName().equalsIgnoreCase(name))
+                return c;
+        return null;
     }
 
     private Transaction copyOf(Transaction t) {

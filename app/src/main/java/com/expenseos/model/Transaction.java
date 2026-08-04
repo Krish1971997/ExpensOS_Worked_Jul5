@@ -24,6 +24,7 @@ public class Transaction {
     private boolean synced;          // false = pending sync (show amber dot)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String paymentType;
     private Map<String, String> customValues = new LinkedHashMap<>();
 
     // Cumulative book balance as of this transaction (chronological order).
@@ -180,4 +181,11 @@ public class Transaction {
         this.updatedAt = updatedAt;
     }
 
+    public String getPaymentType() {
+        return paymentType;
+    }
+
+    public void setPaymentType(String paymentType) {
+        this.paymentType = paymentType;
+    }
 }
