@@ -15,8 +15,10 @@ import android.widget.TextView;
 
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
+import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.model.Category;
+import com.expenseos.model.PaymentType;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.TransactionFilter;
 
@@ -33,7 +35,7 @@ import java.util.Map;
  * Tabbed filter dialog (Date / Category / Sub Category / Amount) matching
  * the web app's filter panel. Works on a defensive copy of the filter
  * passed in, so Cancel/back-press doesn't mutate the caller's live filter.
- *
+ * <p>
  * ASSUMPTION: Category.getName() / SubCategory.getName() exist (these
  * model classes weren't shared with me — if the getter is named
  * differently, e.g. getCategoryName(), rename the calls below).
@@ -52,18 +54,20 @@ public class TransactionFilterDialog extends Dialog {
     private final int initialTab;
     private final boolean singleFieldMode;
 
-    private TextView tabDate, tabCategory, tabSubCategory, tabAmount;
-    private View panelDate, panelCategory, panelSubCategory, panelAmount;
+    private TextView tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType;
+    private View panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType;
 
     private RadioGroup rgDatePreset;
     private LinearLayout layoutSingleDay, layoutDateRange;
     private EditText etSingleDay, etDateFrom, etDateTo;
 
-    private LinearLayout categoryContainer, subCategoryContainer;
+    private LinearLayout categoryContainer, subCategoryContainer, paymentTypeContainer;
     private final List<CheckBox> categoryChecks = new ArrayList<>();
     private final List<CheckBox> subCategoryChecks = new ArrayList<>();
+    private final List<CheckBox> paymentTypeChecks = new ArrayList<>();
     private List<Category> allCategories = new ArrayList<>();
     private List<SubCategory> allSubCategories = new ArrayList<>();
+    private List<PaymentType> allPaymentTypes = new ArrayList<>();
 
     private Spinner spAmountOp1, spAmountOp2;
     private EditText etAmount1, etAmount2;
@@ -71,7 +75,7 @@ public class TransactionFilterDialog extends Dialog {
     // In-dialog "which date preset is active" — not part of TransactionFilter
     // itself (that only stores the resolved dateFrom/dateTo), but we need it
     // to know which radio button to preselect when reopening the dialog.
-    private String activeDatePreset = "all";
+    private final String activeDatePreset = "all";
 
     public TransactionFilterDialog(Context ctx, int bookId, TransactionFilter currentFilter, OnApply onApply) {
         this(ctx, bookId, currentFilter, 0, false, onApply);
@@ -109,6 +113,7 @@ public class TransactionFilterDialog extends Dialog {
         c.setAmountOp2(f.getAmountOp2());
         c.setAmount2(f.getAmount2());
         c.setNoteSearch(f.getNoteSearch());
+        c.setPaymentTypes(f.getPaymentTypes() != null ? new ArrayList<>(f.getPaymentTypes()) : null);
         c.setPage(f.getPage());
         c.setPageSize(f.getPageSize());
         c.setSortBy(f.getSortBy());
@@ -136,7 +141,7 @@ public class TransactionFilterDialog extends Dialog {
         if (singleFieldMode) {
             findViewById(R.id.tabListContainer).setVisibility(View.GONE);
             findViewById(R.id.dividerTabs).setVisibility(View.GONE);
-            String[] titles = {"Date", "Category", "Sub Category", "Amount"};
+            String[] titles = {"Date", "Category", "Sub Category", "Amount", "Payment Type"};
             ((TextView) findViewById(R.id.dialogTitle)).setText(titles[initialTab]);
         }
 
@@ -150,6 +155,7 @@ public class TransactionFilterDialog extends Dialog {
         findViewById(R.id.btnApplyFilter).setOnClickListener(v -> {
             applyDateSelection();
             applyCategorySelection();
+            applyPaymentTypeSelection();
             applyAmountSelection();
             filter.setBookId(bookId);
             if (onApply != null) onApply.onApply(filter);
@@ -182,6 +188,10 @@ public class TransactionFilterDialog extends Dialog {
         spAmountOp2 = findViewById(R.id.spAmountOp2);
         etAmount1 = findViewById(R.id.etAmount1);
         etAmount2 = findViewById(R.id.etAmount2);
+
+        tabPaymentType = findViewById(R.id.tabPaymentType);
+        panelPaymentType = findViewById(R.id.panelPaymentType);
+        paymentTypeContainer = findViewById(R.id.paymentTypeContainer);
     }
 
     // ── Tabs ────────────────────────────────────────────────
@@ -190,12 +200,13 @@ public class TransactionFilterDialog extends Dialog {
         tabCategory.setOnClickListener(v -> selectTab(1));
         tabSubCategory.setOnClickListener(v -> selectTab(2));
         tabAmount.setOnClickListener(v -> selectTab(3));
+        tabPaymentType.setOnClickListener(v -> selectTab(4));
         selectTab(initialTab);
     }
 
     private void selectTab(int index) {
-        TextView[] tabs = {tabDate, tabCategory, tabSubCategory, tabAmount};
-        View[] panels = {panelDate, panelCategory, panelSubCategory, panelAmount};
+        TextView[] tabs = {tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType};
+        View[] panels = {panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType};
         int selColor = getContext().getResources().getColor(R.color.primary);
         int normColor = getContext().getResources().getColor(R.color.text);
         for (int i = 0; i < tabs.length; i++) {
@@ -282,6 +293,9 @@ public class TransactionFilterDialog extends Dialog {
 
         buildCategoryCheckboxes();
         buildSubCategoryCheckboxes();
+
+        allPaymentTypes = new PaymentTypeDao(getContext()).findAll();
+        buildPaymentTypeCheckboxes();
     }
 
     private void buildCategoryCheckboxes() {
@@ -324,6 +338,34 @@ public class TransactionFilterDialog extends Dialog {
             empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
             subCategoryContainer.addView(empty);
         }
+    }
+
+    private void buildPaymentTypeCheckboxes() {
+        paymentTypeContainer.removeAllViews();
+        paymentTypeChecks.clear();
+        List<String> selected = filter.getPaymentTypes();
+        for (PaymentType pt : allPaymentTypes) {
+            CheckBox cb = new CheckBox(getContext());
+            cb.setText(pt.getName());
+            cb.setTag(pt.getName());
+            cb.setPadding(0, 12, 0, 12);
+            if (selected != null && selected.contains(pt.getName())) cb.setChecked(true);
+            paymentTypeContainer.addView(cb);
+            paymentTypeChecks.add(cb);
+        }
+        if (allPaymentTypes.isEmpty()) {
+            TextView empty = new TextView(getContext());
+            empty.setText("No payment types found.");
+            empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
+            paymentTypeContainer.addView(empty);
+        }
+    }
+
+    private void applyPaymentTypeSelection() {
+        List<String> selected = new ArrayList<>();
+        for (CheckBox cb : paymentTypeChecks)
+            if (cb.isChecked()) selected.add((String) cb.getTag());
+        filter.setPaymentTypes(selected.isEmpty() ? null : selected);
     }
 
     private void applyCategorySelection() {
@@ -408,7 +450,8 @@ public class TransactionFilterDialog extends Dialog {
             }
         } else if (filter.getDateFrom() != null || filter.getDateTo() != null) {
             rgDatePreset.check(R.id.rbDateRange);
-            if (filter.getDateFrom() != null) etDateFrom.setText(filter.getDateFrom().format(DATE_FMT));
+            if (filter.getDateFrom() != null)
+                etDateFrom.setText(filter.getDateFrom().format(DATE_FMT));
             if (filter.getDateTo() != null) etDateTo.setText(filter.getDateTo().format(DATE_FMT));
         } else {
             rgDatePreset.check(R.id.rbAllTime);

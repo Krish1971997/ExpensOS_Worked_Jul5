@@ -61,6 +61,17 @@
                     android:textSize="11sp"
                     android:visibility="gone" />
 
+                <TextView
+                    android:id="@+id/tvTxnPaymentType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:background="#F1F5F9"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="3dp"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+
                 <!-- spacer pushes amount to the far right -->
                 <View
                     android:layout_width="0dp"

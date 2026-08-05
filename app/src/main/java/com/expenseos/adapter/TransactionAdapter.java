@@ -120,7 +120,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TxnVH extends RecyclerView.ViewHolder {
-        TextView tvDate, tvCat, tvSubCat, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments;
+        TextView tvDate, tvCat, tvSubCat, tvPaymentType, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments;
         View typeBadge;
 
         TxnVH(View v) {
@@ -128,6 +128,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvDate = v.findViewById(R.id.tvTxnDate);
             tvCat = v.findViewById(R.id.tvTxnCat);
             tvSubCat = v.findViewById(R.id.tvTxnSubCat);
+            tvPaymentType = v.findViewById(R.id.tvTxnPaymentType);
             tvAmount = v.findViewById(R.id.tvTxnAmount);
             tvNote = v.findViewById(R.id.tvTxnNote);
             tvBalance = v.findViewById(R.id.tvTxnBalance);
@@ -173,6 +174,9 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         h.tvSubCat.setText(sub != null ? sub : "");
         h.tvSubCat.setVisibility(sub != null && !sub.isEmpty() ? View.VISIBLE : View.GONE);
 
+        h.tvPaymentType.setText(t.getPaymentType() != null ? t.getPaymentType() : "");
+        h.tvPaymentType.setVisibility(t.getPaymentType() != null && !t.getPaymentType().isEmpty() ? View.VISIBLE : View.GONE);
+        
         h.tvAmount.setText(t.getFormattedAmount());
         h.tvAmount.setTextColor(ContextCompat.getColor(ctx,
                 isIncome ? R.color.green : R.color.red));
@@ -250,7 +254,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         builder.setSpan(new ForegroundColorSpan(Color.WHITE), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new AbsoluteSizeSpan(12, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        
+
         // 3. Month.Year (05.2026) - Small Grey Text
         start = builder.length();
         builder.append(monthYear);

@@ -91,6 +91,16 @@
                 android:text="Amount"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tabPaymentType"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="14dp"
+                android:text="Payment Type"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <View
@@ -123,13 +133,55 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content">
 
-                        <RadioButton android:id="@+id/rbAllTime" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="All Time" android:checked="true" />
-                        <RadioButton android:id="@+id/rbToday" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="Today" />
-                        <RadioButton android:id="@+id/rbYesterday" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="Yesterday" />
-                        <RadioButton android:id="@+id/rbThisMonth" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="This Month" />
-                        <RadioButton android:id="@+id/rbLastMonth" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="Last Month" />
-                        <RadioButton android:id="@+id/rbSingleDay" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="Single Day" />
-                        <RadioButton android:id="@+id/rbDateRange" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingVertical="8dp" android:text="Date Range" />
+                        <RadioButton
+                            android:id="@+id/rbAllTime"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="All Time"
+                            android:checked="true" />
+
+                        <RadioButton
+                            android:id="@+id/rbToday"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="Today" />
+
+                        <RadioButton
+                            android:id="@+id/rbYesterday"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="Yesterday" />
+
+                        <RadioButton
+                            android:id="@+id/rbThisMonth"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="This Month" />
+
+                        <RadioButton
+                            android:id="@+id/rbLastMonth"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="Last Month" />
+
+                        <RadioButton
+                            android:id="@+id/rbSingleDay"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="Single Day" />
+
+                        <RadioButton
+                            android:id="@+id/rbDateRange"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:text="Date Range" />
                     </RadioGroup>
 
                     <LinearLayout
@@ -201,6 +253,21 @@
 
                 <LinearLayout
                     android:id="@+id/subCategoryContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp" />
+            </ScrollView>
+
+            <!-- ── PAYMENT TYPE panel ───────────────────── -->
+            <ScrollView
+                android:id="@+id/panelPaymentType"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/paymentTypeContainer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"

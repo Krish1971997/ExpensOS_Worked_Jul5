@@ -21,11 +21,21 @@ public class TransactionFilter {
     private int pageSize = 15;
     private String sortBy = "date"; // date | type | category | subcategory | amount | note
     private String sortDir = "desc"; // asc | desc
+    private List<String> paymentTypes; // multi-select by name
 
     public boolean isFiltered() {
         return dateFrom != null || dateTo != null || (categoryIds != null && !categoryIds.isEmpty())
                 || (subCategoryIds != null && !subCategoryIds.isEmpty()) || amount1 != null
-                || (noteSearch != null && !noteSearch.isBlank());
+                || (noteSearch != null && !noteSearch.isBlank())
+                || (paymentTypes != null && !paymentTypes.isEmpty());
+    }
+
+    public List<String> getPaymentTypes() {
+        return paymentTypes;
+    }
+
+    public void setPaymentTypes(List<String> paymentTypes) {
+        this.paymentTypes = paymentTypes;
     }
 
     public static String safeOp(String op) {

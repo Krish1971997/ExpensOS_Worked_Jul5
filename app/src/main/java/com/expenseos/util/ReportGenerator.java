@@ -26,7 +26,7 @@ import java.util.Map;
  * Category-wise) as CSV or PDF, writing straight to an OutputStream so the
  * same code works whether the destination is a plain File or a MediaStore
  * Uri's stream (see DownloadsSaver).
- *
+ * <p>
  * "Party-wise summary" is intentionally not implemented — there's no
  * "party"/member concept anywhere in this app's schema, matching how the
  * old app shows that option greyed out rather than functional.
@@ -37,6 +37,7 @@ public class ReportGenerator {
     public static final String TYPE_DAYWISE = "daywise";
     public static final String TYPE_CATEGORYWISE = "categorywise";
     public static final String TYPE_SUBCATEGORYWISE = "subcategorywise";
+    public static final String TYPE_PAYMENTTYPEWISE = "paymenttypewise";
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");

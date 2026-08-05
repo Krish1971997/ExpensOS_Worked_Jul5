@@ -19,13 +19,13 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
-import com.expenseos.ui.MainActivity;
 import com.expenseos.R;
 import com.expenseos.adapter.TransactionAdapter;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
 import com.expenseos.sync.SyncManager;
+import com.expenseos.ui.MainActivity;
 import com.expenseos.util.AppConfig;
 
 import java.math.BigDecimal;
@@ -38,11 +38,11 @@ public class HomeFragment extends Fragment {
     private RecyclerView rvTransactions;
     private SwipeRefreshLayout swipeRefresh;
     private TransactionAdapter adapter;
-    private List<Transaction> transactions = new ArrayList<>();
+    private final List<Transaction> transactions = new ArrayList<>();
 
     private EditText etSearch;
     private ImageButton btnFilter;
-    private TextView chipDate, chipCategory, chipSubCategory, chipAmount;
+    private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType;
     private View rowViewReports;
     private TextView tvEntryCount;
 
@@ -64,6 +64,7 @@ public class HomeFragment extends Fragment {
         chipCategory = root.findViewById(R.id.chipCategory);
         chipSubCategory = root.findViewById(R.id.chipSubCategory);
         chipAmount = root.findViewById(R.id.chipAmount);
+        chipPaymentType = root.findViewById(R.id.chipPaymentType);
         rowViewReports = root.findViewById(R.id.rowViewReports);
         tvEntryCount = root.findViewById(R.id.tvEntryCount);
 
@@ -99,6 +100,7 @@ public class HomeFragment extends Fragment {
         chipCategory.setOnClickListener(v -> openFilterDialog(1, true));
         chipSubCategory.setOnClickListener(v -> openFilterDialog(2, true));
         chipAmount.setOnClickListener(v -> openFilterDialog(3, true));
+        chipPaymentType.setOnClickListener(v -> openFilterDialog(4, true));
         rowViewReports.setOnClickListener(v ->
                 startActivity(new Intent(requireContext(), com.expenseos.ui.GenerateReportActivity.class)));
 
@@ -194,6 +196,7 @@ public class HomeFragment extends Fragment {
             currentFilter.setAmount1(appliedFilter.getAmount1());
             currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
             currentFilter.setAmount2(appliedFilter.getAmount2());
+            currentFilter.setPaymentTypes(appliedFilter.getPaymentTypes());
             loadTransactions();
         }).show();
     }
@@ -236,6 +239,9 @@ public class HomeFragment extends Fragment {
         setChipActive(chipCategory, catCount > 0, normalColor, activeColor);
         setChipActive(chipSubCategory, subCount > 0, normalColor, activeColor);
         setChipActive(chipAmount, currentFilter.getAmount1() != null, normalColor, activeColor);
+        int ptCount = currentFilter.getPaymentTypes() != null ? currentFilter.getPaymentTypes().size() : 0;
+        chipPaymentType.setText(ptCount == 0 ? "Payment Type ▾" : "Payment Type (" + ptCount + ") ▾");
+        setChipActive(chipPaymentType, ptCount > 0, normalColor, activeColor);
     }
 
     private void setChipActive(TextView chip, boolean active, int normalColor, int activeColor) {

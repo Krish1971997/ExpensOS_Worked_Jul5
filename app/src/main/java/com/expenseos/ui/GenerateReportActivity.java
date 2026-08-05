@@ -21,9 +21,11 @@ import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
+import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Category;
+import com.expenseos.model.PaymentType;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
@@ -39,12 +41,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Note: "Payment Mode" from the old app's filter row is intentionally not
- * present here — there's no payment_mode column anywhere in this app's
- * schema, so a filter for it would just be a non-functional stub. Flagging
- * this rather than building a fake control.
- */
 public class GenerateReportActivity extends AppCompatActivity {
 
     private static final int REQ_STORAGE_PERM = 2001;
@@ -55,7 +51,7 @@ public class GenerateReportActivity extends AppCompatActivity {
     private CategoryDao catDao;
     private SubCategoryDao subCatDao;
 
-    private TextView tvDuration, tvEntryType, tvCategory, tvSearchTerm, tvSubCategory, tvAmount;
+    private TextView tvDuration, tvEntryType, tvCategory, tvSearchTerm, tvSubCategory, tvAmount, tvPaymentType;
     private RadioGroup rgReportType;
 
     // Filter state
@@ -65,12 +61,14 @@ public class GenerateReportActivity extends AppCompatActivity {
     private List<Category> allCategories = new ArrayList<>();
     private final List<Integer> selectedCategoryIds = new ArrayList<>();
     private List<SubCategory> allSubCategories = new ArrayList<>();
+    private List<PaymentType> allPaymentTypes = new ArrayList<>();
     private final List<Integer> selectedSubCategoryIds = new ArrayList<>();
     private String amountOp1 = null;
     private BigDecimal amount1 = null;
     private String amountOp2 = null;
     private BigDecimal amount2 = null;
     private String searchTerm = null;
+    private final List<String> selectedPaymentTypes = new ArrayList<>();
 
     // Resumed after a storage-permission grant on API < 29
     private String pendingAction; // "csv" or "pdf-save"
@@ -95,6 +93,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         tvSubCategory = findViewById(R.id.tvSubCategory);
         tvAmount = findViewById(R.id.tvAmount);
         tvSearchTerm = findViewById(R.id.tvSearchTerm);
+        tvPaymentType = findViewById(R.id.tvPaymentType);
         rgReportType = findViewById(R.id.rgReportType);
 
         findViewById(R.id.filterDuration).setOnClickListener(v -> showDurationDialog());
@@ -103,6 +102,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         findViewById(R.id.filterSubCategory).setOnClickListener(v -> showSubCategoryDialog());
         findViewById(R.id.filterAmount).setOnClickListener(v -> showAmountDialog());
         findViewById(R.id.filterSearch).setOnClickListener(v -> showSearchDialog());
+        findViewById(R.id.filterPaymentType).setOnClickListener(v -> showPaymentTypeDialog());
 
         findViewById(R.id.btnGenerateExcel).setOnClickListener(v -> {
             if (ensureStoragePermission("csv")) generateExcel();
@@ -121,6 +121,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         // rather than only those under whatever category happens to be
         // checked in the Category filter.
         allSubCategories = subCatDao.findAll();
+        allPaymentTypes = new PaymentTypeDao(this).findAll();
     }
 
     // ── Duration filter ─────────────────────────────────────
@@ -368,6 +369,39 @@ public class GenerateReportActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showPaymentTypeDialog() {
+        if (allPaymentTypes.isEmpty()) {
+            Toast.makeText(this, "No payment types found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] names = new String[allPaymentTypes.size()];
+        boolean[] checked = new boolean[allPaymentTypes.size()];
+        for (int i = 0; i < allPaymentTypes.size(); i++) {
+            names[i] = allPaymentTypes.get(i).getName();
+            checked[i] = selectedPaymentTypes.contains(names[i]);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Payment Type")
+                .setMultiChoiceItems(names, checked, (d, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("Apply", (d, w) -> {
+                    selectedPaymentTypes.clear();
+                    for (int i = 0; i < checked.length; i++) {
+                        if (checked[i]) {
+                            selectedPaymentTypes.add(names[i]);
+                        }
+                    }
+                    tvPaymentType.setText(selectedPaymentTypes.isEmpty() ? "All" : String.join(", ", selectedPaymentTypes));
+                })
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Clear", (d, w) -> {
+                    selectedPaymentTypes.clear();
+                    tvPaymentType.setText("All");
+                })
+                .show();
+    }
+
     // ── Build the filtered transaction list for the report ──
     private List<Transaction> loadFilteredTransactions() {
         TransactionFilter f = new TransactionFilter();
@@ -376,6 +410,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         f.setDateFrom(dateFrom);
         f.setDateTo(dateTo);
         f.setNoteSearch(searchTerm);
+        f.setPaymentTypes(selectedPaymentTypes.isEmpty() ? null : new ArrayList<>(selectedPaymentTypes));
         f.setCategoryIds(selectedCategoryIds.isEmpty() ? null : new ArrayList<>(selectedCategoryIds));
         f.setSubCategoryIds(selectedSubCategoryIds.isEmpty() ? null : new ArrayList<>(selectedSubCategoryIds));
         f.setAmountOp1(amountOp1);
@@ -393,6 +428,8 @@ public class GenerateReportActivity extends AppCompatActivity {
         if (id == R.id.rbDaywise) return ReportGenerator.TYPE_DAYWISE;
         if (id == R.id.rbCategorywise) return ReportGenerator.TYPE_CATEGORYWISE;
         if (id == R.id.rbSubcategorywise) return ReportGenerator.TYPE_SUBCATEGORYWISE;
+        if (id == R.id.rbPaymenttypewise)
+            return ReportGenerator.TYPE_PAYMENTTYPEWISE; // 👈 சேர்க்கப்பட்ட வரி
         return ReportGenerator.TYPE_ALL;
     }
 

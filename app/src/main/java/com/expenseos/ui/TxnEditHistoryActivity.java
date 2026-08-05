@@ -129,12 +129,18 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
 
         private String titleFor(AuditLog a) {
             switch (a.getAction()) {
-                case "CREATE": return "Created Entry";
-                case "DELETE": return "Deleted Entry";
-                case "RECEIPT_ADD": return "Added 1 attachment";
-                case "RECEIPT_DEL": return "Removed 1 attachment";
-                case "UPDATE": return "Edited " + (a.getFieldName() != null ? a.getFieldName() : "entry");
-                default: return a.getAction();
+                case "CREATE":
+                    return "Created Entry : ";
+                case "DELETE":
+                    return "Deleted Entry : ";
+                case "RECEIPT_ADD":
+                    return "Added 1 attachment : ";
+                case "RECEIPT_DEL":
+                    return "Removed 1 attachment : ";
+                case "UPDATE":
+                    return "Edited : " + (a.getFieldName() != null ? a.getFieldDisplay() : "entry");
+                default:
+                    return a.getAction();
             }
         }
 

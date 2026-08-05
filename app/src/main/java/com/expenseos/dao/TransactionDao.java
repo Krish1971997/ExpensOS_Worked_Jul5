@@ -113,19 +113,7 @@ public class TransactionDao {
         cv.put("book_id", newT.getBookId());
         cv.put("updated_at", LocalDateTime.now().format(TS_FMT));
         cv.put("payment_type", newT.getPaymentType() != null ? newT.getPaymentType() : "UPI");
-
-        // An edit means this row no longer matches what's on the cloud —
-        // mark it unsynced so the next sync actually pushes the change.
-        // (Previously this was never touched, so an edited-but-already-synced
-        // row stayed marked synced=1 forever and its edit never went up.)
         cv.put("synced", 0);
-        //if (oldT.isSynced()) {
-        // Already exists remotely — push this as an UPDATE. If it was
-        // never synced yet, leave sync_action alone (still NULL/INSERT)
-        // so it goes up as its original pending create, not an update
-        // against a remote row that was never created in the first place.
-//            cv.put("sync_action", "UPDATE");
-//        }
 
         db.update("transactions", cv, "id = ?", new String[]{String.valueOf(oldT.getId())});
 
@@ -142,6 +130,11 @@ public class TransactionDao {
                     nvl(newT.getSubCategoryName()));
         if (!Objects.equals(oldT.getNote(), newT.getNote()))
             auditDao.logUpdate(oldT.getId(), "user", "note", nvl(oldT.getNote()), nvl(newT.getNote()));
+
+        // ── NEW ──
+        if (!Objects.equals(oldT.getPaymentType(), newT.getPaymentType()))
+            auditDao.logUpdate(oldT.getId(), "user", "paymenttype",
+                    nvl(oldT.getPaymentType()), nvl(newT.getPaymentType()));
 
         if (!Objects.equals(oldT.getBookId(), newT.getBookId())) {
             CashBookDao cashBookDao = new CashBookDao(ctx);
@@ -659,6 +652,17 @@ public class TransactionDao {
             }
             sql.append(")");
         }
+        
+        // Multi payment-type IN clause
+        if (f.getPaymentTypes() != null && !f.getPaymentTypes().isEmpty()) {
+            sql.append(" AND t.payment_type IN (");
+            for (int i = 0; i < f.getPaymentTypes().size(); i++) {
+                sql.append(i > 0 ? ",?" : "?");
+                params.add(f.getPaymentTypes().get(i));
+            }
+            sql.append(")");
+        }
+
         // Amount conditions
         if (f.getAmount1() != null && f.getAmountOp1() != null) {
             sql.append(" AND t.amount ").append(TransactionFilter.safeOp(f.getAmountOp1())).append(" ?");
