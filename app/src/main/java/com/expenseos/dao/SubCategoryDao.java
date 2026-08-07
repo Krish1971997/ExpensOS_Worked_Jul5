@@ -62,4 +62,11 @@ public class SubCategoryDao {
                 new Object[]{id});
         db.delete("sub_categories", "id=?", new String[]{String.valueOf(id)});
     }
+
+    public void updateParentCategory(int subCategoryId, int newCategoryId) {
+        ContentValues cv = new ContentValues();
+        cv.put("category_id", newCategoryId);
+        cv.put("synced", 0);
+        db.update("sub_categories", cv, "id=?", new String[]{String.valueOf(subCategoryId)});
+    }
 }

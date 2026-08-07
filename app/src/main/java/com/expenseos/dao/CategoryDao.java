@@ -70,6 +70,19 @@ public class CategoryDao {
         db.update("categories", cv, "id=?", new String[]{String.valueOf(id)});
     }
 
+    /**
+     * Change a category's scope after creation — Common (bookId=null) <->
+     * book-specific (bookId=that book). Existing transactions keep pointing
+     * at the same category id, so nothing about mapped transactions changes;
+     * only which cashbook(s) the category shows up in going forward.
+     */
+    public void updateScope(int id, Integer bookId) {
+        ContentValues cv = new ContentValues();
+        if (bookId != null) cv.put("book_id", bookId);
+        else cv.putNull("book_id");
+        db.update("categories", cv, "id=?", new String[]{String.valueOf(id)});
+    }
+
     public void delete(int id) {
         db.execSQL("UPDATE transactions SET category_id=NULL WHERE category_id=?", new Object[]{id});
         db.delete("categories", "id=?", new String[]{String.valueOf(id)});

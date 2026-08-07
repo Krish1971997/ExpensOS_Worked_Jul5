@@ -232,6 +232,11 @@ public class SettingsActivity extends AppCompatActivity {
                     new String[]{"Common (all books)", "This book only"});
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spScope.setAdapter(adp);
+            // Default to "This book only" here — adding a category from a
+            // specific cashbook's Settings screen means that's almost always
+            // the intent, and leaving "Common" as the silent default is what
+            // caused categories to accidentally end up global.
+            spScope.setSelection(1);
             form.addView(spScope);
         }
 
@@ -285,10 +290,7 @@ public class SettingsActivity extends AppCompatActivity {
             h.tvScope.setText(c.isCommon() ? "Common" : "Book only");
             h.tvScope.setTextColor(getColor(c.isCommon() ? R.color.primary : R.color.amber));
 
-            h.btnEdit.setOnClickListener(v ->
-                    showRenameDialog("Rename Category", c.getName(),
-                            SettingsActivity.this::loadCategoryList,
-                            newName -> catDao.update(c.getId(), newName)));
+            h.btnEdit.setOnClickListener(v -> showEditCategoryDialog(c));
 
             h.btnDel.setOnClickListener(v ->
                     new AlertDialog.Builder(SettingsActivity.this)
@@ -387,6 +389,64 @@ public class SettingsActivity extends AppCompatActivity {
         rv.setAdapter(new SubCatAdapter(matched, catNameById));
     }
 
+    // ── Edit Sub-Category — name + parent category ─────────────────────
+    // Mirrors showEditCategoryDialog()'s reasoning: fixes a sub-category
+    // created under the wrong parent (e.g. "Ice" meant for Snacks, mapped to
+    // Food by mistake) without deleting/recreating it — the sub-category id
+    // stays the same, so already-mapped transactions keep pointing at it.
+    private void showEditSubCategoryDialog(SubCategory sc) {
+        List<Category> cats = categoriesForSubCatTab();
+
+        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(pad, pad, pad, pad);
+
+        TextView lbl1 = new TextView(this);
+        lbl1.setText("Category");
+        lbl1.setTextSize(11);
+        form.addView(lbl1);
+
+        Spinner spParent = new Spinner(this);
+        ArrayAdapter<Category> catAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, cats);
+        catAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spParent.setAdapter(catAdp);
+        for (int i = 0; i < cats.size(); i++) {
+            if (cats.get(i).getId() == sc.getParentCategoryId()) {
+                spParent.setSelection(i); // pre-select its CURRENT parent
+                break;
+            }
+        }
+        form.addView(spParent);
+
+        TextView lbl2 = new TextView(this);
+        lbl2.setText("Sub-category name");
+        lbl2.setTextSize(11);
+        lbl2.setPadding(0, pad, 0, 0);
+        form.addView(lbl2);
+
+        EditText etName = new EditText(this);
+        etName.setText(sc.getName());
+        etName.setSelection(sc.getName().length());
+        form.addView(etName);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Edit Sub-Category")
+                .setView(form)
+                .setPositiveButton("Save", (d, w) -> {
+                    String newName = etName.getText().toString().trim();
+                    if (newName.isEmpty() || spParent.getSelectedItem() == null) return;
+                    scDao.update(sc.getId(), newName);
+                    int newCatId = ((Category) spParent.getSelectedItem()).getId();
+                    if (newCatId != sc.getParentCategoryId())
+                        scDao.updateParentCategory(sc.getId(), newCatId);
+                    loadSubCategoryList();
+                    Toast.makeText(this, "Sub-category updated!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void showAddSubCategoryDialog() {
         List<Category> cats = categoriesForSubCatTab();
         if (cats.isEmpty()) {
@@ -472,10 +532,7 @@ public class SettingsActivity extends AppCompatActivity {
             h.tvCategory.setText(catNameById.getOrDefault(sc.getParentCategoryId(), "?"));
             h.tvName.setText(sc.getName());
 
-            h.btnEdit.setOnClickListener(v ->
-                    showRenameDialog("Rename Sub-Category", sc.getName(),
-                            SettingsActivity.this::loadSubCategoryList,
-                            newName -> scDao.update(sc.getId(), newName)));
+            h.btnEdit.setOnClickListener(v -> showEditSubCategoryDialog(sc));
 
             h.btnDel.setOnClickListener(v ->
                     new AlertDialog.Builder(SettingsActivity.this)
@@ -587,7 +644,56 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    // ── Rename helper (shared by category/sub-category/column edit icon) ──
+    // ── Edit Category — name + scope (Common <-> This book only) ──────
+    // Categories are the only one of the four editable lists that carry a
+    // scope, so this gets its own dialog instead of the generic rename one
+    // below — lets you fix a category that was accidentally created as
+    // Common when it should've been book-specific (or vice versa), without
+    // having to delete and recreate it (which would orphan its transactions'
+    // category link).
+    private void showEditCategoryDialog(Category c) {
+        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(pad, pad, pad, pad);
+
+        EditText etName = new EditText(this);
+        etName.setText(c.getName());
+        etName.setSelection(c.getName().length());
+        form.addView(etName);
+
+        Spinner spScope = null;
+        if (bookScoped) {
+            spScope = new Spinner(this);
+            ArrayAdapter<String> adp = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item,
+                    new String[]{"Common (all books)", "This book only"});
+            adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spScope.setAdapter(adp);
+            spScope.setSelection(c.isCommon() ? 0 : 1); // pre-select its CURRENT scope
+            form.addView(spScope);
+        }
+
+        Spinner finalSpScope = spScope;
+        new AlertDialog.Builder(this)
+                .setTitle("Edit Category")
+                .setView(form)
+                .setPositiveButton("Save", (d, w) -> {
+                    String newName = etName.getText().toString().trim();
+                    if (newName.isEmpty()) return;
+                    catDao.update(c.getId(), newName);
+                    if (finalSpScope != null) {
+                        boolean thisBookOnly = finalSpScope.getSelectedItemPosition() == 1;
+                        catDao.updateScope(c.getId(), thisBookOnly ? bookId : null);
+                    }
+                    loadCategoryList();
+                    Toast.makeText(this, "Category updated!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    // ── Rename helper (shared by sub-category/column/payment type edit icon) ──
     private void showRenameDialog(String title, String currentName, Runnable onRenamed, java.util.function.Consumer<String> doRename) {
         EditText et = new EditText(this);
         et.setText(currentName);
