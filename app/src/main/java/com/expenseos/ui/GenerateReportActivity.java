@@ -429,7 +429,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         if (id == R.id.rbCategorywise) return ReportGenerator.TYPE_CATEGORYWISE;
         if (id == R.id.rbSubcategorywise) return ReportGenerator.TYPE_SUBCATEGORYWISE;
         if (id == R.id.rbPaymenttypewise)
-            return ReportGenerator.TYPE_PAYMENTTYPEWISE; // 👈 சேர்க்கப்பட்ட வரி
+            return ReportGenerator.TYPE_PAYMENTTYPEWISE; // 👈 Check rbPaymenttypewise
         return ReportGenerator.TYPE_ALL;
     }
 

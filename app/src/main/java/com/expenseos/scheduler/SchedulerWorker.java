@@ -17,6 +17,8 @@ import com.expenseos.sync.SyncManager;
 import com.expenseos.util.ConsoleLogger;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -67,7 +69,8 @@ public class SchedulerWorker extends Worker {
         return Result.success();
     }
 
-    private void runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
+    private void
+    runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
         log.info("▶ Running scheduler: " + s.getDisplayName() + " (" + s.getName() + ")");
         long logId = dao.logStart(s.getId());
         String message;
@@ -88,7 +91,7 @@ public class SchedulerWorker extends Worker {
                     CashBookResult r = runCashBook(ctx);
                     ok = true;
                     message = r.message;
-                    rows = r.created ? 1 : 0;
+                    rows = r.count;   // <-- was r.created ? 1 : 0, now actual count (0-3)
                     break;
                 }
                 case "BUDGET": {
@@ -132,26 +135,63 @@ public class SchedulerWorker extends Worker {
     }
 
     // ── CASHBOOK: create next month's cash book if it doesn't exist ────
+    // ── CASHBOOK: create this month's set of 3 books if they don't exist ────
     private CashBookResult runCashBook(Context ctx) {
         java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
-        String name = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
+        java.time.LocalDate nextMonth = thisMonth.plusMonths(1);
+
+        String thisMonthName = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
+        String nextMonthName = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
+
+        String[] namesToCreate = {
+                thisMonthName,                          // e.g. "August 2026"
+                thisMonthName + " Expense",              // e.g. "August 2026 Expense"
+                nextMonthName + " Credit Card"           // e.g. "September 2026 Credit Card"
+        };
 
         com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);
-        for (com.expenseos.model.CashBook b : bookDao.findAll()) {
-            if (name.equalsIgnoreCase(b.getName()))
-                return new CashBookResult(false, "Cash book already exists: " + name);
+        java.util.List<com.expenseos.model.CashBook> existing = bookDao.findAll();
+
+        int created = 0;
+        List<String> createdNames = new ArrayList<>();
+        List<String> skippedNames = new ArrayList<>();
+
+        for (String name : namesToCreate) {
+            boolean already = false;
+            for (com.expenseos.model.CashBook b : existing) {
+                if (name.equalsIgnoreCase(b.getName())) {
+                    already = true;
+                    break;
+                }
+            }
+            if (already) {
+                skippedNames.add(name);
+                continue;
+            }
+            bookDao.insert(name, "Auto-created by scheduler");
+            createdNames.add(name);
+            created++;
         }
-        bookDao.insert(name, "Auto-created by scheduler");
-        return new CashBookResult(true, "Created cash book: " + name);
+
+        String message;
+        if (created == 0) {
+            message = "All cash books already exist: " + String.join(", ", skippedNames);
+        } else {
+            message = "Created: " + String.join(", ", createdNames)
+                    + (skippedNames.isEmpty() ? "" : " (already existed: " + String.join(", ", skippedNames) + ")");
+        }
+        return new CashBookResult(created > 0, message, created);
     }
 
     private static class CashBookResult {
         boolean created;
         String message;
+        int count;
 
-        CashBookResult(boolean created, String message) {
+        CashBookResult(boolean created, String message, int count) {
             this.created = created;
             this.message = message;
+            this.count = count;
         }
     }
 

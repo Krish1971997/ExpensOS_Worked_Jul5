@@ -188,4 +188,9 @@ public class Transaction {
     public void setPaymentType(String paymentType) {
         this.paymentType = paymentType;
     }
+
+    // 👈 இந்த alias method-ஐச் சேர்க்கவும்
+    public String getPaymentTypeName() {
+        return paymentType;
+    }
 }

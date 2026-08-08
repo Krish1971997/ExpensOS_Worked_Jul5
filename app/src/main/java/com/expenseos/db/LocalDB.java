@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 29; // bumped: added budgets, budget_categories
+    private static final int DB_VERSION = 30; // bumped: added budgets, budget_categories
     private static LocalDB instance;
     private final ConsoleLogger log = ConsoleLogger.get();
     // Every table that has a manually-assigned "id" column now gets a row
@@ -231,10 +231,12 @@ public class LocalDB extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE IF NOT EXISTS payment_types (" +
                 "id         INTEGER PRIMARY KEY," +
                 "name       TEXT NOT NULL UNIQUE," +
+                "is_default INTEGER NOT NULL DEFAULT 0," +
                 "created_at TEXT DEFAULT (datetime('now'))," +
                 "updated_at TEXT DEFAULT (datetime('now'))," +
                 "synced     INTEGER DEFAULT 0)");
         seedDefaultPaymentTypes(db);
+        db.execSQL("UPDATE payment_types SET is_default=1 WHERE name='UPI'"); // sensible out-of-box default
 
         db.execSQL("CREATE TABLE IF NOT EXISTS passbook_entries (" +
                 "sms_id           INTEGER PRIMARY KEY," +
@@ -574,6 +576,14 @@ public class LocalDB extends SQLiteOpenHelper {
             db.execSQL("UPDATE transactions SET payment_type='UPI' WHERE payment_type IS NULL OR payment_type=''");
 
             initSequences(db);
+        }
+
+        if (oldV < 30) {
+            try {
+                db.execSQL("ALTER TABLE payment_types ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
+                db.execSQL("UPDATE payment_types SET is_default=1 WHERE name='UPI'");
+            } catch (Exception ignored) {
+            }
         }
     }
 

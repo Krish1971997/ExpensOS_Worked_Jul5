@@ -30,6 +30,7 @@ public class StatsActivity extends AppCompatActivity {
 
     private YearMonth currentMonth = YearMonth.now();
     private boolean showExpense = true; // default tab = Expense, per screenshot
+    private String seriesSuffix = ""; // "" = plain month books; "Credit Card" etc = scoped to that series
     private TextView tvMonth, tvTotalBalance, tvEmpty;
     private PieChart pieChart;
     private RecyclerView rvCategories;
@@ -68,22 +69,37 @@ public class StatsActivity extends AppCompatActivity {
             refresh();
         });
 
+        // Launched from inside a specific cashbook (e.g. "September 2026
+        // Credit Card") — scope month-cycling to that same series, and
+        // start on that book's own month rather than today's calendar month.
+        int scopeBookId = getIntent().getIntExtra("scopeBookId", -1);
+        if (scopeBookId > 0) {
+            com.expenseos.model.CashBook scopeBook =
+                    new com.expenseos.dao.CashBookDao(this).findById(scopeBookId);
+            if (scopeBook != null) {
+                seriesSuffix = MonthBookResolver.extractSuffix(scopeBook.getName());
+                YearMonth parsed = MonthBookResolver.parseYearMonth(scopeBook.getName());
+                if (parsed != null) currentMonth = parsed;
+            }
+        }
+
         refresh();
     }
 
     private void refresh() {
         tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
-                + " " + currentMonth.getYear());
+                + " " + currentMonth.getYear()
+                + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
 
         tabExpense.setTextColor(showExpense ? Color.parseColor("#DC2626") : Color.GRAY);
         tabIncome.setTextColor(!showExpense ? Color.parseColor("#16A34A") : Color.GRAY);
 
-        CashBook book = MonthBookResolver.findBookForMonth(this, currentMonth);
+        CashBook book = MonthBookResolver.findBookForMonth(this, currentMonth, seriesSuffix);
         if (book == null) {
             pieChart.setVisibility(View.GONE);
             rvCategories.setVisibility(View.GONE);
             tvEmpty.setVisibility(View.VISIBLE);
-            tvEmpty.setText("No cash book found for " + MonthBookResolver.expectedName(currentMonth));
+            tvEmpty.setText("No cash book found for " + MonthBookResolver.expectedName(currentMonth, seriesSuffix));
             tvTotalBalance.setText("₹0.00");
             return;
         }

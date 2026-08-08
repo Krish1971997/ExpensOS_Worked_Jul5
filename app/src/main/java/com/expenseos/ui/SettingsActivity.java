@@ -1,5 +1,7 @@
 package com.expenseos.ui;
 
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -23,6 +25,7 @@ import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
+import com.expenseos.db.LocalDB;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
 import com.expenseos.model.SubCategory;
@@ -74,6 +77,8 @@ public class SettingsActivity extends AppCompatActivity {
     // ── Categories tab state ──
     private int catSubTab = 0; // 0=INCOME, 1=EXPENSE
     private String catSearch = "";
+    private String paySearch = "";
+    private boolean paySearchWired = false; // guards against stacking duplicate TextWatchers
     private TextView tabCatIncome, tabCatExpense;
     private EditText etCatSearch;
 
@@ -145,9 +150,13 @@ public class SettingsActivity extends AppCompatActivity {
         int activeColor = getColor(R.color.primary);
         int inactiveColor = getColor(R.color.text_muted);
         btnCat.setTextColor(tab == 0 ? activeColor : inactiveColor);
+        btnCat.setBackgroundResource(tab == 0 ? R.drawable.bg_tab_active : android.R.color.transparent);
         btnSub.setTextColor(tab == 1 ? activeColor : inactiveColor);
+        btnSub.setBackgroundResource(tab == 1 ? R.drawable.bg_tab_active : android.R.color.transparent);
         btnCol.setTextColor(tab == 2 ? activeColor : inactiveColor);
+        btnCol.setBackgroundResource(tab == 2 ? R.drawable.bg_tab_active : android.R.color.transparent);
         btnPay.setTextColor(tab == 3 ? activeColor : inactiveColor);
+        btnPay.setBackgroundResource(tab == 3 ? R.drawable.bg_tab_active : android.R.color.transparent);
 
         if (tab == 0) loadCategoryList();
         if (tab == 1) loadSubCategoryList();
@@ -189,9 +198,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void setCatSubTab(int tab) {
         catSubTab = tab;
         tabCatIncome.setTextColor(getColor(tab == 0 ? R.color.green : R.color.text_muted));
-        tabCatIncome.setTypeface(null, tab == 0 ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        tabCatIncome.setBackgroundResource(tab == 0 ? R.drawable.bg_tab_active : android.R.color.transparent);
         tabCatExpense.setTextColor(getColor(tab == 1 ? R.color.red : R.color.text_muted));
-        tabCatExpense.setTypeface(null, tab == 1 ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        tabCatExpense.setBackgroundResource(tab == 1 ? R.drawable.bg_tab_active : android.R.color.transparent);
         etCatSearch.setHint("Search " + (tab == 0 ? "income" : "expense") + " category");
         etCatSearch.setText("");
         loadCategoryList();
@@ -438,8 +447,17 @@ public class SettingsActivity extends AppCompatActivity {
                     if (newName.isEmpty() || spParent.getSelectedItem() == null) return;
                     scDao.update(sc.getId(), newName);
                     int newCatId = ((Category) spParent.getSelectedItem()).getId();
-                    if (newCatId != sc.getParentCategoryId())
+                    if (newCatId != sc.getParentCategoryId()) {
                         scDao.updateParentCategory(sc.getId(), newCatId);
+                        // Keep already-recorded transactions consistent — their
+                        // stored category_id must follow the sub-category to its
+                        // new parent, otherwise a txn would still show the OLD
+                        // category (e.g. Food) even though its sub-category
+                        // (Ice) now belongs to Snacks.
+                        SQLiteDatabase db = LocalDB.getInstance(this).getWritableDatabase();
+                        db.execSQL("UPDATE transactions SET category_id = ? WHERE sub_categories_id = ?",
+                                new Object[]{newCatId, sc.getId()});
+                    }
                     loadSubCategoryList();
                     Toast.makeText(this, "Sub-category updated!", Toast.LENGTH_SHORT).show();
                 })
@@ -684,12 +702,55 @@ public class SettingsActivity extends AppCompatActivity {
                     catDao.update(c.getId(), newName);
                     if (finalSpScope != null) {
                         boolean thisBookOnly = finalSpScope.getSelectedItemPosition() == 1;
+                        // Only a risk going Common -> this-book-only: narrowing
+                        // scope would silently drop this category out of any
+                        // OTHER cashbook that already has transactions on it.
+                        if (thisBookOnly && c.isCommon()) {
+                            java.util.Map<String, Integer> otherBooks = booksUsingCategory(c.getId(), bookId);
+                            if (!otherBooks.isEmpty()) {
+                                showScopeBlockedDialog(otherBooks);
+                                return;
+                            }
+                        }
+                        catDao.update(c.getId(), newName);
                         catDao.updateScope(c.getId(), thisBookOnly ? bookId : null);
+                    } else {
+                        catDao.update(c.getId(), newName);
                     }
                     loadCategoryList();
                     Toast.makeText(this, "Category updated!", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    // Books (other than the current one) that have transactions on this
+    // category, with how many each — used to block a Common -> book-only
+    // scope change that would otherwise silently orphan those cashbooks'
+    // transactions from the category.
+    private java.util.Map<String, Integer> booksUsingCategory(int categoryId, int excludeBookId) {
+        java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
+        SQLiteDatabase db = LocalDB.getInstance(this).getReadableDatabase();
+        String sql = "SELECT cb.name, COUNT(*) FROM transactions t " +
+                "JOIN cash_books cb ON cb.id = t.book_id " +
+                "WHERE t.category_id = ? AND t.book_id != ? " +
+                "GROUP BY t.book_id, cb.name";
+        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(categoryId), String.valueOf(excludeBookId)})) {
+            while (c.moveToNext()) result.put(c.getString(0), c.getInt(1));
+        }
+        return result;
+    }
+
+    private void showScopeBlockedDialog(java.util.Map<String, Integer> otherBooks) {
+        StringBuilder sb = new StringBuilder("This category is still used in other cashbooks:\n\n");
+        for (java.util.Map.Entry<String, Integer> e : otherBooks.entrySet())
+            sb.append("• ").append(e.getKey()).append(" — ").append(e.getValue())
+                    .append(e.getValue() == 1 ? " transaction\n" : " transactions\n");
+        sb.append("\nMaking it \"This book only\" would remove it from those cashbooks. Move or delete those transactions first, or keep it Common.");
+        new AlertDialog.Builder(this)
+                .setTitle("Can't change scope")
+                .setMessage(sb.toString())
+                .setPositiveButton("OK", null)
                 .show();
     }
 
@@ -719,20 +780,57 @@ public class SettingsActivity extends AppCompatActivity {
 // ══════════════════════════════════════════════════════
 
     private void loadPaymentTypesTab() {
-        List<com.expenseos.model.PaymentType> list = payDao.findAll();
+        if (!paySearchWired) {
+            paySearchWired = true;
+            EditText etSearch = findViewById(R.id.etPaySearch);
+            etSearch.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                @Override
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                @Override
+                public void afterTextChanged(Editable e) {
+                    paySearch = e.toString().trim();
+                    loadPaymentTypesTab();
+                }
+            });
+            findViewById(R.id.btnAddPaymentType).setOnClickListener(v -> showAddPaymentTypeDialog());
+        }
+
+        List<com.expenseos.model.PaymentType> all = payDao.findAll();
+        List<com.expenseos.model.PaymentType> filtered = new ArrayList<>();
+        for (com.expenseos.model.PaymentType pt : all) {
+            if (paySearch.isEmpty() || pt.getName().toLowerCase(Locale.ROOT).contains(paySearch.toLowerCase(Locale.ROOT)))
+                filtered.add(pt);
+        }
+
         RecyclerView rv = findViewById(R.id.rvPaymentTypes);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setAdapter(new PaymentTypeAdapter(list));
+        rv.setAdapter(new PaymentTypeAdapter(filtered));
+    }
 
-        findViewById(R.id.btnAddPaymentType).setOnClickListener(v -> {
-            EditText et = findViewById(R.id.etNewPaymentType);
-            String name = et.getText().toString().trim();
-            if (name.isEmpty()) return;
-            payDao.insert(name);
-            et.setText("");
-            loadPaymentTypesTab();
-            Toast.makeText(this, "Payment type added!", Toast.LENGTH_SHORT).show();
-        });
+    private void showAddPaymentTypeDialog() {
+        EditText etName = new EditText(this);
+        etName.setHint("e.g. HDFC Credit Card");
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        etName.setPadding(pad, pad, pad, pad);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Add Payment Type")
+                .setView(etName)
+                .setPositiveButton("Add", (d, w) -> {
+                    String name = etName.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    payDao.insert(name);
+                    loadPaymentTypesTab();
+                    Toast.makeText(this, "Payment type added!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     class PaymentTypeAdapter extends RecyclerView.Adapter<PaymentTypeAdapter.VH> {
@@ -743,28 +841,42 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         class VH extends RecyclerView.ViewHolder {
-            TextView tvName;
-            View btnEdit;
-            Button btnDel;
+            TextView tvName, tvDefaultBadge; // tvDefaultBadge சேர்க்கப்பட்டுள்ளது
+            View btnEdit, btnDel;
 
             VH(View v) {
                 super(v);
-                tvName = v.findViewById(R.id.tvColName);   // reusing item_column_definition.xml ids
-                btnEdit = v.findViewById(R.id.btnColEdit);
-                btnDel = v.findViewById(R.id.btnColDel);
+                tvName = v.findViewById(R.id.tvPaymentTypeName);
+                tvDefaultBadge = v.findViewById(R.id.tvDefaultBadge); // Bind badge view
+                btnEdit = v.findViewById(R.id.btnPaymentTypeEdit);
+                btnDel = v.findViewById(R.id.btnPaymentTypeDel);
             }
         }
 
         @Override
         public VH onCreateViewHolder(ViewGroup p, int t) {
             return new VH(LayoutInflater.from(p.getContext())
-                    .inflate(R.layout.item_column_definition, p, false)); // reuse same row layout
+                    .inflate(R.layout.item_payment_type, p, false));
         }
 
         @Override
         public void onBindViewHolder(VH h, int pos) {
             com.expenseos.model.PaymentType pt = list.get(pos);
+
+            // 1. Text Concatenation-க்கு பதிலாக Name மட்டும் வைக்கப்படுகிறது
             h.tvName.setText(pt.getName());
+
+            // 2. Default status-ஐப் பொறுத்து Badge காட்டுவது/மறைப்பது
+            if (pt.isDefault()) {
+                h.tvDefaultBadge.setVisibility(View.VISIBLE);
+            } else {
+                h.tvDefaultBadge.setVisibility(View.GONE);
+            }
+
+            h.itemView.setOnClickListener(v -> {
+                payDao.setDefault(pt.getId());
+                loadPaymentTypesTab();
+            });
 
             h.btnEdit.setOnClickListener(v ->
                     showRenameDialog("Rename Payment Type", pt.getName(),

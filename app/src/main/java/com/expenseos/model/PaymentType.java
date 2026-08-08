@@ -3,6 +3,8 @@ package com.expenseos.model;
 public class PaymentType {
     private int id;
     private String name;
+    private boolean isDefault;   // ← new field
+
 
     public PaymentType() {
     }
@@ -11,6 +13,13 @@ public class PaymentType {
         this.id = id;
         this.name = name;
     }
+
+    public PaymentType(int id, String name, boolean isDefault) {   // ← new constructor
+        this.id = id;
+        this.name = name;
+        this.isDefault = isDefault;
+    }
+
 
     public int getId() {
         return id;
@@ -26,6 +35,14 @@ public class PaymentType {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public boolean isDefault() {          // ← new getter
+        return isDefault;
+    }
+
+    public void setDefault(boolean isDefault) {   // ← new setter
+        this.isDefault = isDefault;
     }
 
     @Override

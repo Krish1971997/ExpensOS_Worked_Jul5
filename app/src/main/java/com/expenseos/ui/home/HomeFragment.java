@@ -43,8 +43,10 @@ public class HomeFragment extends Fragment {
     private EditText etSearch;
     private ImageButton btnFilter;
     private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType;
-    private View rowViewReports;
-    private TextView tvEntryCount;
+    private View rowViewReports, rowStats;
+    private TextView tvEntryCount, btnSortField, btnSortToggle;
+    private boolean sortAscending = false;
+    private String currentSortBy = "date"; // default sort field
 
     // Persists across searches/filter-dialog opens for this fragment instance.
     private final TransactionFilter currentFilter = new TransactionFilter();
@@ -66,7 +68,21 @@ public class HomeFragment extends Fragment {
         chipAmount = root.findViewById(R.id.chipAmount);
         chipPaymentType = root.findViewById(R.id.chipPaymentType);
         rowViewReports = root.findViewById(R.id.rowViewReports);
+        rowStats = root.findViewById(R.id.rowStats);
         tvEntryCount = root.findViewById(R.id.tvEntryCount);
+        btnSortField = root.findViewById(R.id.btnSortField);
+        btnSortToggle = root.findViewById(R.id.btnSortToggle);
+
+        // Field Selector Popup
+        btnSortField.setOnClickListener(v -> showSortMenu(v));
+
+        // Asc / Desc Direction Toggle
+        btnSortToggle.setOnClickListener(v -> {
+            sortAscending = !sortAscending;
+            currentFilter.setSortDir(sortAscending ? "asc" : "desc");
+            updateSortToggleText();
+            loadTransactions();
+        });
 
         rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> {
@@ -77,6 +93,8 @@ public class HomeFragment extends Fragment {
         rvTransactions.setAdapter(adapter);
 
         currentFilter.setPageSize(Integer.MAX_VALUE);
+        currentFilter.setSortBy(currentSortBy);
+        currentFilter.setSortDir("desc");
 
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override
@@ -103,6 +121,11 @@ public class HomeFragment extends Fragment {
         chipPaymentType.setOnClickListener(v -> openFilterDialog(4, true));
         rowViewReports.setOnClickListener(v ->
                 startActivity(new Intent(requireContext(), com.expenseos.ui.GenerateReportActivity.class)));
+        rowStats.setOnClickListener(v -> {
+            Intent i = new Intent(requireContext(), com.expenseos.ui.StatsActivity.class);
+            i.putExtra("scopeBookId", AppConfig.get(requireContext()).getActiveBookId());
+            startActivity(i);
+        });
 
         Button btnIncome = root.findViewById(R.id.btn_add_income);
         Button btnExpense = root.findViewById(R.id.btn_add_expense);
@@ -254,6 +277,60 @@ public class HomeFragment extends Fragment {
         Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
         i.putExtra("type", type.name());
         startActivity(i);
+    }
+
+    private void showSortMenu(View v) {
+        androidx.appcompat.widget.PopupMenu popup = new androidx.appcompat.widget.PopupMenu(requireContext(), v);
+        popup.getMenu().add(0, 1, 0, "Date");
+        popup.getMenu().add(0, 2, 1, "Amount");
+        popup.getMenu().add(0, 3, 2, "Category");
+        popup.getMenu().add(0, 4, 3, "Subcategory");
+        popup.getMenu().add(0, 5, 4, "Type");
+        popup.getMenu().add(0, 6, 5, "Note");
+
+        popup.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1:
+                    currentSortBy = "date";
+                    btnSortField.setText("Date ▾");
+                    break;
+                case 2:
+                    currentSortBy = "amount";
+                    btnSortField.setText("Amount ▾");
+                    break;
+                case 3:
+                    currentSortBy = "category";
+                    btnSortField.setText("Category ▾");
+                    break;
+                case 4:
+                    currentSortBy = "subcategory";
+                    btnSortField.setText("Subcategory ▾");
+                    break;
+                case 5:
+                    currentSortBy = "type";
+                    btnSortField.setText("Type ▾");
+                    break;
+                case 6:
+                    currentSortBy = "note";
+                    btnSortField.setText("Note ▾");
+                    break;
+                default:
+                    return false;
+            }
+            currentFilter.setSortBy(currentSortBy);
+            updateSortToggleText();
+            loadTransactions();
+            return true;
+        });
+        popup.show();
+    }
+
+    private void updateSortToggleText() {
+        if ("date".equals(currentSortBy)) {
+            btnSortToggle.setText(sortAscending ? "↑ Oldest" : "↓ Newest");
+        } else {
+            btnSortToggle.setText(sortAscending ? "↑ ASC" : "↓ DESC");
+        }
     }
 
     // Refresh totals/list when returning from TransactionEntryActivity

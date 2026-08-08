@@ -21,16 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Builds the three implemented report types (All Entries / Day-wise /
- * Category-wise) as CSV or PDF, writing straight to an OutputStream so the
- * same code works whether the destination is a plain File or a MediaStore
- * Uri's stream (see DownloadsSaver).
- * <p>
- * "Party-wise summary" is intentionally not implemented — there's no
- * "party"/member concept anywhere in this app's schema, matching how the
- * old app shows that option greyed out rather than functional.
- */
 public class ReportGenerator {
 
     public static final String TYPE_ALL = "all";
@@ -49,19 +39,21 @@ public class ReportGenerator {
             case TYPE_DAYWISE -> writeDaywiseCsv(txns, w);
             case TYPE_CATEGORYWISE -> writeCategorywiseCsv(txns, w);
             case TYPE_SUBCATEGORYWISE -> writeSubcategorywiseCsv(txns, w);
+            case TYPE_PAYMENTTYPEWISE -> writePaymentTypewiseCsv(txns, w); // 👈 Added
             default -> writeAllEntriesCsv(txns, w);
         }
         w.flush();
     }
 
     private static void writeAllEntriesCsv(List<Transaction> txns, Writer w) throws Exception {
-        w.write("Date,Time,Type,Category,Sub Category,Amount,Note\n");
+        w.write("Date,Time,Type,Category,Sub Category,Payment Type,Amount,Note\n");
         for (Transaction t : txns) {
             w.write(csvEscape(t.getDateTime() != null ? t.getDateTime().format(DATE_FMT) : "") + ",");
             w.write(csvEscape(t.getDateTime() != null ? t.getDateTime().format(TIME_FMT) : "") + ",");
             w.write(csvEscape(t.getType().name()) + ",");
             w.write(csvEscape(t.getCategoryName()) + ",");
             w.write(csvEscape(t.getSubCategoryName()) + ",");
+            w.write(csvEscape(t.getPaymentTypeName()) + ",");
             w.write(csvEscape(t.getAmount() != null ? t.getAmount().toPlainString() : "0") + ",");
             w.write(csvEscape(t.getNote()) + "\n");
         }
@@ -93,6 +85,15 @@ public class ReportGenerator {
         }
     }
 
+    // 👈 Payment Type-wise CSV logic added
+    private static void writePaymentTypewiseCsv(List<Transaction> txns, Writer w) throws Exception {
+        w.write("Payment Type,Total Income,Total Expense,Net\n");
+        for (Map.Entry<String, BigDecimal[]> e : paymentTypeTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            w.write(csvEscape(e.getKey()) + "," + in.toPlainString() + "," + out.toPlainString() + "," + in.subtract(out).toPlainString() + "\n");
+        }
+    }
+
     private static String csvEscape(String s) {
         if (s == null) return "";
         if (s.contains(",") || s.contains("\"") || s.contains("\n"))
@@ -119,6 +120,8 @@ public class ReportGenerator {
             case TYPE_DAYWISE -> addDaywiseTable(doc, txns, headFont, cellFont);
             case TYPE_CATEGORYWISE -> addCategorywiseTable(doc, txns, headFont, cellFont);
             case TYPE_SUBCATEGORYWISE -> addSubcategorywiseTable(doc, txns, headFont, cellFont);
+            case TYPE_PAYMENTTYPEWISE ->
+                    addPaymentTypewiseTable(doc, txns, headFont, cellFont); // 👈 Added
             default -> addAllEntriesTable(doc, txns, headFont, cellFont);
         }
 
@@ -130,14 +133,15 @@ public class ReportGenerator {
             case TYPE_DAYWISE -> "Day-wise Summary";
             case TYPE_CATEGORYWISE -> "Category-wise Summary";
             case TYPE_SUBCATEGORYWISE -> "Sub Category-wise Summary";
+            case TYPE_PAYMENTTYPEWISE -> "Payment Type-wise Summary"; // 👈 Added
             default -> "All Entries Report";
         };
     }
 
     private static void addAllEntriesTable(Document doc, List<Transaction> txns, Font headFont, Font cellFont) throws Exception {
-        PdfPTable table = new PdfPTable(new float[]{2f, 1.3f, 1.6f, 1.6f, 1.3f, 2.5f});
+        PdfPTable table = new PdfPTable(new float[]{2f, 1.2f, 1.5f, 1.5f, 1.5f, 1.3f, 2f});
         table.setWidthPercentage(100);
-        for (String h : new String[]{"Date", "Type", "Category", "Sub Category", "Amount", "Note"})
+        for (String h : new String[]{"Date", "Type", "Category", "Sub Cat", "Payment Type", "Amount", "Note"})
             addHeaderCell(table, h, headFont);
 
         for (Transaction t : txns) {
@@ -146,6 +150,7 @@ public class ReportGenerator {
             addCell(table, t.getType().name(), cellFont);
             addCell(table, t.getCategoryName() != null ? t.getCategoryName() : "", cellFont);
             addCell(table, t.getSubCategoryName() != null ? t.getSubCategoryName() : "", cellFont);
+            addCell(table, t.getPaymentTypeName() != null ? t.getPaymentTypeName() : "", cellFont);
             addCell(table, t.getAmount() != null ? t.getAmount().toPlainString() : "0", cellFont);
             addCell(table, t.getNote() != null ? t.getNote() : "", cellFont);
         }
@@ -202,9 +207,26 @@ public class ReportGenerator {
         doc.add(table);
     }
 
+    // 👈 Payment Type-wise PDF Table logic added
+    private static void addPaymentTypewiseTable(Document doc, List<Transaction> txns, Font headFont, Font cellFont) throws Exception {
+        PdfPTable table = new PdfPTable(new float[]{2.2f, 1.5f, 1.5f, 1.5f});
+        table.setWidthPercentage(100);
+        for (String h : new String[]{"Payment Type", "Income", "Expense", "Net"})
+            addHeaderCell(table, h, headFont);
+
+        for (Map.Entry<String, BigDecimal[]> e : paymentTypeTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            addCell(table, e.getKey(), cellFont);
+            addCell(table, in.toPlainString(), cellFont);
+            addCell(table, out.toPlainString(), cellFont);
+            addCell(table, in.subtract(out).toPlainString(), cellFont);
+        }
+        doc.add(table);
+    }
+
     private static void addHeaderCell(PdfPTable table, String text, Font font) {
         PdfPCell cell = new PdfPCell(new Paragraph(text, font));
-        cell.setBackgroundColor(new BaseColor(37, 99, 235)); // matches @color/primary
+        cell.setBackgroundColor(new BaseColor(37, 99, 235));
         cell.setPadding(6);
         table.addCell(cell);
     }
@@ -216,8 +238,6 @@ public class ReportGenerator {
     }
 
     // ── Shared aggregation ─────────────────────────────────────
-    // date-string -> [totalIn, totalOut], insertion order = chronological
-    // since callers already fetch txns sorted by date.
     private static Map<String, BigDecimal[]> dayTotals(List<Transaction> txns) {
         List<Transaction> sorted = new ArrayList<>(txns);
         sorted.sort((a, b) -> {
@@ -256,6 +276,21 @@ public class ReportGenerator {
                     ? t.getSubCategoryName() : "No Sub Category";
             map.putIfAbsent(sub, new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
             BigDecimal[] tot = map.get(sub);
+            BigDecimal amt = t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO;
+            if (t.getType() == Transaction.Type.INCOME) tot[0] = tot[0].add(amt);
+            else tot[1] = tot[1].add(amt);
+        }
+        return map;
+    }
+
+    // 👈 Payment Type calculation method added
+    private static Map<String, BigDecimal[]> paymentTypeTotals(List<Transaction> txns) {
+        Map<String, BigDecimal[]> map = new LinkedHashMap<>();
+        for (Transaction t : txns) {
+            String pt = t.getPaymentTypeName() != null && !t.getPaymentTypeName().isEmpty()
+                    ? t.getPaymentTypeName() : "Unspecified";
+            map.putIfAbsent(pt, new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal[] tot = map.get(pt);
             BigDecimal amt = t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO;
             if (t.getType() == Transaction.Type.INCOME) tot[0] = tot[0].add(amt);
             else tot[1] = tot[1].add(amt);

@@ -652,7 +652,7 @@ public class TransactionDao {
             }
             sql.append(")");
         }
-        
+
         // Multi payment-type IN clause
         if (f.getPaymentTypes() != null && !f.getPaymentTypes().isEmpty()) {
             sql.append(" AND t.payment_type IN (");

@@ -22,10 +22,18 @@ public class PaymentTypeDao {
 
     public List<PaymentType> findAll() {
         List<PaymentType> list = new ArrayList<>();
-        try (Cursor c = db.rawQuery("SELECT id, name FROM payment_types ORDER BY name", null)) {
-            while (c.moveToNext()) list.add(new PaymentType(c.getInt(0), c.getString(1)));
+        try (Cursor c = db.rawQuery("SELECT id, name, is_default FROM payment_types ORDER BY name", null)) {
+            while (c.moveToNext())
+                list.add(new PaymentType(c.getInt(0), c.getString(1), c.getInt(2) == 1));
         }
         return list;
+    }
+
+    /**
+     * Marks exactly one payment type as default, clearing any previous one.
+     */
+    public void setDefault(int id) {
+        db.execSQL("UPDATE payment_types SET is_default = (id = ?)", new Object[]{id});
     }
 
     public void insert(String name) {

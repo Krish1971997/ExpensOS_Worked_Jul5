@@ -178,7 +178,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
             Intent i = new Intent(this, SettingsActivity.class);
             i.putExtra("bookScoped", true);
             i.putExtra("bookId", bookId);
-            i.putExtra("startTab", 2); // 0=Categories, 1=Sub-Categories, 2=Columns
+            i.putExtra("startTab", 0); // 0=Categories, 1=Sub-Categories, 2=Columns
             startActivity(i);
         });
 
@@ -314,6 +314,15 @@ public class TransactionEntryActivity extends AppCompatActivity {
         } else {
             spSubCategory.setVisibility(View.VISIBLE);
             tvSubCategoryLabel.setVisibility(View.VISIBLE);
+
+            // Exactly one → fine to auto-select it. More than one → must
+            // not auto-pick the first one; prepend a placeholder (id=0,
+            // already this codebase's "no subcategory" convention) so the
+            // default selection is "none" and the user has to choose.
+            if (currentSubCategories.size() > 1) {
+                currentSubCategories.add(0, new SubCategory(0, "Select Sub Category", catId));
+            }
+
             ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentSubCategories);
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spSubCategory.setAdapter(adp);
@@ -683,9 +692,19 @@ public class TransactionEntryActivity extends AppCompatActivity {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
             return;
         }
+        // Category validation
         if (spCategory.getSelectedItem() == null || ((Category) spCategory.getSelectedItem()).getId() == 0) {
             Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
             return;
+        }
+
+        // Subcategory validation - Mandatory if visible and has placeholder (id == 0)
+        if (spSubCategory.getVisibility() == View.VISIBLE) {
+            SubCategory selectedSub = (SubCategory) spSubCategory.getSelectedItem();
+            if (selectedSub == null || selectedSub.getId() == 0) {
+                Toast.makeText(this, "Please select a subcategory", Toast.LENGTH_SHORT).show();
+                return;
+            }
         }
 
         if (spPaymentType.getSelectedItem() == null) {
@@ -780,7 +799,22 @@ public class TransactionEntryActivity extends AppCompatActivity {
         spPaymentType.setAdapter(adp);
 
         int pos = 0;
-        String target = (preselect != null && !preselect.isEmpty()) ? preselect : "UPI"; // default UPI
+//        String target = (preselect != null && !preselect.isEmpty()) ? preselect : "UPI"; // default UPI
+        String target = preselect; // null unless editing an existing transaction
+        if (target == null || target.isEmpty()) {
+            for (com.expenseos.model.PaymentType t : types)
+                if (t.isDefault()) {
+                    target = t.getName();
+                    break;
+                }
+        }
+        if (target == null) target = "UPI"; // last-resort fallback if nothing is marked default yet
+        for (int i = 0; i < types.size(); i++)
+            if (types.get(i).getName().equalsIgnoreCase(target)) {
+                pos = i;
+                break;
+            }
+        spPaymentType.setSelection(pos);
         for (int i = 0; i < types.size(); i++)
             if (types.get(i).getName().equalsIgnoreCase(target)) {
                 pos = i;

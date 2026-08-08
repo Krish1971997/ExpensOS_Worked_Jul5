@@ -59,6 +59,8 @@
         <activity android:name=".ui.BudgetActivity" />
         <activity android:name=".ui.StatsActivity" />
         <activity android:name=".ui.CategoryStatsActivity" />
+        <activity android:name=".ui.BackupActivity" />
+        <activity android:name=".ui.ConfigActivity" />
         <activity
             android:name=".ui.CalendarViewActivity"
             android:exported="false"

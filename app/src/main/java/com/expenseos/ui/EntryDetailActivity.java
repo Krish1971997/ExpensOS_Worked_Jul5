@@ -308,6 +308,7 @@ public class EntryDetailActivity extends AppCompatActivity {
                 .show();
     }
 
+    // ── 1. Target CashBook தேர்வு செய்யும் முதல் Popup ──
     private void showCopyDialog() {
         List<CashBook> books = bookDao.findAll();
         String[] opts = new String[books.size() + 1];
@@ -318,12 +319,47 @@ public class EntryDetailActivity extends AppCompatActivity {
                 .setTitle("Copy Entry To")
                 .setItems(opts, (d, which) -> {
                     int targetBookId = which == 0 ? txn.getBookId() : books.get(which - 1).getId();
-                    Transaction dup = copyOf(txn);
-                    dup.setBookId(targetBookId);
-                    long newId = txnDao.insert(dup);
-                    Toast.makeText(this, newId != -1 ? "Copied!" : "Copy failed", Toast.LENGTH_SHORT).show();
+                    // CashBook தேர்வு செய்த பிறகு Date Option Popup திரையிடப்படும்
+                    showCopyDateOptionsDialog(targetBookId);
                 })
                 .show();
+    }
+
+    // ── 2. Screen 1-இல் உள்ளது போன்ற Copy Date Options Popup ──
+    private void showCopyDateOptionsDialog(int targetBookId) {
+        String[] options = new String[]{
+                "Copy with today's date",
+                "Copy with date of entry"
+        };
+
+        // default-ஆக "Copy with today's date" (index 0) தேர்ந்தெடுக்கப்பட்டிருக்கும்
+        final int[] selectedOption = {0};
+
+        new AlertDialog.Builder(this)
+                .setTitle("Copy")
+                .setSingleChoiceItems(options, 0, (dialog, which) -> {
+                    selectedOption[0] = which;
+                })
+                .setPositiveButton("OK", (dialog, which) -> {
+                    performCopyEntry(targetBookId, selectedOption[0] == 0);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    // ── 3. தேர்ந்தெடுக்கப்பட்ட Date Option-படி பிரதியை உருவாக்குதல் ──
+    private void performCopyEntry(int targetBookId, boolean useTodayDate) {
+        Transaction dup = copyOf(txn);
+        dup.setBookId(targetBookId);
+
+        if (useTodayDate) {
+            dup.setDateTime(LocalDateTime.now()); // இன்றைய தேதி மற்றும் நேரம்
+        } else {
+            dup.setDateTime(txn.getDateTime()); // அசல் Entry-இன் தேதி
+        }
+
+        long newId = txnDao.insert(dup);
+        Toast.makeText(this, newId != -1 ? "Copied successfully!" : "Copy failed", Toast.LENGTH_SHORT).show();
     }
 
     private void showDeleteConfirm() {

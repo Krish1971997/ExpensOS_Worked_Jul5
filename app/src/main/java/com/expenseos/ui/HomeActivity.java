@@ -71,8 +71,14 @@ public class HomeActivity extends AppCompatActivity {
         findViewById(R.id.navHome).setOnClickListener(v -> loadTab(NAV_HOME));
 //        findViewById(R.id.navReports).setOnClickListener(v -> loadTab(NAV_REPORTS));
         findViewById(R.id.navLog).setOnClickListener(v -> loadTab(NAV_LOG));               // <-- new
-        findViewById(R.id.navBackup).setOnClickListener(v -> loadTab(NAV_BACKUP));
-        findViewById(R.id.navConfig).setOnClickListener(v -> loadTab(NAV_CONFIG));
+        findViewById(R.id.navBackup).setOnClickListener(v ->
+                startActivity(new Intent(this, SchedulerActivity.class)));
+        findViewById(R.id.navConfig).setOnClickListener(v -> {
+            Intent i = new Intent(this, SettingsActivity.class);
+            i.putExtra("bookScoped", true);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
+        });
     }
 
     private void loadTab(int tab) {
@@ -132,13 +138,18 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, MainActivity.class));
         });
 
+//        View drawerSettings = findViewById(R.id.drawerSettings);
+//        if (drawerSettings != null) drawerSettings.setOnClickListener(v -> {
+//            drawerLayout.closeDrawer(GravityCompat.START);
+//            Intent i = new Intent(this, SettingsActivity.class);
+//            i.putExtra("bookScoped", true);
+//            i.putExtra("bookId", bookId);
+//            startActivity(i);
+//        });
         View drawerSettings = findViewById(R.id.drawerSettings);
         if (drawerSettings != null) drawerSettings.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
-            Intent i = new Intent(this, SettingsActivity.class);
-            i.putExtra("bookScoped", true);
-            i.putExtra("bookId", bookId);
-            startActivity(i);
+            startActivity(new Intent(this, ConfigActivity.class));
         });
 
         View drawerAudit = findViewById(R.id.drawerAudit);
@@ -158,7 +169,7 @@ public class HomeActivity extends AppCompatActivity {
         View drawerScheduler = findViewById(R.id.drawerScheduler);
         if (drawerScheduler != null) drawerScheduler.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
-            startActivity(new Intent(this, SchedulerActivity.class));
+            startActivity(new Intent(this, BackupActivity.class));
         });
 
 //        View drawerConsoleLog = findViewById(R.id.drawerConsoleLog);
