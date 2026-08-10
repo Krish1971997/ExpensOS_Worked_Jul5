@@ -22,6 +22,7 @@ public class TransactionFilter {
     private String sortBy = "date"; // date | type | category | subcategory | amount | note
     private String sortDir = "desc"; // asc | desc
     private List<String> paymentTypes; // multi-select by name
+    private List<Integer> bookIds; // Multi-select CashBooks for All Transactions page[cite: 20]
 
     public boolean isFiltered() {
         return dateFrom != null || dateTo != null || (categoryIds != null && !categoryIds.isEmpty())
@@ -167,6 +168,14 @@ public class TransactionFilter {
 
     public void setSortDir(String sortDir) {
         this.sortDir = sortDir;
+    }
+
+    public List<Integer> getBookIds() {
+        return bookIds;
+    }
+
+    public void setBookIds(List<Integer> bookIds) {
+        this.bookIds = bookIds;
     }
 }
 

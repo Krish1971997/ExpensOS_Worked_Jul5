@@ -57,6 +57,7 @@ public class HomeActivity extends AppCompatActivity {
 //        com.expenseos.sync.BackupScheduler.scheduleDaily(this);
 
         com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);   // <-- add this
+        com.expenseos.scheduler.SchedulerWorker.ensureMonthlyCategoryReportScheduler(this);
 
         setupBottomNav();
         setupDrawer();
@@ -172,11 +173,13 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, BackupActivity.class));
         });
 
-//        View drawerConsoleLog = findViewById(R.id.drawerConsoleLog);
-//        if (drawerConsoleLog != null) drawerConsoleLog.setOnClickListener(v -> {
-//            drawerLayout.closeDrawer(GravityCompat.START);
-//            startActivity(new Intent(this, LogActivity.class));
-//        });
+        View drawerMonthlyReport = findViewById(R.id.drawerMonthlyReport);
+        if (drawerMonthlyReport != null) drawerMonthlyReport.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            Intent i = new Intent(this, MonthlyCategoryReportActivity.class);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
+        });
     }
 
     // ── Sync Button ───────────────────────────────────────

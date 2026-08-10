@@ -267,9 +267,16 @@ public class ConfigFragment extends Fragment {
     }
 
     private void saveGmailPrefs() {
+        String from = etGmailFrom.getText().toString().trim();
+        String pass = etGmailPass.getText().toString().trim();
+
+        // Save to BOTH — AppConfig (used by GmailSender for the Monthly
+        // Category Report) is the source of truth; keep the old prefs write
+        // too so nothing else silently breaks.
+        com.expenseos.util.AppConfig.get(requireContext()).setGmail(from, pass);
         prefs.edit()
-                .putString("gmail_from", etGmailFrom.getText().toString().trim())
-                .putString("gmail_pass", etGmailPass.getText().toString().trim())
+                .putString("gmail_from", from)
+                .putString("gmail_pass", pass)
                 .apply();
     }
 

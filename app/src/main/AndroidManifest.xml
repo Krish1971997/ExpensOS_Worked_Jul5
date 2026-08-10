@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Only needed for the legacy pre-scoped-storage Downloads save path
@@ -24,10 +27,6 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.ExpenseOS"
         android:usesCleartextTraffic="true">
-
-        <receiver
-            android:name="com.expenseos.sync.BackupScheduler$AutoBackupReceiver"
-            android:exported="false" />
 
         <!-- Launch: Book Selector -->
         <activity
@@ -61,6 +60,10 @@
         <activity android:name=".ui.CategoryStatsActivity" />
         <activity android:name=".ui.BackupActivity" />
         <activity android:name=".ui.ConfigActivity" />
+        <activity android:name=".ui.AllTransactionsActivity" />
+        <activity
+            android:name=".ui.MonthlyCategoryReportActivity"
+            android:exported="false" />
         <activity
             android:name=".ui.CalendarViewActivity"
             android:exported="false"

@@ -117,6 +117,12 @@ public class SchedulerWorker extends Worker {
                     rows = o.rows;
                     break;
                 }
+                case "MONTHLY_CATEGORY_REPORT": {
+                    MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
+                    ok = o.ok;
+                    message = o.message;
+                    break;
+                }
                 default:
                     ok = false;
                     message = "Unknown scheduler: " + s.getName();
@@ -212,6 +218,50 @@ public class SchedulerWorker extends Worker {
         return lastRun.isBefore(oneWeekAgo) ? lastRun : oneWeekAgo;
     }
 
+    // ── MONTHLY_CATEGORY_REPORT: emails the last-3-months category
+    // comparison for the active cashbook. Runs at 12:05 AM on the 1st, so
+    // "current month" has ~0 data yet — compares the month that just ended
+    // against the one before it (matches the CASHBOOK case's "current
+    // month at trigger time" convention, one turn earlier since this looks
+    // BACKWARD instead of creating something forward).
+    private MonthlyReportOutcome runMonthlyCategoryReport(Context ctx) {
+        MonthlyReportOutcome outcome = new MonthlyReportOutcome();
+        try {
+            int bookId = com.expenseos.util.AppConfig.get(ctx).getActiveBookId();
+            com.expenseos.util.CategoryComparisonReport.Result result =
+                    com.expenseos.util.CategoryComparisonReport.build(ctx, bookId, 3, false);
+
+            if (result.rows.isEmpty()) {
+                outcome.ok = true;
+                outcome.message = "No expense data to report — skipped email";
+                return outcome;
+            }
+
+            java.io.ByteArrayOutputStream pdfBytes = new java.io.ByteArrayOutputStream();
+            com.expenseos.util.CategoryComparisonReport.writePdf(result, pdfBytes);
+
+            String subject = "Monthly Category Report — " +
+                    result.months.get(result.months.size() - 1).getMonth().getDisplayName(
+                            java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+            String html = com.expenseos.util.CategoryComparisonReport.buildHtmlEmail(result);
+            com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
+                    "monthly_category_report.pdf", pdfBytes.toByteArray(), "application/pdf");
+
+            com.expenseos.util.GmailSender.send(ctx, null, subject, html, attachment);
+            outcome.ok = true;
+            outcome.message = "Report emailed (" + result.rows.size() + " categories)";
+        } catch (Exception e) {
+            outcome.ok = false;
+            outcome.message = e.getMessage() != null ? e.getMessage() : e.toString();
+        }
+        return outcome;
+    }
+
+    private static class MonthlyReportOutcome {
+        boolean ok = false;
+        String message = "";
+    }
+
     // ── Blocking wrapper around SyncManager's callback-based API ────
     // Worker.doWork() already runs on a background thread supplied by
     // WorkManager, so blocking here with a latch is safe and simplest.
@@ -255,7 +305,28 @@ public class SchedulerWorker extends Worker {
         int rows = 0;
     }
 
-    // ── Static scheduling helpers ────────────────────────────────────
+// ── Static scheduling helpers ────────────────────────────────────
+
+    /**
+     * Seeds the "MONTHLY_CATEGORY_REPORT" scheduler row if it doesn't exist
+     * yet (SchedulerDao.insertScheduler uses CONFLICT_IGNORE on the unique
+     * `name` column, so calling this on every app start is safe/idempotent).
+     * Runs at 00:05 on the 1st of each month.
+     */
+    public static void ensureMonthlyCategoryReportScheduler(Context ctx) {
+        SchedulerDao dao = new SchedulerDao(ctx);
+        if (dao.findByName("MONTHLY_CATEGORY_REPORT") != null) return;
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime firstOfThisMonth = now.withDayOfMonth(1).withHour(0).withMinute(5).withSecond(0).withNano(0);
+        LocalDateTime nextRun = now.isBefore(firstOfThisMonth)
+                ? firstOfThisMonth
+                : firstOfThisMonth.plusMonths(1);
+
+        dao.insertScheduler("MONTHLY_CATEGORY_REPORT", "Monthly Category Report Email",
+                true, "MONTHLY", "1", 0, 5, nextRun);
+        ConsoleLogger.get().info("Monthly Category Report scheduler seeded — next run: " + nextRun);
+    }
 
     /**
      * Call once (e.g. HomeActivity.onCreate) — KEEP policy makes this idempotent.

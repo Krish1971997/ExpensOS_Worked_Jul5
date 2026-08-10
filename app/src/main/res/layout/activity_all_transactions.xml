@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@android:color/white">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:background="@color/nav_bg"
+        android:elevation="4dp">
+
+        <ImageButton
+            android:id="@+id/btnAllTxnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_revert" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="📊 All Transactions"
+            android:textColor="@color/primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Totals row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:background="#F8FAFC"
+            android:padding="10dp">
+
+            <TextView
+                android:text="TOTAL INCOME"
+                android:textSize="10sp"
+                android:textColor="#888"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tv_total_income"
+                android:text="₹0.00"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/green"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:orientation="vertical"
+            android:background="#F8FAFC"
+            android:padding="10dp">
+
+            <TextView
+                android:text="TOTAL EXPENSES"
+                android:textSize="10sp"
+                android:textColor="#888"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tv_total_expense"
+                android:text="₹0.00"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/red"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:background="#F8FAFC"
+            android:padding="10dp">
+
+            <TextView
+                android:text="NET BALANCE"
+                android:textSize="10sp"
+                android:textColor="#888"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/tv_net_balance"
+                android:text="₹0.00"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Search + sort toggle + filter icon -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp">
+
+        <EditText
+            android:id="@+id/etTxnSearch"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:hint="Search by remark or amount"
+            android:background="@drawable/bg_search_box"
+            android:paddingHorizontal="12dp" />
+
+        <TextView
+            android:id="@+id/btnSortToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_filter_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="8dp"
+            android:text="↓"
+            android:textColor="@color/text"
+            android:textSize="14sp" />
+
+        <ImageButton
+            android:id="@+id/btnTxnFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_filter" />
+    </LinearLayout>
+
+    <!-- Filter chips row -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingHorizontal="12dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/chipCashBook"
+                style="@style/FilterChip"
+                android:text="Cashbook ▾" />
+
+            <TextView
+                android:id="@+id/chipDate"
+                style="@style/FilterChip"
+                android:text="Date ▾" />
+
+            <TextView
+                android:id="@+id/chipCategory"
+                style="@style/FilterChip"
+                android:text="Category ▾" />
+
+            <TextView
+                android:id="@+id/chipSubCategory"
+                style="@style/FilterChip"
+                android:text="Sub Category ▾" />
+
+            <TextView
+                android:id="@+id/chipAmount"
+                style="@style/FilterChip"
+                android:text="Amount ▾" />
+
+            <TextView
+                android:id="@+id/chipPaymentType"
+                style="@style/FilterChip"
+                android:text="Payment Type ▾" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/tvEntryCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginVertical="6dp"
+        android:text="Showing 0 entries"
+        android:textColor="#888"
+        android:textSize="12sp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_transactions"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="12dp" />
+</LinearLayout>

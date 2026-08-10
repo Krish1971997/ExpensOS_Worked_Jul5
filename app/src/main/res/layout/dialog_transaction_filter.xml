@@ -52,6 +52,16 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/tabCashBook"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="14dp"
+                android:text="Cash Book"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <TextView
                 android:id="@+id/tabDate"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -114,6 +124,21 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1">
+
+            <!-- ── CASH BOOK panel ──────────────────────── -->
+            <ScrollView
+                android:id="@+id/panelCashBook"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/cashBookContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp" />
+            </ScrollView>
 
             <!-- ── DATE panel ───────────────────────────── -->
             <ScrollView

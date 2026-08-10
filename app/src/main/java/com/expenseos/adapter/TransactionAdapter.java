@@ -34,6 +34,9 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
     private static final int TYPE_HEADER = 0;
     private static final int TYPE_TXN = 1;
+    private boolean showBookLabel;
+    private java.util.Map<Integer, String> bookNameCache; // lazy-loaded, only used when showBookLabel=true
+
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("h:mm a");
 
@@ -69,6 +72,20 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private final List<Row> rows = new ArrayList<>();
     private final OnTxnLongClick onLongClick;
     private final OnTxnClick onClick;
+
+    // NEW constructor — for All Transactions screen
+    public TransactionAdapter(Context ctx, List<Transaction> list,
+                              OnTxnLongClick onLongClick, OnTxnClick onClick,
+                              boolean showBookLabel) {
+        this.ctx = ctx;
+        this.readDb = LocalDB.getInstance(ctx).getReadableDatabase();
+        this.onLongClick = onLongClick;
+        this.onClick = onClick;
+        this.showBookLabel = showBookLabel;
+        if (showBookLabel) loadBookNames();
+        setData(list);
+    }
+
 
     public TransactionAdapter(Context ctx, List<Transaction> list,
                               OnTxnLongClick onLongClick,
@@ -176,12 +193,18 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         h.tvPaymentType.setText(t.getPaymentType() != null ? t.getPaymentType() : "");
         h.tvPaymentType.setVisibility(t.getPaymentType() != null && !t.getPaymentType().isEmpty() ? View.VISIBLE : View.GONE);
-        
+
         h.tvAmount.setText(t.getFormattedAmount());
         h.tvAmount.setTextColor(ContextCompat.getColor(ctx,
                 isIncome ? R.color.green : R.color.red));
 
         h.tvNote.setText(t.getNote() != null ? t.getNote() : "");
+
+        if (showBookLabel && bookNameCache != null) {
+            String bookName = bookNameCache.get(t.getBookId());
+            h.tvNote.setText((t.getNote() != null ? t.getNote() + "  " : "") +
+                    "📒 " + (bookName != null ? bookName : "Book #" + t.getBookId()));
+        }
 
         if (t.getRunningBalance() != null) {
             h.tvBalance.setText("Balance: " + t.getRunningBalance().toPlainString());
@@ -262,5 +285,12 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         builder.setSpan(new ForegroundColorSpan(Color.parseColor("#6B7280")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         return builder;
+    }
+
+    private void loadBookNames() {
+        bookNameCache = new java.util.HashMap<>();
+        try (Cursor c = readDb.rawQuery("SELECT id, name FROM cash_books", null)) {
+            while (c.moveToNext()) bookNameCache.put(c.getInt(0), c.getString(1));
+        }
     }
 }

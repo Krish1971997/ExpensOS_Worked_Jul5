@@ -48,7 +48,6 @@ public class HomeFragment extends Fragment {
     private boolean sortAscending = false;
     private String currentSortBy = "date"; // default sort field
 
-    // Persists across searches/filter-dialog opens for this fragment instance.
     private final TransactionFilter currentFilter = new TransactionFilter();
 
     @Override
@@ -73,10 +72,8 @@ public class HomeFragment extends Fragment {
         btnSortField = root.findViewById(R.id.btnSortField);
         btnSortToggle = root.findViewById(R.id.btnSortToggle);
 
-        // Field Selector Popup
         btnSortField.setOnClickListener(v -> showSortMenu(v));
 
-        // Asc / Desc Direction Toggle
         btnSortToggle.setOnClickListener(v -> {
             sortAscending = !sortAscending;
             currentFilter.setSortDir(sortAscending ? "asc" : "desc");
@@ -113,12 +110,15 @@ public class HomeFragment extends Fragment {
             }
         });
 
-        btnFilter.setOnClickListener(v -> openFilterDialog(0, false));
-        chipDate.setOnClickListener(v -> openFilterDialog(0, true));
-        chipCategory.setOnClickListener(v -> openFilterDialog(1, true));
-        chipSubCategory.setOnClickListener(v -> openFilterDialog(2, true));
-        chipAmount.setOnClickListener(v -> openFilterDialog(3, true));
-        chipPaymentType.setOnClickListener(v -> openFilterDialog(4, true));
+        // ── Index Matching Fixed ───────────────────────────
+        btnFilter.setOnClickListener(v -> openFilterDialog(1, false));       // Date
+        chipDate.setOnClickListener(v -> openFilterDialog(1, true));          // Date = Index 1
+        chipCategory.setOnClickListener(v -> openFilterDialog(2, true));      // Category = Index 2
+        chipSubCategory.setOnClickListener(v -> openFilterDialog(3, true));   // Sub Category = Index 3
+        chipAmount.setOnClickListener(v -> openFilterDialog(4, true));        // Amount = Index 4
+        chipPaymentType.setOnClickListener(v -> openFilterDialog(5, true));    // Payment Type = Index 5
+        // ───────────────────────────────────────────────────
+
         rowViewReports.setOnClickListener(v ->
                 startActivity(new Intent(requireContext(), com.expenseos.ui.GenerateReportActivity.class)));
         rowStats.setOnClickListener(v -> {
@@ -166,8 +166,6 @@ public class HomeFragment extends Fragment {
         return root;
     }
 
-    // Called externally (e.g. HomeActivity's sync button) to refresh the
-    // list/totals in place without recreating the fragment.
     public void refreshData() {
         loadTransactions();
     }
@@ -177,7 +175,7 @@ public class HomeFragment extends Fragment {
         TransactionDao dao = new TransactionDao(requireContext());
 
         currentFilter.setBookId(bookId);
-        currentFilter.setType(null); // this screen always shows both income & expense
+        currentFilter.setType(null);
         List<Transaction> all = dao.findByFilter(currentFilter);
 
         BigDecimal income = BigDecimal.ZERO, expense = BigDecimal.ZERO;
@@ -198,18 +196,12 @@ public class HomeFragment extends Fragment {
         refreshFilterChips();
         tvEntryCount.setText("Showing " + all.size() + " entries");
 
-        // Update toolbar book label
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
     }
 
-    // tab: 0=Date, 1=Category, 2=Sub Category, 3=Amount.
-    // singleField=true (chip tap) locks the dialog to just that tab;
-    // singleField=false (filter icon tap) shows the full tabbed dialog.
     private void openFilterDialog(int tab, boolean singleField) {
         int bookId = AppConfig.get(requireContext()).getActiveBookId();
         new TransactionFilterDialog(requireContext(), bookId, currentFilter, tab, singleField, appliedFilter -> {
-            // keep noteSearch box in sync with whatever the dialog produced
-            // (dialog doesn't touch noteSearch, so this just re-applies our field)
             appliedFilter.setNoteSearch(currentFilter.getNoteSearch());
             currentFilter.setDateFrom(appliedFilter.getDateFrom());
             currentFilter.setDateTo(appliedFilter.getDateTo());
@@ -224,11 +216,7 @@ public class HomeFragment extends Fragment {
         }).show();
     }
 
-    // Updates each pill's label to reflect the active filter, e.g.
-    // "Date: This Month", "Category (2)", "Amount: >=10". Falls back to the
-    // plain field name when that field isn't filtered.
     private void refreshFilterChips() {
-        // Date
         if (currentFilter.getDateFrom() == null && currentFilter.getDateTo() == null) {
             chipDate.setText("Date ▾");
         } else if (currentFilter.getDateFrom() != null && currentFilter.getDateFrom().equals(currentFilter.getDateTo())) {
@@ -237,15 +225,12 @@ public class HomeFragment extends Fragment {
             chipDate.setText("Date: range ▾");
         }
 
-        // Category
         int catCount = currentFilter.getCategoryIds() != null ? currentFilter.getCategoryIds().size() : 0;
         chipCategory.setText(catCount == 0 ? "Category ▾" : "Category (" + catCount + ") ▾");
 
-        // Sub Category
         int subCount = currentFilter.getSubCategoryIds() != null ? currentFilter.getSubCategoryIds().size() : 0;
         chipSubCategory.setText(subCount == 0 ? "Sub Category ▾" : "Sub Category (" + subCount + ") ▾");
 
-        // Amount
         if (currentFilter.getAmount1() == null) {
             chipAmount.setText("Amount ▾");
         } else {
@@ -271,7 +256,6 @@ public class HomeFragment extends Fragment {
         chip.setTextColor(active ? activeColor : normalColor);
         chip.setTypeface(null, active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
     }
-
 
     private void openEntryScreen(Transaction.Type type) {
         Intent i = new Intent(requireContext(), com.expenseos.ui.TransactionEntryActivity.class);
@@ -333,8 +317,6 @@ public class HomeFragment extends Fragment {
         }
     }
 
-    // Refresh totals/list when returning from TransactionEntryActivity
-    // (add, edit, or delete-then-back all land here).
     @Override
     public void onResume() {
         super.onResume();

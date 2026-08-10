@@ -87,4 +87,19 @@ public class CategoryDao {
         db.execSQL("UPDATE transactions SET category_id=NULL WHERE category_id=?", new Object[]{id});
         db.delete("categories", "id=?", new String[]{String.valueOf(id)});
     }
+
+    /**
+     * All categories of this type, across every book (used by "All Transactions" filters).
+     */
+    public List<Category> findAllByType(String type) {
+        String sql = "SELECT id, name, type, book_id FROM categories WHERE type=? ORDER BY id";
+        List<Category> list = new ArrayList<>();
+        try (Cursor c = db.rawQuery(sql, new String[]{type})) {
+            while (c.moveToNext()) {
+                Integer bId = c.isNull(3) ? null : c.getInt(3);
+                list.add(new Category(c.getInt(0), c.getString(1), c.getString(2), bId));
+            }
+        }
+        return list;
+    }
 }

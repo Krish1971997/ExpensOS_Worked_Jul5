@@ -622,6 +622,17 @@ public class TransactionDao {
             sql.append(" AND t.book_id = ?");
             params.add(String.valueOf(f.getBookId()));
         }
+
+        // 🟢 NEW: Multi-Cashbook IN Clause (All Transactions Screen-க்காக)
+        if (f.getBookIds() != null && !f.getBookIds().isEmpty()) {
+            sql.append(" AND t.book_id IN (");
+            for (int i = 0; i < f.getBookIds().size(); i++) {
+                sql.append(i > 0 ? ",?" : "?");
+                params.add(String.valueOf(f.getBookIds().get(i)));
+            }
+            sql.append(")");
+        }
+        
         if (f.getType() != null && !f.getType().isBlank()) {
             sql.append(" AND t.type = ?");
             params.add(f.getType());

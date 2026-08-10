@@ -83,6 +83,9 @@ public class MainActivity extends AppCompatActivity {
         // Restore from Cloud — works even with zero local books
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
+        findViewById(R.id.btnAllTxn).setOnClickListener(v ->
+                startActivity(new Intent(this, AllTransactionsActivity.class)));
+
         // New Book
         findViewById(R.id.btnNewBook).setOnClickListener(v -> showNewBookDialog());
 

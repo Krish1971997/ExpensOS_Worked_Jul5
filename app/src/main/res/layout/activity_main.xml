@@ -31,6 +31,15 @@
             android:layout_height="36dp"
             android:text="☁ Restore"
             android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btnAllTxn"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:text="📊 All Txns"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Middle content: header, search, book list — takes remaining space -->
