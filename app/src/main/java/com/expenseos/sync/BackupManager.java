@@ -84,6 +84,14 @@ public class BackupManager {
                 backup.put("schedulers", tableToJson(db, "schedulers"));
                 backup.put("scheduler_log", tableToJson(db, "scheduler_log"));
                 backup.put("deleted_records", tableToJson(db, "deleted_records"));
+                backup.put("payment_types", tableToJson(db, "payment_types"));
+                backup.put("keyword_mappings", tableToJson(db, "keyword_mappings"));
+                backup.put("events", tableToJson(db, "events"));
+                backup.put("reminders", tableToJson(db, "reminders"));
+                backup.put("event_reminders", tableToJson(db, "event_reminders"));
+                backup.put("tasks", tableToJson(db, "tasks"));
+                backup.put("task_events", tableToJson(db, "task_events"));
+                backup.put("task_alarms", tableToJson(db, "task_alarms"));
 
                 String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 String fileName = "backup_" + ts + ".zip";
