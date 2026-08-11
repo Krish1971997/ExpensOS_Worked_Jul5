@@ -9,11 +9,18 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.speech.RecognizerIntent;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -25,23 +32,29 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
+import com.expenseos.dao.KeywordMappingDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.ReceiptDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
+import com.expenseos.model.KeywordMapping;
 import com.expenseos.model.PaymentType;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
+import com.expenseos.util.AppConfig;
 import com.expenseos.util.ConsoleLogger;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -82,6 +95,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private ColumnDefinitionDao colDefDao;
     private ReceiptDao receiptDao;
     private PaymentTypeDao payDao;
+    private KeywordMappingDao kwDao;
 
     private LocalDate selectedDate = LocalDate.now();
     private LocalTime selectedTime = LocalTime.now();
@@ -94,12 +108,14 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private final List<PendingAttachment> pendingAttachments = new ArrayList<>();
     private Uri pendingCameraUri; // set right before launching the camera intent, consumed in onActivityResult
 
-    private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic;
+    private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic, tvKwSuggestion;
     private LinearLayout boxDate, boxTime, boxAmount, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
     private View btnCalculator;
     private Spinner spCategory, spSubCategory, spPaymentType;
     private Button btnSaveAddNew, btnSave;
+    private KeywordMapping pendingSuggestion;
+    private Integer pendingSubCategoryId;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -109,7 +125,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
 //        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
 //        bookId = prefs.getInt("active_book_id", 0);
 
-        bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
+        bookId = AppConfig.get(this).getActiveBookId();
 
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
@@ -117,9 +133,11 @@ public class TransactionEntryActivity extends AppCompatActivity {
         colDefDao = new ColumnDefinitionDao(this);
         receiptDao = new ReceiptDao(this);
         payDao = new PaymentTypeDao(this);
+        kwDao = new KeywordMappingDao(this);
 
         bindViews();
         setupClicks();
+        wireDescriptionAutoSuggest();
 
         txnId = getIntent().getIntExtra("txnId", -1);
 
@@ -139,10 +157,10 @@ public class TransactionEntryActivity extends AppCompatActivity {
         // extra tap — matches the old app's behavior.
         etAmount.requestFocus();
         etAmount.post(() -> {
-            android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            InputMethodManager imm =
+                    (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null)
-                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                imm.showSoftInput(etAmount, InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
@@ -167,6 +185,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         spCategory = findViewById(R.id.spCategory);
         spSubCategory = findViewById(R.id.spSubCategory);
         tvSubCategoryLabel = findViewById(R.id.tvSubCategoryLabel);
+        tvKwSuggestion = findViewById(R.id.tvKwSuggestion);   // <-- இது missing
         customFieldsContainer = findViewById(R.id.customFieldsContainer);
         btnSaveAddNew = findViewById(R.id.btnSaveAddNew);
         btnSave = findViewById(R.id.btnSave);
@@ -326,7 +345,84 @@ public class TransactionEntryActivity extends AppCompatActivity {
             ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentSubCategories);
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spSubCategory.setAdapter(adp);
+
+            if (pendingSubCategoryId != null) {
+                for (int i = 0; i < currentSubCategories.size(); i++) {
+                    if (currentSubCategories.get(i).getId() == pendingSubCategoryId) {
+                        spSubCategory.setSelection(i);
+                        break;
+                    }
+                }
+                pendingSubCategoryId = null;
+            }
+
         }
+    }
+
+    // ── Description -> Category/Sub-category auto-pickup ──────────────
+    // As the user types the Remark/Note, looks for a saved keyword mapping
+    // (managed in Settings -> Keywords) whose keyword occurs in the note,
+    // and auto-selects that category/sub-category. Debounced, and never
+    // overrides a category already picked (manually, or from edit-mode
+    // load) — only fires while spCategory is still on its placeholder.
+    // Replace the whole "Description -> Category/Sub-category auto-pickup"
+// block I gave earlier with this tap-to-apply version:
+
+    private final Handler suggestHandler = new Handler(Looper.getMainLooper());
+    private Runnable suggestRunnable;
+
+    private void wireDescriptionAutoSuggest() {
+        etNote.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                if (suggestRunnable != null) suggestHandler.removeCallbacks(suggestRunnable);
+                String text = e.toString();
+                suggestRunnable = () -> showKeywordSuggestion(text);
+                suggestHandler.postDelayed(suggestRunnable, 350);
+            }
+        });
+
+        tvKwSuggestion.setOnClickListener(v -> applyPendingSuggestion());
+    }
+
+    private void showKeywordSuggestion(String note) {
+        if (note == null || note.trim().length() < 3 || spCategory.getSelectedItemPosition() != 0) {
+            pendingSuggestion = null;
+            tvKwSuggestion.setVisibility(View.GONE);
+            return;
+        }
+        KeywordMapping match = kwDao.suggest(note.trim(), currentType.name(), bookId);
+        if (match == null) {
+            pendingSuggestion = null;
+            tvKwSuggestion.setVisibility(View.GONE);
+            return;
+        }
+        pendingSuggestion = match;
+        tvKwSuggestion.setText("💡 " + match.getCategoryName() +
+                (match.getSubCategoryName() != null ? " ▸ " + match.getSubCategoryName() : "") +
+                " — tap to apply");
+        tvKwSuggestion.setVisibility(View.VISIBLE);
+    }
+
+    private void applyPendingSuggestion() {
+        if (pendingSuggestion == null) return;
+        pendingSubCategoryId = pendingSuggestion.getSubCategoryId(); // consumed by the sub-category cascade above
+        for (int i = 0; i < currentCategories.size(); i++) {
+            if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
+                spCategory.setSelection(i + 1); // +1 for the placeholder row
+                break;
+            }
+        }
+        tvKwSuggestion.setVisibility(View.GONE);
+        pendingSuggestion = null;
     }
 
     // ── Custom fields now auto-populate for whatever type is selected —
@@ -391,8 +487,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // ── Attach Image or PDF — 3-option bottom sheet, matching the old app
     // (this used to jump straight to the system file manager) ───────────
     private void pickAttachment() {
-        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
-                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        BottomSheetDialog sheet =
+                new BottomSheetDialog(this);
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         container.setPadding(0, dp(8), 0, dp(16));
@@ -433,7 +529,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         row.setClickable(true);
         row.setFocusable(true);
 
-        android.util.TypedValue outValue = new android.util.TypedValue();
+        TypedValue outValue = new TypedValue();
         getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
         row.setBackgroundResource(outValue.resourceId);
 
@@ -460,14 +556,14 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // authorities="${applicationId}.fileprovider" — see file_paths.xml.
     private void launchCamera() {
         try {
-            java.io.File dir = new java.io.File(getCacheDir(), "receipts");
+            File dir = new File(getCacheDir(), "receipts");
             if (!dir.exists()) dir.mkdirs();
-            java.io.File photoFile = java.io.File.createTempFile("receipt_", ".jpg", dir);
-            pendingCameraUri = androidx.core.content.FileProvider.getUriForFile(
+            File photoFile = File.createTempFile("receipt_", ".jpg", dir);
+            pendingCameraUri = FileProvider.getUriForFile(
                     this, getPackageName() + ".fileprovider", photoFile);
 
-            Intent intent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingCameraUri);
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraUri);
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             startActivityForResult(intent, REQ_CAMERA);
         } catch (Exception e) {
@@ -784,16 +880,16 @@ public class TransactionEntryActivity extends AppCompatActivity {
         // entries at the same timestamp.
         etAmount.requestFocus();
         etAmount.post(() -> {
-            android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            InputMethodManager imm =
+                    (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null)
-                imm.showSoftInput(etAmount, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                imm.showSoftInput(etAmount, InputMethodManager.SHOW_IMPLICIT);
         });
     }
 
     private void loadPaymentTypes(String preselect) {
-        List<com.expenseos.model.PaymentType> types = payDao.findAll();
-        ArrayAdapter<com.expenseos.model.PaymentType> adp =
+        List<PaymentType> types = payDao.findAll();
+        ArrayAdapter<PaymentType> adp =
                 new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, types);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spPaymentType.setAdapter(adp);
@@ -802,7 +898,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
 //        String target = (preselect != null && !preselect.isEmpty()) ? preselect : "UPI"; // default UPI
         String target = preselect; // null unless editing an existing transaction
         if (target == null || target.isEmpty()) {
-            for (com.expenseos.model.PaymentType t : types)
+            for (PaymentType t : types)
                 if (t.isDefault()) {
                     target = t.getName();
                     break;

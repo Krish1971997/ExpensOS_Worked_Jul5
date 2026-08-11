@@ -57,6 +57,10 @@ dependencies {
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'androidx.work:work-runtime:2.9.0'
+    implementation 'com.google.android.gms:play-services-auth:20.7.0'
+    implementation 'com.google.api-client:google-api-client-android:2.2.0'
+    implementation 'com.google.apis:google-api-services-calendar:v3-rev20250404-2.0.0'
+    implementation 'com.google.http-client:google-http-client-android:1.44.1'
 
     implementation 'org.postgresql:postgresql:42.7.13'
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'

@@ -279,6 +279,24 @@
                     android:textSize="16sp" />
             </LinearLayout>
 
+            <!-- Keyword suggestion chip — shown only when the note text
+                 matches a saved keyword mapping and no category is picked yet.
+                 Tapping it applies the suggested category/sub-category. -->
+            <TextView
+                android:id="@+id/tvKwSuggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_chip_suggestion"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp"
+                android:textColor="@color/green"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+
             <!-- Attach -->
 
             <!-- Attached files list -->

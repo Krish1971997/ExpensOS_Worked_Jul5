@@ -80,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.navSettings).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
+        findViewById(R.id.navIntegrations).setOnClickListener(v ->
+                startActivity(new Intent(this, IntegrationsActivity.class)));
+
         // Restore from Cloud — works even with zero local books
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 

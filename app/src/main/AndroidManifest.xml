@@ -10,6 +10,9 @@
      (API 26-28) in DownloadsSaver — maxSdkVersion so it's a no-op
      (and doesn't show in the Play Store permission list) on API 29+,
      where MediaStore.Downloads is used instead. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -61,6 +64,19 @@
         <activity android:name=".ui.BackupActivity" />
         <activity android:name=".ui.ConfigActivity" />
         <activity android:name=".ui.AllTransactionsActivity" />
+        <activity
+            android:name=".ui.IntegrationsCalendarActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.AddTaskActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.IntegrationsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.AddEventActivity"
+            android:exported="false" />
+
         <activity
             android:name=".ui.MonthlyCategoryReportActivity"
             android:exported="false" />

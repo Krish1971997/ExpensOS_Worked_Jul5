@@ -8,9 +8,11 @@ import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,11 +25,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.expenseos.R;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
+import com.expenseos.dao.KeywordMappingDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
+import com.expenseos.model.KeywordMapping;
 import com.expenseos.model.SubCategory;
 
 import java.util.ArrayList;
@@ -73,6 +77,7 @@ public class SettingsActivity extends AppCompatActivity {
     private SubCategoryDao scDao;
     private ColumnDefinitionDao colDao;
     private PaymentTypeDao payDao;
+    private KeywordMappingDao kwDao;
 
     // ── Categories tab state ──
     private int catSubTab = 0; // 0=INCOME, 1=EXPENSE
@@ -83,10 +88,14 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText etCatSearch;
 
     // ── Sub-Categories tab state ──
+// ── Sub-Categories tab state ──
     private int subCatSubTab = 0; // 0=INCOME, 1=EXPENSE
     private String subCatSearch = "";
     private TextView tabSubIncome, tabSubExpense;
     private EditText etSubCatSearch;
+
+    // ── Keywords tab state (auto-suggest category/sub-category from description) ──
+    private String kwSearch = "";
 
     @Override
     protected void onCreate(Bundle s) {
@@ -97,6 +106,7 @@ public class SettingsActivity extends AppCompatActivity {
         scDao = new SubCategoryDao(this);
         colDao = new ColumnDefinitionDao(this);
         payDao = new PaymentTypeDao(this);
+        kwDao = new KeywordMappingDao(this);
 
         bookScoped = getIntent().getBooleanExtra("bookScoped", false);
 
@@ -122,6 +132,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         bindCategoryViews();
         bindSubCategoryViews();
+        bindKeywordViews();
         setupTabs();
 
         int startTab = getIntent().getIntExtra("startTab", 0);
@@ -134,6 +145,7 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btnTabSub).setOnClickListener(v -> switchTab(1));
         findViewById(R.id.btnTabColumns).setOnClickListener(v -> switchTab(2));
         findViewById(R.id.btnTabPaymentTypes).setOnClickListener(v -> switchTab(3));
+        findViewById(R.id.btnTabKeywords).setOnClickListener(v -> switchTab(4));
     }
 
     private void switchTab(int tab) {
@@ -141,11 +153,13 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.panelSubCategories).setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
         findViewById(R.id.panelColumns).setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
         findViewById(R.id.panelPaymentTypes).setVisibility(tab == 3 ? View.VISIBLE : View.GONE);
+        findViewById(R.id.panelKeywords).setVisibility(tab == 4 ? View.VISIBLE : View.GONE);
 
         Button btnCat = findViewById(R.id.btnTabCat);
         Button btnSub = findViewById(R.id.btnTabSub);
         Button btnCol = findViewById(R.id.btnTabColumns);
         Button btnPay = findViewById(R.id.btnTabPaymentTypes);
+        Button btnKw = findViewById(R.id.btnTabKeywords);
 
         int activeColor = getColor(R.color.primary);
         int inactiveColor = getColor(R.color.text_muted);
@@ -157,11 +171,14 @@ public class SettingsActivity extends AppCompatActivity {
         btnCol.setBackgroundResource(tab == 2 ? R.drawable.bg_tab_active : android.R.color.transparent);
         btnPay.setTextColor(tab == 3 ? activeColor : inactiveColor);
         btnPay.setBackgroundResource(tab == 3 ? R.drawable.bg_tab_active : android.R.color.transparent);
+        btnKw.setTextColor(tab == 4 ? activeColor : inactiveColor);
+        btnKw.setBackgroundResource(tab == 4 ? R.drawable.bg_tab_active : android.R.color.transparent);
 
         if (tab == 0) loadCategoryList();
         if (tab == 1) loadSubCategoryList();
         if (tab == 2) loadColumnsTab();
         if (tab == 3) loadPaymentTypesTab();
+        if (tab == 4) loadKeywordsTab();
     }
 
     // ══════════════════════════════════════════════════════
@@ -303,15 +320,10 @@ public class SettingsActivity extends AppCompatActivity {
 
             h.btnDel.setOnClickListener(v ->
                     new AlertDialog.Builder(SettingsActivity.this)
-                            .setTitle("Delete Category")
-                            .setMessage("Delete \"" + c.getName() + "\"? " +
-                                    "Transactions using it won't be affected.")
+                            .setTitle("Delete Payment Type")
+                            .setMessage("Delete \"" + c.getName() + "\"?")
                             .setPositiveButton("Delete", (d, w) -> {
-                                catDao.delete(c.getId());
-                                // Use c's CURRENT index, not the bind-time `pos` — RecyclerView
-                                // doesn't rebind surviving rows after notifyItemRemoved, so a
-                                // row's closure can go stale as soon as any earlier row is
-                                // removed, causing the wrong item to be removed from `list`.
+                                payDao.delete(c.getId());
                                 int idx = list.indexOf(c);
                                 if (idx >= 0) {
                                     list.remove(idx);
@@ -327,6 +339,252 @@ public class SettingsActivity extends AppCompatActivity {
             return list.size();
         }
     }
+
+    // ══════════════════════════════════════════════════════
+    // KEYWORDS TAB — description keyword -> Category/Sub-category,
+    // used by TransactionEntryActivity to auto-pick while typing the note.
+    // ══════════════════════════════════════════════════════
+
+    private void bindKeywordViews() {
+        EditText etKwSearch = findViewById(R.id.etKwSearch);
+        etKwSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                kwSearch = e.toString().trim();
+                loadKeywordsTab();
+            }
+        });
+        findViewById(R.id.btnKwAdd).setOnClickListener(v -> showKeywordDialog(null));
+    }
+
+    private void loadKeywordsTab() {
+        List<KeywordMapping> all = kwDao.findAll(bookScoped && bookId > 0 ? bookId : null);
+        List<KeywordMapping> filtered = new ArrayList<>();
+        for (KeywordMapping k : all) {
+            if (kwSearch.isEmpty() || k.getKeyword().toLowerCase(Locale.ROOT).contains(kwSearch.toLowerCase(Locale.ROOT)))
+                filtered.add(k);
+        }
+        RecyclerView rv = findViewById(R.id.rvKeywordList);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        rv.setAdapter(new KeywordAdapter(filtered));
+    }
+
+    // existing == null -> Add, else Edit. Combined so the category/sub-category
+    // cascade logic isn't duplicated between the two flows. Scope (Common/This
+    // book only) is only offered on Add — changing scope after creation isn't
+    // supported here, same as CategoryDao's separate updateScope() approach.
+    private void showKeywordDialog(KeywordMapping existing) {
+        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
+        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(pad, pad, pad, pad);
+
+        EditText etKeyword = new EditText(this);
+        etKeyword.setHint("Keyword, e.g. lunch, uber, netflix");
+        if (existing != null) {
+            etKeyword.setText(existing.getKeyword());
+            etKeyword.setSelection(existing.getKeyword().length());
+        }
+        form.addView(etKeyword);
+
+        TextView lblType = new TextView(this);
+        lblType.setText("Type");
+        lblType.setTextSize(11);
+        lblType.setPadding(0, pad, 0, 0);
+        form.addView(lblType);
+
+        Spinner spType = new Spinner(this);
+        ArrayAdapter<String> typeAdp = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{"Expense", "Income"});
+        typeAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spType.setAdapter(typeAdp);
+        if (existing != null) spType.setSelection(existing.getType().equals("INCOME") ? 1 : 0);
+        form.addView(spType);
+
+        TextView lblCat = new TextView(this);
+        lblCat.setText("Category");
+        lblCat.setTextSize(11);
+        lblCat.setPadding(0, pad, 0, 0);
+        form.addView(lblCat);
+
+        Spinner spCat = new Spinner(this);
+        form.addView(spCat);
+
+        TextView lblSub = new TextView(this);
+        lblSub.setText("Sub-Category (optional)");
+        lblSub.setTextSize(11);
+        lblSub.setPadding(0, pad, 0, 0);
+        form.addView(lblSub);
+
+        Spinner spSub = new Spinner(this);
+        form.addView(spSub);
+
+        Runnable[] refreshSubRef = new Runnable[1];
+        Runnable refreshCat = () -> {
+            String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
+            List<Category> cats = catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
+            ArrayAdapter<Category> catAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, cats);
+            catAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spCat.setAdapter(catAdp);
+            if (existing != null) {
+                for (int i = 0; i < cats.size(); i++) {
+                    if (cats.get(i).getId() == existing.getCategoryId()) {
+                        spCat.setSelection(i);
+                        break;
+                    }
+                }
+            }
+            refreshSubRef[0].run();
+        };
+        refreshSubRef[0] = () -> {
+            List<SubCategory> subs = new ArrayList<>();
+            subs.add(new SubCategory(0, "None", 0));
+            if (spCat.getSelectedItem() != null)
+                subs.addAll(scDao.findByCategoryId(((Category) spCat.getSelectedItem()).getId()));
+            ArrayAdapter<SubCategory> subAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, subs);
+            subAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spSub.setAdapter(subAdp);
+            if (existing != null && existing.getSubCategoryId() != null) {
+                for (int i = 0; i < subs.size(); i++) {
+                    if (subs.get(i).getId() == existing.getSubCategoryId()) {
+                        spSub.setSelection(i);
+                        break;
+                    }
+                }
+            }
+        };
+        refreshCat.run();
+
+        spType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                refreshCat.run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
+        spCat.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                refreshSubRef[0].run();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
+
+        Spinner spScope = null;
+        if (bookScoped && existing == null) {
+            spScope = new Spinner(this);
+            ArrayAdapter<String> scopeAdp = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item,
+                    new String[]{"Common (all books)", "This book only"});
+            scopeAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            spScope.setAdapter(scopeAdp);
+            spScope.setSelection(1);
+            form.addView(spScope);
+        }
+
+        Spinner finalSpScope = spScope;
+        new AlertDialog.Builder(this)
+                .setTitle(existing == null ? "Add Keyword Mapping" : "Edit Keyword Mapping")
+                .setView(form)
+                .setPositiveButton("Save", (d, w) -> {
+                    String keyword = etKeyword.getText().toString().trim();
+                    if (keyword.isEmpty() || spCat.getSelectedItem() == null) return;
+                    String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
+                    int catId = ((Category) spCat.getSelectedItem()).getId();
+                    SubCategory sub = (SubCategory) spSub.getSelectedItem();
+                    Integer subId = (sub != null && sub.getId() > 0) ? sub.getId() : null;
+
+                    if (existing == null) {
+                        boolean thisBookOnly = finalSpScope != null && finalSpScope.getSelectedItemPosition() == 1;
+                        kwDao.insert(keyword, type, catId, subId, thisBookOnly ? bookId : null);
+                        Toast.makeText(this, "Keyword mapping added!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        kwDao.update(existing.getId(), keyword, catId, subId);
+                        Toast.makeText(this, "Keyword mapping updated!", Toast.LENGTH_SHORT).show();
+                    }
+                    loadKeywordsTab();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    class KeywordAdapter extends RecyclerView.Adapter<KeywordAdapter.VH> {
+        private final List<KeywordMapping> list;
+
+        KeywordAdapter(List<KeywordMapping> list) {
+            this.list = list;
+        }
+
+        class VH extends RecyclerView.ViewHolder {
+            TextView tvKeyword, tvTarget, tvScope;
+            ImageButton btnEdit;
+            Button btnDel;
+
+            VH(View v) {
+                super(v);
+                tvKeyword = v.findViewById(R.id.tvKwKeyword);
+                tvTarget = v.findViewById(R.id.tvKwTarget);
+                tvScope = v.findViewById(R.id.tvKwScope);
+                btnEdit = v.findViewById(R.id.btnKwEdit);
+                btnDel = v.findViewById(R.id.btnKwDel);
+            }
+        }
+
+        @Override
+        public VH onCreateViewHolder(ViewGroup p, int t) {
+            return new VH(LayoutInflater.from(p.getContext())
+                    .inflate(R.layout.item_keyword_mapping, p, false));
+        }
+
+        @Override
+        public void onBindViewHolder(VH h, int pos) {
+            KeywordMapping k = list.get(pos);
+            h.tvKeyword.setText("\"" + k.getKeyword() + "\"");
+            String target = k.getCategoryName()
+                    + (k.getSubCategoryName() != null ? " ▸ " + k.getSubCategoryName() : "")
+                    + "  (" + (k.getType().equals("INCOME") ? "Income" : "Expense") + ")";
+            h.tvTarget.setText("→ " + target);
+            h.tvScope.setText(k.isCommon() ? "Common" : "Book only");
+            h.tvScope.setTextColor(getColor(k.isCommon() ? R.color.primary : R.color.amber));
+
+            h.btnEdit.setOnClickListener(v -> showKeywordDialog(k));
+
+            h.btnDel.setOnClickListener(v ->
+                    new AlertDialog.Builder(SettingsActivity.this)
+                            .setTitle("Delete Keyword")
+                            .setMessage("Delete \"" + k.getKeyword() + "\"? Already-saved transactions won't be affected.")
+                            .setPositiveButton("Delete", (d, w) -> {
+                                kwDao.delete(k.getId());
+                                int idx = list.indexOf(k);
+                                if (idx >= 0) {
+                                    list.remove(idx);
+                                    notifyItemRemoved(idx);
+                                }
+                            })
+                            .setNegativeButton("Cancel", null)
+                            .show());
+        }
+
+        @Override
+        public int getItemCount() {
+            return list.size();
+        }
+    }
+
 
     // ══════════════════════════════════════════════════════
     // SUB-CATEGORIES TAB

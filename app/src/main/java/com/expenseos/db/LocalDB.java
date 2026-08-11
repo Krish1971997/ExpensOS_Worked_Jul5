@@ -11,7 +11,8 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 30; // bumped: added budgets, budget_categories
+    private static final int DB_VERSION = 32; // bumped: added events, reminders, tasks
+    // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     private static LocalDB instance;
     private final ConsoleLogger log = ConsoleLogger.get();
     // Every table that has a manually-assigned "id" column now gets a row
@@ -21,7 +22,8 @@ public class LocalDB extends SQLiteOpenHelper {
             "cash_books", "categories", "sub_categories", "column_definitions",
             "transactions", "transaction_custom_values", "deleted_records",
             "transaction_audit_log", "transaction_receipts", "schedulers",
-            "scheduler_log", "budgets", "budget_categories", "payment_types"
+            "scheduler_log", "budgets", "budget_categories", "payment_types",
+            "keyword_mappings", "events", "reminders", "event_reminders", "tasks", "task_events", "task_alarms"
     };
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -247,6 +249,80 @@ public class LocalDB extends SQLiteOpenHelper {
                 "remark           TEXT," +          // <-- new
                 "timestamp_millis INTEGER NOT NULL," +
                 "copied           INTEGER DEFAULT 0)");
+
+        // keyword_mappings — Description keyword -> Category/Sub-category,
+        // used to auto-pick a category while typing the Remark/Note.
+        db.execSQL("CREATE TABLE IF NOT EXISTS keyword_mappings (" +
+                "id              INTEGER PRIMARY KEY," +
+                "keyword         TEXT NOT NULL," +
+                "type            TEXT NOT NULL," +           // INCOME | EXPENSE
+                "category_id     INTEGER NOT NULL," +
+                "sub_category_id INTEGER," +
+                "book_id         INTEGER," +                 // NULL = common
+                "created_at      TEXT DEFAULT (datetime('now'))," +
+                "updated_at      TEXT DEFAULT (datetime('now'))," +
+                "synced          INTEGER DEFAULT 0)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)");
+
+        // events — the "before/after N days" trigger definitions
+        db.execSQL("CREATE TABLE IF NOT EXISTS events (" +
+                "id               INTEGER PRIMARY KEY," +
+                "name             TEXT NOT NULL," +
+                "offset_direction TEXT NOT NULL DEFAULT 'BEFORE' CHECK(offset_direction IN ('BEFORE','AFTER'))," +
+                "offset_days      INTEGER NOT NULL DEFAULT 0," +
+                "header           TEXT," +
+                "created_at       TEXT DEFAULT (datetime('now'))," +
+                "updated_at       TEXT DEFAULT (datetime('now'))," +
+                "synced           INTEGER DEFAULT 0)");
+
+        // reminders — reusable named reminder templates (e.g. "1 day before 7pm")
+        db.execSQL("CREATE TABLE IF NOT EXISTS reminders (" +
+                "id         INTEGER PRIMARY KEY," +
+                "name       TEXT NOT NULL UNIQUE," +
+                "created_at TEXT DEFAULT (datetime('now'))," +
+                "updated_at TEXT DEFAULT (datetime('now')))");
+
+        // event_reminders — links an event to a reminder for either NOTIFICATION or ALARM,
+        // offset is relative to the event's own base alert date (task_date ± event.offset_days)
+        db.execSQL("CREATE TABLE IF NOT EXISTS event_reminders (" +
+                "id               INTEGER PRIMARY KEY," +
+                "event_id         INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
+                "reminder_id      INTEGER NOT NULL REFERENCES reminders(id)," +
+                "type             TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                "offset_direction TEXT NOT NULL DEFAULT 'BEFORE' CHECK(offset_direction IN ('BEFORE','AFTER'))," +
+                "offset_days      INTEGER NOT NULL DEFAULT 0," +
+                "time_hour        INTEGER NOT NULL," +
+                "time_minute      INTEGER NOT NULL," +
+                "created_at       TEXT DEFAULT (datetime('now'))," +
+                "updated_at       TEXT DEFAULT (datetime('now')))");
+
+        // tasks — Phase 2 la use aagum, table ippove create pannitrom
+        db.execSQL("CREATE TABLE IF NOT EXISTS tasks (" +
+                "id               INTEGER PRIMARY KEY," +
+                "name             TEXT NOT NULL," +
+                "task_datetime    TEXT NOT NULL," +
+                "description      TEXT," +
+                "color            TEXT," +
+                "google_event_id  TEXT," +
+                "created_at       TEXT DEFAULT (datetime('now'))," +
+                "updated_at       TEXT DEFAULT (datetime('now'))," +
+                "synced           INTEGER DEFAULT 0)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS task_events (" +
+                "id       INTEGER PRIMARY KEY," +
+                "task_id  INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
+                "event_id INTEGER NOT NULL REFERENCES events(id)," +
+                "UNIQUE(task_id,event_id))");
+
+        // task_alarms — tracks which AlarmManager request_code maps to which
+        // task+event_reminder, so edit/delete can cancel the exact pending alarm
+        db.execSQL("CREATE TABLE IF NOT EXISTS task_alarms (" +
+                "id                 INTEGER PRIMARY KEY," +
+                "task_id            INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
+                "event_reminder_id  INTEGER NOT NULL REFERENCES event_reminders(id) ON DELETE CASCADE," +
+                "request_code       INTEGER NOT NULL UNIQUE," +
+                "trigger_at         TEXT NOT NULL," +
+                "type               TEXT NOT NULL)");
 
         // id_sequences — app-controlled "next id" per table, replacing
         // AUTOINCREMENT so that ids stay predictable/reservable and won't
@@ -585,6 +661,54 @@ public class LocalDB extends SQLiteOpenHelper {
             } catch (Exception ignored) {
             }
         }
+
+        if (oldV < 31) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS keyword_mappings (" +
+                    "id              INTEGER PRIMARY KEY," +
+                    "keyword         TEXT NOT NULL," +
+                    "type            TEXT NOT NULL," +
+                    "category_id     INTEGER NOT NULL," +
+                    "sub_category_id INTEGER," +
+                    "book_id         INTEGER," +
+                    "created_at      TEXT DEFAULT (datetime('now'))," +
+                    "updated_at      TEXT DEFAULT (datetime('now'))," +
+                    "synced          INTEGER DEFAULT 0)");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)");
+            initSequences(db);
+        }
+
+        if (oldV < 32) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS events (" +
+                    "id INTEGER PRIMARY KEY, name TEXT NOT NULL," +
+                    "offset_direction TEXT NOT NULL DEFAULT 'BEFORE' CHECK(offset_direction IN ('BEFORE','AFTER'))," +
+                    "offset_days INTEGER NOT NULL DEFAULT 0, header TEXT," +
+                    "created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))," +
+                    "synced INTEGER DEFAULT 0)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS reminders (" +
+                    "id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE," +
+                    "created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))");
+            db.execSQL("CREATE TABLE IF NOT EXISTS event_reminders (" +
+                    "id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
+                    "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
+                    "type TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                    "offset_direction TEXT NOT NULL DEFAULT 'BEFORE' CHECK(offset_direction IN ('BEFORE','AFTER'))," +
+                    "offset_days INTEGER NOT NULL DEFAULT 0, time_hour INTEGER NOT NULL, time_minute INTEGER NOT NULL," +
+                    "created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')))");
+            db.execSQL("CREATE TABLE IF NOT EXISTS tasks (" +
+                    "id INTEGER PRIMARY KEY, name TEXT NOT NULL, task_datetime TEXT NOT NULL," +
+                    "description TEXT, color TEXT, google_event_id TEXT," +
+                    "created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))," +
+                    "synced INTEGER DEFAULT 0)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS task_events (" +
+                    "id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
+                    "event_id INTEGER NOT NULL REFERENCES events(id), UNIQUE(task_id,event_id))");
+            db.execSQL("CREATE TABLE IF NOT EXISTS task_alarms (" +
+                    "id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
+                    "event_reminder_id INTEGER NOT NULL REFERENCES event_reminders(id) ON DELETE CASCADE," +
+                    "request_code INTEGER NOT NULL UNIQUE, trigger_at TEXT NOT NULL, type TEXT NOT NULL)");
+            initSequences(db);
+        }
+
     }
 
     @Override

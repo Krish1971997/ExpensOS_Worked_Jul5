@@ -72,6 +72,9 @@ public class HomeFragment extends Fragment {
         btnSortField = root.findViewById(R.id.btnSortField);
         btnSortToggle = root.findViewById(R.id.btnSortToggle);
 
+        // Sticky Date Header View Initialization
+        TextView tvStickyDateHeader = root.findViewById(R.id.tvStickyDateHeader);
+
         btnSortField.setOnClickListener(v -> showSortMenu(v));
 
         btnSortToggle.setOnClickListener(v -> {
@@ -81,13 +84,36 @@ public class HomeFragment extends Fragment {
             loadTransactions();
         });
 
-        rvTransactions.setLayoutManager(new LinearLayoutManager(getContext()));
+        LinearLayoutManager layoutManager = new LinearLayoutManager(getContext());
+        rvTransactions.setLayoutManager(layoutManager);
+
         adapter = new TransactionAdapter(requireContext(), transactions, null, txn -> {
             Intent i = new Intent(requireContext(), com.expenseos.ui.EntryDetailActivity.class);
             i.putExtra("txnId", txn.getId());
             startActivity(i);
         });
         rvTransactions.setAdapter(adapter);
+
+        // ── Sticky Date Header Scroll Listener ────────────────────────────
+        rvTransactions.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+
+                if (layoutManager != null) {
+                    int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();
+
+                    if (firstVisibleItemPosition != RecyclerView.NO_POSITION && !transactions.isEmpty()) {
+                        Transaction currentTxn = transactions.get(firstVisibleItemPosition);
+
+                        if (currentTxn != null && currentTxn.getFormattedDate() != null && tvStickyDateHeader != null) {
+                            tvStickyDateHeader.setText(currentTxn.getFormattedDate());
+                        }
+                    }
+                }
+            }
+        });
+        // ──────────────────────────────────────────────────────────────────
 
         currentFilter.setPageSize(Integer.MAX_VALUE);
         currentFilter.setSortBy(currentSortBy);

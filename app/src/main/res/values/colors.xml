@@ -35,4 +35,6 @@
     <color name="income_badge_text">#15803D</color>
     <color name="expense_badge_bg">#FEE2E2</color>
     <color name="expense_badge_text">#B91C1C</color>
+
+    <color name="secondary">#666666</color>
 </resources>
