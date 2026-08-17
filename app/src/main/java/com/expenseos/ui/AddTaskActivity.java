@@ -1,7 +1,6 @@
 package com.expenseos.ui;
 
 import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -24,6 +23,7 @@ import com.expenseos.model.Event;
 import com.expenseos.model.Task;
 import com.expenseos.scheduler.TaskAlarmScheduler;
 import com.expenseos.util.TaskColors;
+import com.expenseos.util.TimePickerHelper;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -82,10 +82,11 @@ public class AddTaskActivity extends AppCompatActivity {
             refreshDateTimeButtons();
         }, date.getYear(), date.getMonthValue() - 1, date.getDayOfMonth()).show());
 
-        btnTime.setOnClickListener(v -> new TimePickerDialog(this, (p, h, min) -> {
-            time = LocalTime.of(h, min);
-            refreshDateTimeButtons();
-        }, time.getHour(), time.getMinute(), true).show());
+        btnTime.setOnClickListener(v ->
+                TimePickerHelper.show(this, getSupportFragmentManager(), time.getHour(), time.getMinute(), (h, min) -> {
+                    time = LocalTime.of(h, min);
+                    refreshDateTimeButtons();
+                }));
 
         btnEvents.setOnClickListener(v -> showEventPicker());
 

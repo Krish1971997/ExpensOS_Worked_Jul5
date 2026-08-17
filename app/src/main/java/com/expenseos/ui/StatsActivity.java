@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
 import com.expenseos.adapter.StatsCategoryAdapter;
+import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.CashBook;
 import com.expenseos.util.MonthBookResolver;
@@ -31,10 +32,20 @@ public class StatsActivity extends AppCompatActivity {
     private YearMonth currentMonth = YearMonth.now();
     private boolean showExpense = true; // default tab = Expense, per screenshot
     private String seriesSuffix = ""; // "" = plain month books; "Credit Card" etc = scoped to that series
+
+    // Set only when we were launched from a cashbook whose NAME does NOT match
+    // the "<Month> <Year>[suffix]" pattern (e.g. "Temple trip August 2026",
+    // "trip expense aug 2026"). Such books have no month/series to cycle
+    // through, so we show that exact book's stats directly and skip
+    // MonthBookResolver entirely. When this is non-null, currentMonth /
+    // seriesSuffix based lookups are NOT used.
+    private CashBook directBook = null;
+
     private TextView tvMonth, tvTotalBalance, tvEmpty;
     private PieChart pieChart;
     private RecyclerView rvCategories;
     private TextView tabIncome, tabExpense;
+    private View btnPrevMonth, btnNextMonth;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -42,11 +53,16 @@ public class StatsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_stats);
 
         findViewById(R.id.btnStatsBack).setOnClickListener(v -> finish());
-        findViewById(R.id.btnPrevMonth).setOnClickListener(v -> {
+
+        btnPrevMonth = findViewById(R.id.btnPrevMonth);
+        btnNextMonth = findViewById(R.id.btnNextMonth);
+        btnPrevMonth.setOnClickListener(v -> {
+            if (directBook != null) return; // no cycling for standalone/irregular books
             currentMonth = currentMonth.minusMonths(1);
             refresh();
         });
-        findViewById(R.id.btnNextMonth).setOnClickListener(v -> {
+        btnNextMonth.setOnClickListener(v -> {
+            if (directBook != null) return;
             currentMonth = currentMonth.plusMonths(1);
             refresh();
         });
@@ -69,17 +85,29 @@ public class StatsActivity extends AppCompatActivity {
             refresh();
         });
 
-        // Launched from inside a specific cashbook (e.g. "September 2026
-        // Credit Card") — scope month-cycling to that same series, and
-        // start on that book's own month rather than today's calendar month.
+        // Launched from inside a specific cashbook — decide whether it's a
+        // month-pattern book ("August 2026", "August 2026 Expense",
+        // "August 2026 Credit Card") or an irregular one-off book
+        // ("Temple trip August 2026", "trip expense aug 2026").
         int scopeBookId = getIntent().getIntExtra("scopeBookId", -1);
         if (scopeBookId > 0) {
-            com.expenseos.model.CashBook scopeBook =
-                    new com.expenseos.dao.CashBookDao(this).findById(scopeBookId);
+            CashBook scopeBook = new CashBookDao(this).findById(scopeBookId);
             if (scopeBook != null) {
-                seriesSuffix = MonthBookResolver.extractSuffix(scopeBook.getName());
                 YearMonth parsed = MonthBookResolver.parseYearMonth(scopeBook.getName());
-                if (parsed != null) currentMonth = parsed;
+                if (parsed != null) {
+                    // Conforms to "<Month> <Year>[suffix]" — scope prev/next
+                    // cycling to books sharing this same suffix/series.
+                    seriesSuffix = MonthBookResolver.extractSuffix(scopeBook.getName());
+                    currentMonth = parsed;
+                } else {
+                    // Irregular name — no month/series to cycle through.
+                    // Show this exact book's stats, nothing else.
+                    directBook = scopeBook;
+                    btnPrevMonth.setEnabled(false);
+                    btnNextMonth.setEnabled(false);
+                    btnPrevMonth.setAlpha(0.3f);
+                    btnNextMonth.setAlpha(0.3f);
+                }
             }
         }
 
@@ -87,14 +115,20 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     private void refresh() {
-        tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
-                + " " + currentMonth.getYear()
-                + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
-
         tabExpense.setTextColor(showExpense ? Color.parseColor("#DC2626") : Color.GRAY);
         tabIncome.setTextColor(!showExpense ? Color.parseColor("#16A34A") : Color.GRAY);
 
-        CashBook book = MonthBookResolver.findBookForMonth(this, currentMonth, seriesSuffix);
+        CashBook book;
+        if (directBook != null) {
+            book = directBook;
+            tvMonth.setText(book.getName());
+        } else {
+            tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
+                    + " " + currentMonth.getYear()
+                    + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
+            book = MonthBookResolver.findBookForMonth(this, currentMonth, seriesSuffix);
+        }
+
         if (book == null) {
             pieChart.setVisibility(View.GONE);
             rvCategories.setVisibility(View.GONE);
@@ -106,8 +140,8 @@ public class StatsActivity extends AppCompatActivity {
 
         TransactionDao dao = new TransactionDao(this);
         List<Map<String, Object>> rows = showExpense
-                ? dao.categoryBreakdownWithId("EXPENSE", book.getId())   // <-- changed
-                : dao.categoryBreakdownWithId("INCOME", book.getId());  // <-- changed
+                ? dao.categoryBreakdownWithId("EXPENSE", book.getId())
+                : dao.categoryBreakdownWithId("INCOME", book.getId());
 
         // Sort descending by amount — screenshot shows highest first
         rows.sort((a, b) -> ((BigDecimal) b.get("total")).compareTo((BigDecimal) a.get("total")));
@@ -144,9 +178,10 @@ public class StatsActivity extends AppCompatActivity {
         pieChart.invalidate();
 
         // Category list — tap → CategoryStatsActivity drill-down
+        final CashBook resolvedBook = book;
         rvCategories.setAdapter(new StatsCategoryAdapter(rows, total, (categoryId, categoryName) -> {
             Intent i = new Intent(this, CategoryStatsActivity.class);
-            i.putExtra("bookId", book.getId());
+            i.putExtra("bookId", resolvedBook.getId());
             i.putExtra("categoryId", categoryId);
             i.putExtra("categoryName", categoryName);
             i.putExtra("isExpense", showExpense);

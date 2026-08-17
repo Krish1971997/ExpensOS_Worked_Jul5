@@ -91,69 +91,6 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Column headers -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="32dp"
-        android:background="#F8FAFC"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="8dp">
-
-        <TextView
-            android:layout_width="80dp"
-            android:layout_height="wrap_content"
-            android:text="TYPE"
-            android:textAllCaps="true"
-            android:textColor="@color/text_muted"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1.2"
-            android:text="DATE &amp; TIME"
-            android:textAllCaps="true"
-            android:textColor="@color/text_muted"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="0.8"
-            android:text="AMOUNT (₹)"
-            android:textAllCaps="true"
-            android:textColor="@color/text_muted"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="CATEGORY"
-            android:textAllCaps="true"
-            android:textColor="@color/text_muted"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="NOTE"
-            android:textAllCaps="true"
-            android:textColor="@color/text_muted"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <View
-            android:layout_width="32dp"
-            android:layout_height="1dp" />
-    </LinearLayout>
-
     <!-- Scrollable rows -->
     <ScrollView
         android:layout_width="match_parent"

@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 32; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 33; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     private static LocalDB instance;
     private final ConsoleLogger log = ConsoleLogger.get();
@@ -276,25 +276,24 @@ public class LocalDB extends SQLiteOpenHelper {
                 "synced           INTEGER DEFAULT 0)");
 
         // reminders — reusable named reminder templates (e.g. "1 day before 7pm")
+// reminders — standalone, reusable, named: name + offset (days/weeks before) + time
         db.execSQL("CREATE TABLE IF NOT EXISTS reminders (" +
-                "id         INTEGER PRIMARY KEY," +
-                "name       TEXT NOT NULL UNIQUE," +
-                "created_at TEXT DEFAULT (datetime('now'))," +
-                "updated_at TEXT DEFAULT (datetime('now')))");
+                "id           INTEGER PRIMARY KEY," +
+                "name         TEXT NOT NULL," +
+                "offset_value INTEGER NOT NULL DEFAULT 0," +
+                "offset_unit  TEXT NOT NULL DEFAULT 'DAY' CHECK(offset_unit IN ('DAY','WEEK'))," +
+                "time_hour    INTEGER NOT NULL," +
+                "time_minute  INTEGER NOT NULL," +
+                "created_at   TEXT DEFAULT (datetime('now'))," +
+                "updated_at   TEXT DEFAULT (datetime('now')))");
 
-        // event_reminders — links an event to a reminder for either NOTIFICATION or ALARM,
-        // offset is relative to the event's own base alert date (task_date ± event.offset_days)
+        // event_reminders — just links an event to one reminder for NOTIFICATION and one for ALARM
         db.execSQL("CREATE TABLE IF NOT EXISTS event_reminders (" +
-                "id               INTEGER PRIMARY KEY," +
-                "event_id         INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
-                "reminder_id      INTEGER NOT NULL REFERENCES reminders(id)," +
-                "type             TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
-                "offset_direction TEXT NOT NULL DEFAULT 'BEFORE' CHECK(offset_direction IN ('BEFORE','AFTER'))," +
-                "offset_days      INTEGER NOT NULL DEFAULT 0," +
-                "time_hour        INTEGER NOT NULL," +
-                "time_minute      INTEGER NOT NULL," +
-                "created_at       TEXT DEFAULT (datetime('now'))," +
-                "updated_at       TEXT DEFAULT (datetime('now')))");
+                "id          INTEGER PRIMARY KEY," +
+                "event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
+                "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
+                "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                "UNIQUE(event_id, type))");
 
         // tasks — Phase 2 la use aagum, table ippove create pannitrom
         db.execSQL("CREATE TABLE IF NOT EXISTS tasks (" +
@@ -707,6 +706,31 @@ public class LocalDB extends SQLiteOpenHelper {
                     "event_reminder_id INTEGER NOT NULL REFERENCES event_reminders(id) ON DELETE CASCADE," +
                     "request_code INTEGER NOT NULL UNIQUE, trigger_at TEXT NOT NULL, type TEXT NOT NULL)");
             initSequences(db);
+        }
+
+        if (oldV < 33) {
+
+            db.execSQL("DROP TABLE reminders");
+            db.execSQL("DROP TABLE event_reminders");
+
+            // reminders — standalone, reusable, named: name + offset (days/weeks before) + time
+            db.execSQL("CREATE TABLE IF NOT EXISTS reminders (" +
+                    "id           INTEGER PRIMARY KEY," +
+                    "name         TEXT NOT NULL," +
+                    "offset_value INTEGER NOT NULL DEFAULT 0," +
+                    "offset_unit  TEXT NOT NULL DEFAULT 'DAY' CHECK(offset_unit IN ('DAY','WEEK'))," +
+                    "time_hour    INTEGER NOT NULL," +
+                    "time_minute  INTEGER NOT NULL," +
+                    "created_at   TEXT DEFAULT (datetime('now'))," +
+                    "updated_at   TEXT DEFAULT (datetime('now')))");
+
+            // event_reminders — just links an event to one reminder for NOTIFICATION and one for ALARM
+            db.execSQL("CREATE TABLE IF NOT EXISTS event_reminders (" +
+                    "id          INTEGER PRIMARY KEY," +
+                    "event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
+                    "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
+                    "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                    "UNIQUE(event_id, type))");
         }
 
     }

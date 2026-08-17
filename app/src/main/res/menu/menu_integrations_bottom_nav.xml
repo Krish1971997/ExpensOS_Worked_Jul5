@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/navCalendar" android:icon="@android:drawable/ic_menu_my_calendar" android:title="Calendar" />
+    <item android:id="@+id/navConfig" android:icon="@android:drawable/ic_menu_edit" android:title="Config" />
+</menu>

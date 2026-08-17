@@ -1,16 +1,16 @@
 package com.expenseos.ui;
 
-import android.app.TimePickerDialog;
+import android.content.Intent;
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -34,20 +34,13 @@ public class AddEventActivity extends AppCompatActivity {
     private EditText etName, etDays, etHeader;
     private Spinner spOffsetDirection;
     private View blockNotification, blockAlarm;
+    private Button btnNotifReminder, btnAlarmReminder;
 
-    // Notification tab state
-    private Spinner spNotifReminder;
-    private Button btnNotifTime;
-    private int notifHour = 19, notifMinute = 0; // default 7 PM
     private long notifReminderId = 0;
-
-    // Alarm tab state
-    private Spinner spAlarmReminder;
-    private Button btnAlarmTime;
-    private int alarmHour = 7, alarmMinute = 55;
     private long alarmReminderId = 0;
 
-    private List<Reminder> reminderList;
+    private ActivityResultLauncher<Intent> notifReminderLauncher;
+    private ActivityResultLauncher<Intent> alarmReminderLauncher;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -62,18 +55,29 @@ public class AddEventActivity extends AppCompatActivity {
         spOffsetDirection = findViewById(R.id.spOffsetDirection);
         blockNotification = findViewById(R.id.blockNotification);
         blockAlarm = findViewById(R.id.blockAlarm);
-        spNotifReminder = findViewById(R.id.spNotifReminder);
-        btnNotifTime = findViewById(R.id.btnNotifTime);
-        spAlarmReminder = findViewById(R.id.spAlarmReminder);
-        btnAlarmTime = findViewById(R.id.btnAlarmTime);
+        btnNotifReminder = findViewById(R.id.btnNotifReminder);
+        btnAlarmReminder = findViewById(R.id.btnAlarmReminder);
 
         ArrayAdapter<String> dirAdapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_dropdown_item, new String[]{"Before", "After"});
         spOffsetDirection.setAdapter(dirAdapter);
 
+        notifReminderLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                notifReminderId = result.getData().getLongExtra("reminder_id", 0);
+                refreshReminderButton(btnNotifReminder, notifReminderId);
+            }
+        });
+        alarmReminderLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                alarmReminderId = result.getData().getLongExtra("reminder_id", 0);
+                refreshReminderButton(btnAlarmReminder, alarmReminderId);
+            }
+        });
+
         setupTabs();
-        loadReminderSpinners();
-        setupTimePickers();
+        btnNotifReminder.setOnClickListener(v -> showReminderPicker(true));
+        btnAlarmReminder.setOnClickListener(v -> showReminderPicker(false));
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnSaveEvent).setOnClickListener(v -> save());
@@ -108,84 +112,37 @@ public class AddEventActivity extends AppCompatActivity {
         blockAlarm.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
     }
 
-    private void setupTimePickers() {
-        btnNotifTime.setText(String.format("%02d:%02d", notifHour, notifMinute));
-        btnNotifTime.setOnClickListener(v -> new TimePickerDialog(this, (p, h, m) -> {
-            notifHour = h;
-            notifMinute = m;
-            btnNotifTime.setText(String.format("%02d:%02d", h, m));
-        }, notifHour, notifMinute, true).show());
-
-        btnAlarmTime.setText(String.format("%02d:%02d", alarmHour, alarmMinute));
-        btnAlarmTime.setOnClickListener(v -> new TimePickerDialog(this, (p, h, m) -> {
-            alarmHour = h;
-            alarmMinute = m;
-            btnAlarmTime.setText(String.format("%02d:%02d", h, m));
-        }, alarmHour, alarmMinute, true).show());
-    }
-
-    // ── Reminder spinners — existing list + "+ Add new…" as last entry ──
-    private void loadReminderSpinners() {
-        reminderList = reminderDao.findAll();
+    // ── Reminder picker: popup list of existing reminders + "Create new" ──
+    private void showReminderPicker(boolean isNotif) {
+        List<Reminder> reminders = reminderDao.findAll();
         List<String> labels = new ArrayList<>();
-        for (Reminder r : reminderList) labels.add(r.getName());
-        labels.add("+ Add new…");
+        for (Reminder r : reminders) labels.add(r.getName() + " — " + r.getSummary());
+        labels.add("+ Create new reminder");
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_dropdown_item, labels);
-
-        spNotifReminder.setAdapter(adapter);
-        spAlarmReminder.setAdapter(new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_dropdown_item, labels));
-
-        spNotifReminder.setOnItemSelectedListener(reminderSelectListener(true));
-        spAlarmReminder.setOnItemSelectedListener(reminderSelectListener(false));
-    }
-
-    private AdapterView.OnItemSelectedListener reminderSelectListener(boolean isNotif) {
-        return new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                if (pos == reminderList.size()) { // "+ Add new…" tapped
-                    promptNewReminder(isNotif);
-                } else {
-                    long rid = reminderList.get(pos).getId();
-                    if (isNotif) notifReminderId = rid;
-                    else alarmReminderId = rid;
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {
-            }
-        };
-    }
-
-    private void promptNewReminder(boolean isNotif) {
-        View v = LayoutInflater.from(this).inflate(R.layout.dialog_new_reminder, null);
-        EditText et = v.findViewById(R.id.etReminderName);
         new AlertDialog.Builder(this)
-                .setTitle("New Reminder")
-                .setView(v)
-                .setPositiveButton("Create", (d, w) -> {
-                    String name = et.getText().toString().trim();
-                    if (name.isEmpty()) {
-                        Toast.makeText(this, "Name required", Toast.LENGTH_SHORT).show();
-                        return;
+                .setTitle("Select reminder")
+                .setItems(labels.toArray(new String[0]), (d, which) -> {
+                    if (which == reminders.size()) {
+                        Intent i = new Intent(this, AddReminderActivity.class);
+                        (isNotif ? notifReminderLauncher : alarmReminderLauncher).launch(i);
+                    } else {
+                        long id = reminders.get(which).getId();
+                        if (isNotif) {
+                            notifReminderId = id;
+                            refreshReminderButton(btnNotifReminder, id);
+                        } else {
+                            alarmReminderId = id;
+                            refreshReminderButton(btnAlarmReminder, id);
+                        }
                     }
-                    long id = reminderDao.insertOrGet(name);
-                    loadReminderSpinners(); // refresh both spinners
-                    Spinner target = isNotif ? spNotifReminder : spAlarmReminder;
-                    for (int i = 0; i < reminderList.size(); i++)
-                        if (reminderList.get(i).getId() == id) target.setSelection(i);
-                    if (isNotif) notifReminderId = id;
-                    else alarmReminderId = id;
                 })
-                .setNegativeButton("Cancel", (d, w) -> {
-                    // revert spinner off "+ Add new…" back to first item
-                    (isNotif ? spNotifReminder : spAlarmReminder).setSelection(0);
-                })
+                .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void refreshReminderButton(Button btn, long reminderId) {
+        Reminder r = reminderDao.findById(reminderId);
+        btn.setText(r != null ? r.getName() + " (" + r.getSummary() + ")" : "Select reminder");
     }
 
     // ── Load for edit ─────────────────────────────────────
@@ -201,30 +158,14 @@ public class AddEventActivity extends AppCompatActivity {
         }
         List<EventReminder> notifs = eventDao.findReminders(editingEventId, "NOTIFICATION");
         if (!notifs.isEmpty()) {
-            EventReminder er = notifs.get(0);
-            notifHour = er.getTimeHour();
-            notifMinute = er.getTimeMinute();
-            notifReminderId = er.getReminderId();
-            btnNotifTime.setText(String.format("%02d:%02d", notifHour, notifMinute));
-            selectReminderInSpinner(spNotifReminder, notifReminderId);
+            notifReminderId = notifs.get(0).getReminderId();
+            refreshReminderButton(btnNotifReminder, notifReminderId);
         }
         List<EventReminder> alarms = eventDao.findReminders(editingEventId, "ALARM");
         if (!alarms.isEmpty()) {
-            EventReminder er = alarms.get(0);
-            alarmHour = er.getTimeHour();
-            alarmMinute = er.getTimeMinute();
-            alarmReminderId = er.getReminderId();
-            btnAlarmTime.setText(String.format("%02d:%02d", alarmHour, alarmMinute));
-            selectReminderInSpinner(spAlarmReminder, alarmReminderId);
+            alarmReminderId = alarms.get(0).getReminderId();
+            refreshReminderButton(btnAlarmReminder, alarmReminderId);
         }
-    }
-
-    private void selectReminderInSpinner(Spinner sp, long reminderId) {
-        for (int i = 0; i < reminderList.size(); i++)
-            if (reminderList.get(i).getId() == reminderId) {
-                sp.setSelection(i);
-                return;
-            }
     }
 
     // ── Save ───────────────────────────────────────────────
@@ -254,29 +195,8 @@ public class AddEventActivity extends AppCompatActivity {
         long eventId = editingEventId > 0 ? editingEventId : eventDao.insert(e);
         if (editingEventId > 0) eventDao.update(e);
 
-        List<EventReminder> notifList = new ArrayList<>();
-        if (notifReminderId > 0) {
-            EventReminder er = new EventReminder();
-            er.setReminderId(notifReminderId);
-            er.setOffsetDirection("BEFORE"); // TODO: expose its own before/after+days field if needed later
-            er.setOffsetDays(0);
-            er.setTimeHour(notifHour);
-            er.setTimeMinute(notifMinute);
-            notifList.add(er);
-        }
-        eventDao.replaceReminders(eventId, "NOTIFICATION", notifList);
-
-        List<EventReminder> alarmList = new ArrayList<>();
-        if (alarmReminderId > 0) {
-            EventReminder er = new EventReminder();
-            er.setReminderId(alarmReminderId);
-            er.setOffsetDirection("BEFORE");
-            er.setOffsetDays(0);
-            er.setTimeHour(alarmHour);
-            er.setTimeMinute(alarmMinute);
-            alarmList.add(er);
-        }
-        eventDao.replaceReminders(eventId, "ALARM", alarmList);
+        if (notifReminderId > 0) eventDao.setReminder(eventId, "NOTIFICATION", notifReminderId);
+        if (alarmReminderId > 0) eventDao.setReminder(eventId, "ALARM", alarmReminderId);
 
         Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
         finish();

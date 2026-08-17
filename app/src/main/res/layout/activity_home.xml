@@ -299,7 +299,8 @@
                         android:textSize="14sp" />
                 </LinearLayout>
 
-                <!-- Settings -->
+                <!-- NEW -->
+                <!-- Configuration (was labeled Settings) -->
                 <LinearLayout
                     android:id="@+id/drawerSettings"
                     android:layout_width="match_parent"
@@ -321,7 +322,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
-                        android:text="Settings"
+                        android:text="Configuration"
                         android:textColor="@color/text"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -416,6 +417,7 @@
                         android:textSize="14sp" />
                 </LinearLayout>
 
+                <!-- NEW -->
                 <!-- Monthly Category Report -->
                 <LinearLayout
                     android:id="@+id/drawerMonthlyReport"
@@ -439,6 +441,33 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:text="Monthly Category Report"
+                        android:textColor="@color/text"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <!-- Bulk Add -->
+                <LinearLayout
+                    android:id="@+id/drawerBulkAdd"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="18dp">
+
+                    <TextView
+                        android:layout_width="28dp"
+                        android:layout_height="wrap_content"
+                        android:text="➕"
+                        android:textSize="18sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="Bulk Add"
                         android:textColor="@color/text"
                         android:textSize="14sp" />
                 </LinearLayout>

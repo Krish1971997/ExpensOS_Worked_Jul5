@@ -6,10 +6,6 @@ public class EventReminder {
     private long reminderId;
     private String reminderName; // joined, for display
     private String type;         // NOTIFICATION / ALARM
-    private String offsetDirection; // BEFORE / AFTER
-    private int offsetDays;
-    private int timeHour;
-    private int timeMinute;
 
     public long getId() {
         return id;
@@ -49,37 +45,5 @@ public class EventReminder {
 
     public void setType(String t) {
         this.type = t;
-    }
-
-    public String getOffsetDirection() {
-        return offsetDirection;
-    }
-
-    public void setOffsetDirection(String d) {
-        this.offsetDirection = d;
-    }
-
-    public int getOffsetDays() {
-        return offsetDays;
-    }
-
-    public void setOffsetDays(int d) {
-        this.offsetDays = d;
-    }
-
-    public int getTimeHour() {
-        return timeHour;
-    }
-
-    public void setTimeHour(int h) {
-        this.timeHour = h;
-    }
-
-    public int getTimeMinute() {
-        return timeMinute;
-    }
-
-    public void setTimeMinute(int m) {
-        this.timeMinute = m;
     }
 }

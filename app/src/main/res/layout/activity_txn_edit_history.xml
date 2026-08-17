@@ -31,22 +31,50 @@
             android:textColor="@color/text"
             android:textSize="18sp"
             android:textStyle="bold" />
-    </LinearLayout>
 
-    <TextView
-        android:id="@+id/tvHistoryCount"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#F5F7FA"
-        android:gravity="center"
-        android:padding="10dp"
-        android:textColor="@color/text_muted"
-        android:textSize="12sp" />
+        <TextView
+            android:id="@+id/tvHistoryCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_hist_count_pill"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="4dp"
+            android:textColor="@color/primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvHistory"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:paddingHorizontal="14dp" />
+        android:paddingHorizontal="14dp"
+        android:paddingTop="6dp"
+        android:clipToPadding="false" />
+
+    <!-- Shown when a transaction has no recorded activity yet -->
+    <LinearLayout
+        android:id="@+id/emptyHistoryState"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🕐"
+            android:textSize="36sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="No activity recorded yet"
+            android:textColor="@color/text_muted"
+            android:textSize="13sp" />
+    </LinearLayout>
 </LinearLayout>

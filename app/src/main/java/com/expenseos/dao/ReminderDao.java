@@ -21,29 +21,77 @@ public class ReminderDao {
     public List<Reminder> findAll() {
         List<Reminder> out = new ArrayList<>();
         try (Cursor c = db.getReadableDatabase().rawQuery(
-                "SELECT id, name FROM reminders ORDER BY name", null)) {
-            while (c.moveToNext()) out.add(new Reminder(c.getLong(0), c.getString(1)));
+                "SELECT id,name,offset_value,offset_unit,time_hour,time_minute FROM reminders ORDER BY name", null)) {
+            while (c.moveToNext()) out.add(fromCursor(c));
         }
         return out;
     }
 
-    /**
-     * Returns existing reminder id if name already exists, else inserts and returns new id.
-     */
-    public long insertOrGet(String name) {
-        SQLiteDatabase wdb = db.getWritableDatabase();
-        try (Cursor c = wdb.rawQuery("SELECT id FROM reminders WHERE name=? COLLATE NOCASE", new String[]{name})) {
-            if (c.moveToFirst()) return c.getLong(0);
+    public Reminder findById(long id) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,offset_value,offset_unit,time_hour,time_minute FROM reminders WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) return fromCursor(c);
         }
+        return null;
+    }
+
+    public long insert(Reminder r) {
+        SQLiteDatabase wdb = db.getWritableDatabase();
         long id = db.getNextId("reminders");
-        ContentValues cv = new ContentValues();
+        ContentValues cv = toCv(r);
         cv.put("id", id);
-        cv.put("name", name);
         wdb.insert("reminders", null, cv);
         return id;
     }
 
+    public void update(Reminder r) {
+        db.getWritableDatabase().update("reminders", toCv(r), "id=?", new String[]{String.valueOf(r.getId())});
+    }
+
+    /**
+     * Used by "existing or create new" reminder pickers — matches by exact name, else inserts a bare-minimum row.
+     */
+    public long insertOrGet(String name, int offsetValue, String offsetUnit, int hour, int minute) {
+        SQLiteDatabase wdb = db.getWritableDatabase();
+        try (Cursor c = wdb.rawQuery("SELECT id FROM reminders WHERE name=? COLLATE NOCASE", new String[]{name})) {
+            if (c.moveToFirst()) return c.getLong(0);
+        }
+        Reminder r = new Reminder();
+        r.setName(name);
+        r.setOffsetValue(offsetValue);
+        r.setOffsetUnit(offsetUnit);
+        r.setTimeHour(hour);
+        r.setTimeMinute(minute);
+        return insert(r);
+    }
+
+    /**
+     * Cascade delete: event_reminders rows referencing this reminder go too (FK ON DELETE — see note below).
+     */
     public void delete(long id) {
+        db.getWritableDatabase().delete("event_reminders", "reminder_id=?", new String[]{String.valueOf(id)});
         db.getWritableDatabase().delete("reminders", "id=?", new String[]{String.valueOf(id)});
+    }
+
+    private ContentValues toCv(Reminder r) {
+        ContentValues cv = new ContentValues();
+        cv.put("name", r.getName());
+        cv.put("offset_value", r.getOffsetValue());
+        cv.put("offset_unit", r.getOffsetUnit());
+        cv.put("time_hour", r.getTimeHour());
+        cv.put("time_minute", r.getTimeMinute());
+        return cv;
+    }
+
+    private Reminder fromCursor(Cursor c) {
+        Reminder r = new Reminder();
+        r.setId(c.getLong(0));
+        r.setName(c.getString(1));
+        r.setOffsetValue(c.getInt(2));
+        r.setOffsetUnit(c.getString(3));
+        r.setTimeHour(c.getInt(4));
+        r.setTimeMinute(c.getInt(5));
+        return r;
     }
 }

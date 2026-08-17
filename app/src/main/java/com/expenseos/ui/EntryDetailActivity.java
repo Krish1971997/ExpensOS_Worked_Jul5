@@ -76,7 +76,10 @@ public class EntryDetailActivity extends AppCompatActivity {
         findViewById(R.id.btnEntryBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnEntryMenu).setOnClickListener(this::showEntryMenu);
         findViewById(R.id.btnEditEntry).setOnClickListener(v -> {
-            Intent i = new Intent(this, TransactionEntryActivity.class);
+            // Edit goes through the dedicated TransactionDetailActivity edit
+            // screen (not TransactionEntryActivity — that stays reserved for
+            // creating brand-new transactions).
+            Intent i = new Intent(this, TransactionDetailActivity.class);
             i.putExtra("txnId", txnId);
             startActivity(i);
         });
@@ -454,6 +457,7 @@ public class EntryDetailActivity extends AppCompatActivity {
         c.setNote(t.getNote());
         c.setBookId(t.getBookId());
         c.setCustomValues(t.getCustomValues());
+        c.setPaymentType(t.getPaymentType());
         return c;
     }
 }

@@ -93,25 +93,12 @@
                 android:orientation="vertical"
                 android:paddingTop="12dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Reminder"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_muted" />
-
-                <Spinner
-                    android:id="@+id/spNotifReminder"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
                 <Button
-                    android:id="@+id/btnNotifTime"
+                    android:id="@+id/btnNotifReminder"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Time" />
+                    android:text="Select reminder" />
             </LinearLayout>
 
             <!-- Alarm tab content -->
@@ -123,25 +110,12 @@
                 android:paddingTop="12dp"
                 android:visibility="gone">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Reminder"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_muted" />
-
-                <Spinner
-                    android:id="@+id/spAlarmReminder"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
                 <Button
-                    android:id="@+id/btnAlarmTime"
+                    android:id="@+id/btnAlarmReminder"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Time" />
+                    android:text="Select reminder" />
             </LinearLayout>
 
             <Button

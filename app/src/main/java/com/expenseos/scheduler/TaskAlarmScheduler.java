@@ -10,6 +10,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 
 import com.expenseos.dao.EventDao;
+import com.expenseos.dao.ReminderDao;
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.EventReminder;
 import com.expenseos.receiver.AlarmReceiver;
@@ -48,32 +49,7 @@ public class TaskAlarmScheduler {
         }
     }
 
-    private static void scheduleType(Context ctx, long taskId, EventDao eventDao, long eventId,
-                                     String type, LocalDateTime baseDate) {
-        for (EventReminder er : eventDao.findReminders(eventId, type)) {
-            LocalDateTime trigger = "AFTER".equals(er.getOffsetDirection())
-                    ? baseDate.plusDays(er.getOffsetDays())
-                    : baseDate.minusDays(er.getOffsetDays());
-            trigger = trigger.withHour(er.getTimeHour()).withMinute(er.getTimeMinute()).withSecond(0);
-
-            if (trigger.isBefore(LocalDateTime.now())) continue; // don't schedule past-due alarms
-
-            int requestCode = nextRequestCode(ctx);
-            PendingIntent pi = buildPendingIntent(ctx, requestCode, taskId, er.getId(), type);
-
-            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-            long triggerMillis = trigger.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
-            boolean canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (am != null && am.canScheduleExactAlarms());
-            if (am != null) {
-                if (canExact)
-                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
-                else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
-            }
-
-            recordAlarm(ctx, taskId, er.getId(), requestCode, trigger.format(TASK_FMT), type);
-        }
-    }
-
+    
     private static PendingIntent buildPendingIntent(Context ctx, int requestCode, long taskId, long eventReminderId, String type) {
         Intent intent = new Intent(ctx, "ALARM".equals(type) ? AlarmReceiver.class : TaskNotificationReceiver.class);
         intent.putExtra("task_id", taskId);
@@ -119,5 +95,33 @@ public class TaskAlarmScheduler {
     private static com.expenseos.model.Event findEvent(EventDao dao, long eventId) {
         for (com.expenseos.model.Event e : dao.findAll()) if (e.getId() == eventId) return e;
         return null;
+    }
+
+    private static void scheduleType(Context ctx, long taskId, EventDao eventDao, long eventId,
+                                     String type, LocalDateTime baseDate) {
+        ReminderDao reminderDao = new ReminderDao(ctx);
+        for (EventReminder er : eventDao.findReminders(eventId, type)) {
+            com.expenseos.model.Reminder reminder = reminderDao.findById(er.getReminderId());
+            if (reminder == null) continue;
+
+            LocalDateTime trigger = baseDate.minusDays(reminder.offsetInDays())
+                    .withHour(reminder.getTimeHour()).withMinute(reminder.getTimeMinute()).withSecond(0);
+
+            if (trigger.isBefore(LocalDateTime.now())) continue;
+
+            int requestCode = nextRequestCode(ctx);
+            PendingIntent pi = buildPendingIntent(ctx, requestCode, taskId, er.getId(), type);
+
+            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+            long triggerMillis = trigger.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+            boolean canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (am != null && am.canScheduleExactAlarms());
+            if (am != null) {
+                if (canExact)
+                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
+                else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
+            }
+
+            recordAlarm(ctx, taskId, er.getId(), requestCode, trigger.format(TASK_FMT), type);
+        }
     }
 }

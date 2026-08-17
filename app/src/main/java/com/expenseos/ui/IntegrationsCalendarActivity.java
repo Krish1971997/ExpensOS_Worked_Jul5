@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -42,11 +43,24 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle s) {
+
         super.onCreate(s);
         setContentView(R.layout.activity_integrations_calendar);
         taskDao = new TaskDao(this);
         currentMonth = YearMonth.now();
         currentDay = LocalDate.now();
+
+        com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = findViewById(R.id.bottomNavIntegrationsCal);
+        bottomNav.setSelectedItemId(R.id.navCalendar);
+        bottomNav.setOnItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.navConfig) {
+                startActivity(new Intent(this, IntegrationsActivity.class));
+                overridePendingTransition(0, 0);
+                finish();
+                return true;
+            }
+            return true;
+        });
 
         findViewById(R.id.btnCalBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnCalPrev).setOnClickListener(v -> step(-1));

@@ -13,6 +13,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -365,8 +366,30 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btnKwAdd).setOnClickListener(v -> showKeywordDialog(null));
     }
 
+    // NEW
     private void loadKeywordsTab() {
         List<KeywordMapping> all = kwDao.findAll(bookScoped && bookId > 0 ? bookId : null);
+
+        // Case-2 dupes only: same keyword+type but different category/sub-category
+        // pair. Grouping by keyword+type+category+subcategory means Case-1
+        // (chocobar/ice cream/ice all -> Snacks/Ice) never gets flagged.
+        Map<String, Integer> keywordTypeCount = new HashMap<>();
+        Map<String, Integer> keywordTypeTargetCount = new HashMap<>();
+        for (KeywordMapping k : all) {
+            String kwKey = k.getKeyword().toLowerCase(Locale.ROOT) + "|" + k.getType();
+            String targetKey = kwKey + "|" + k.getCategoryId() + "|" + k.getSubCategoryId();
+            keywordTypeCount.put(kwKey, keywordTypeCount.getOrDefault(kwKey, 0) + 1);
+            keywordTypeTargetCount.put(targetKey, keywordTypeTargetCount.getOrDefault(targetKey, 0) + 1);
+        }
+        Map<String, Boolean> conflict = new HashMap<>();
+        for (KeywordMapping k : all) {
+            String kwKey = k.getKeyword().toLowerCase(Locale.ROOT) + "|" + k.getType();
+            String targetKey = kwKey + "|" + k.getCategoryId() + "|" + k.getSubCategoryId();
+            // conflict = same keyword appears with more distinct targets than just this one
+            boolean hasConflict = keywordTypeCount.get(kwKey) > keywordTypeTargetCount.get(targetKey);
+            conflict.put(kwKey, conflict.getOrDefault(kwKey, false) || hasConflict);
+        }
+
         List<KeywordMapping> filtered = new ArrayList<>();
         for (KeywordMapping k : all) {
             if (kwSearch.isEmpty() || k.getKeyword().toLowerCase(Locale.ROOT).contains(kwSearch.toLowerCase(Locale.ROOT)))
@@ -374,13 +397,14 @@ public class SettingsActivity extends AppCompatActivity {
         }
         RecyclerView rv = findViewById(R.id.rvKeywordList);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setAdapter(new KeywordAdapter(filtered));
+        rv.setAdapter(new KeywordAdapter(filtered, conflict));
     }
 
     // existing == null -> Add, else Edit. Combined so the category/sub-category
     // cascade logic isn't duplicated between the two flows. Scope (Common/This
     // book only) is only offered on Add — changing scope after creation isn't
     // supported here, same as CategoryDao's separate updateScope() approach.
+    // NEW (full method)
     private void showKeywordDialog(KeywordMapping existing) {
         android.widget.LinearLayout form = new android.widget.LinearLayout(this);
         form.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -428,27 +452,40 @@ public class SettingsActivity extends AppCompatActivity {
         form.addView(spSub);
 
         Runnable[] refreshSubRef = new Runnable[1];
+        // Category list always starts with a "Select Category" placeholder —
+        // for Add it's the real default (nothing pre-picked); for Edit it's
+        // skipped straight past since we select the saved category below.
         Runnable refreshCat = () -> {
             String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
-            List<Category> cats = catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
-            ArrayAdapter<Category> catAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, cats);
+            List<Category> realCats = catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
+            List<Category> withPlaceholder = new ArrayList<>();
+            withPlaceholder.add(new Category(0, "Select Category", type, null));
+            withPlaceholder.addAll(realCats);
+
+            ArrayAdapter<Category> catAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, withPlaceholder);
             catAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spCat.setAdapter(catAdp);
+
             if (existing != null) {
-                for (int i = 0; i < cats.size(); i++) {
-                    if (cats.get(i).getId() == existing.getCategoryId()) {
-                        spCat.setSelection(i);
+                for (int i = 0; i < realCats.size(); i++) {
+                    if (realCats.get(i).getId() == existing.getCategoryId()) {
+                        spCat.setSelection(i + 1); // +1 for the placeholder row
                         break;
                     }
                 }
+            } else {
+                spCat.setSelection(0); // stays on "Select Category"
             }
             refreshSubRef[0].run();
         };
+        // Sub-category only loads once a real category is picked (position > 0)
+        // — never queries/loads against the placeholder.
         refreshSubRef[0] = () -> {
             List<SubCategory> subs = new ArrayList<>();
             subs.add(new SubCategory(0, "None", 0));
-            if (spCat.getSelectedItem() != null)
+            if (spCat.getSelectedItemPosition() > 0) {
                 subs.addAll(scDao.findByCategoryId(((Category) spCat.getSelectedItem()).getId()));
+            }
             ArrayAdapter<SubCategory> subAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, subs);
             subAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spSub.setAdapter(subAdp);
@@ -484,15 +521,27 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
+        // Scope — shown for both Add and Edit now, so a wrong pick can be
+        // corrected later instead of forcing a delete + re-add.
         Spinner spScope = null;
-        if (bookScoped && existing == null) {
+        if (bookScoped) {
+            TextView lblScope = new TextView(this);
+            lblScope.setText("Cashbook Scope");
+            lblScope.setTextSize(11);
+            lblScope.setPadding(0, pad, 0, 0);
+            form.addView(lblScope);
+
             spScope = new Spinner(this);
+            LinearLayout.LayoutParams scopeLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            scopeLp.topMargin = (int) (4 * getResources().getDisplayMetrics().density);
+            spScope.setLayoutParams(scopeLp);
             ArrayAdapter<String> scopeAdp = new ArrayAdapter<>(this,
                     android.R.layout.simple_spinner_item,
                     new String[]{"Common (all books)", "This book only"});
             scopeAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spScope.setAdapter(scopeAdp);
-            spScope.setSelection(1);
+            spScope.setSelection(existing != null ? (existing.isCommon() ? 0 : 1) : 0); // default: Common
             form.addView(spScope);
         }
 
@@ -502,18 +551,33 @@ public class SettingsActivity extends AppCompatActivity {
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
                     String keyword = etKeyword.getText().toString().trim();
-                    if (keyword.isEmpty() || spCat.getSelectedItem() == null) return;
+                    if (keyword.isEmpty() || spCat.getSelectedItemPosition() == 0) {
+                        Toast.makeText(this, "Pick a keyword and a category", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
+
+                    List<KeywordMapping> dupes = kwDao.findByKeyword(keyword, type,
+                            bookScoped && bookId > 0 ? bookId : null,
+                            existing != null ? existing.getId() : null);
+                    if (!dupes.isEmpty()) {
+                        Toast.makeText(this, "⚠ \"" + keyword + "\" already has " + dupes.size() +
+                                        " mapping(s) saved. Edit or delete the existing one instead of adding another.",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
                     int catId = ((Category) spCat.getSelectedItem()).getId();
                     SubCategory sub = (SubCategory) spSub.getSelectedItem();
                     Integer subId = (sub != null && sub.getId() > 0) ? sub.getId() : null;
+                    boolean thisBookOnly = finalSpScope != null && finalSpScope.getSelectedItemPosition() == 1;
+                    Integer scopeBookId = thisBookOnly ? bookId : null;
 
                     if (existing == null) {
-                        boolean thisBookOnly = finalSpScope != null && finalSpScope.getSelectedItemPosition() == 1;
-                        kwDao.insert(keyword, type, catId, subId, thisBookOnly ? bookId : null);
+                        kwDao.insert(keyword, type, catId, subId, scopeBookId);
                         Toast.makeText(this, "Keyword mapping added!", Toast.LENGTH_SHORT).show();
                     } else {
-                        kwDao.update(existing.getId(), keyword, catId, subId);
+                        kwDao.update(existing.getId(), keyword, catId, subId, scopeBookId);
                         Toast.makeText(this, "Keyword mapping updated!", Toast.LENGTH_SHORT).show();
                     }
                     loadKeywordsTab();
@@ -522,11 +586,14 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
+    // NEW
     class KeywordAdapter extends RecyclerView.Adapter<KeywordAdapter.VH> {
         private final List<KeywordMapping> list;
+        private final Map<String, Boolean> conflict;
 
-        KeywordAdapter(List<KeywordMapping> list) {
+        KeywordAdapter(List<KeywordMapping> list, Map<String, Boolean> conflict) {
             this.list = list;
+            this.conflict = conflict;
         }
 
         class VH extends RecyclerView.ViewHolder {
@@ -557,7 +624,15 @@ public class SettingsActivity extends AppCompatActivity {
             String target = k.getCategoryName()
                     + (k.getSubCategoryName() != null ? " ▸ " + k.getSubCategoryName() : "")
                     + "  (" + (k.getType().equals("INCOME") ? "Income" : "Expense") + ")";
-            h.tvTarget.setText("→ " + target);
+// NEW
+            String kwKey = k.getKeyword().toLowerCase(Locale.ROOT) + "|" + k.getType();
+            if (Boolean.TRUE.equals(conflict.get(kwKey))) {
+                h.tvTarget.setText("→ " + target + "\n⚠ \"" + k.getKeyword() + "\" maps to more than one category/sub-category — remove the extra mapping");
+                h.tvTarget.setTextColor(getColor(R.color.red));
+            } else {
+                h.tvTarget.setText("→ " + target);
+                h.tvTarget.setTextColor(getColor(R.color.text_muted));
+            }
             h.tvScope.setText(k.isCommon() ? "Common" : "Book only");
             h.tvScope.setTextColor(getColor(k.isCommon() ? R.color.primary : R.color.amber));
 

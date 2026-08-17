@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="4dp"
+    android:layout_marginBottom="6dp"
     app:cardBackgroundColor="@color/bg_card"
     app:cardCornerRadius="8dp"
     app:cardElevation="1dp">
@@ -11,70 +11,185 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="6dp">
 
-        <!-- Type Spinner -->
-        <Spinner
-            android:id="@+id/spBulkType"
-            android:layout_width="80dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp" />
+        <!-- NEW — split into two rows -->
+        <!-- ══ HEADER LINE 1 — Type, Date&Time, Delete ══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <!-- Date & Time -->
-        <EditText
-            android:id="@+id/etBulkDate"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:layout_weight="1.2"
-            android:hint="yyyy-MM-dd HH:mm"
-            android:inputType="text"
-            android:paddingHorizontal="6dp"
-            android:textSize="11sp" />
+            <Spinner
+                android:id="@+id/spBulkType"
+                android:layout_width="108dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp" />
 
-        <!-- Amount -->
-        <EditText
-            android:id="@+id/etBulkAmount"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:layout_weight="0.8"
-            android:hint="0.00"
-            android:inputType="numberDecimal"
-            android:paddingHorizontal="6dp"
-            android:textSize="12sp" />
+            <TextView
+                android:id="@+id/tvBulkDateTime"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input_box"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp"
+                android:textSize="11sp" />
 
-        <!-- Category -->
-        <Spinner
-            android:id="@+id/spBulkCategory"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:layout_weight="1" />
+            <Button
+                android:id="@+id/btnBulkRowDel"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="32dp"
+                android:layout_height="40dp"
+                android:padding="0dp"
+                android:text="✕"
+                android:textColor="@color/red"
+                android:textSize="14sp" />
+        </LinearLayout>
 
-        <!-- Note -->
-        <EditText
-            android:id="@+id/etBulkNote"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="4dp"
-            android:layout_weight="1"
-            android:hint="Note"
-            android:inputType="text"
-            android:paddingHorizontal="6dp"
-            android:textSize="11sp" />
+        <!-- ══ HEADER LINE 2 — Amount, Category, Expand ══ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <!-- Delete row button -->
-        <Button
-            android:id="@+id/btnBulkRowDel"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:padding="0dp"
-            android:text="✕"
-            android:textColor="@color/text_hint"
-            android:textSize="14sp" />
+            <EditText
+                android:id="@+id/etBulkAmount"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="0.8"
+                android:hint="0.00"
+                android:inputType="numberDecimal"
+                android:paddingHorizontal="8dp"
+                android:textSize="13sp" />
+
+            <Spinner
+                android:id="@+id/spBulkCategory"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1.4" />
+
+            <TextView
+                android:id="@+id/btnBulkExpand"
+                android:layout_width="32dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="▴"
+                android:textColor="@color/text_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- ══ EXPANDABLE BODY ══ -->
+        <LinearLayout
+            android:id="@+id/llBulkExpand"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="vertical">
+
+            <!-- Sub-Category — hidden unless the picked category has any -->
+            <Spinner
+                android:id="@+id/spBulkSubCategory"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginBottom="4dp"
+                android:visibility="gone" />
+
+            <Spinner
+                android:id="@+id/spBulkPaymentType"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginBottom="4dp" />
+
+            <!-- Note + Mic -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_input_box"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp">
+
+                <EditText
+                    android:id="@+id/etBulkNote"
+                    android:layout_width="0dp"
+                    android:layout_height="24dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="Note"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnBulkMic"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:gravity="center"
+                    android:text="🎤"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- Keyword suggestion chip -->
+            <TextView
+                android:id="@+id/tvBulkKwSuggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_chip_suggestion"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp"
+                android:textColor="@color/green"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+            <!-- Attach + Calculator -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnBulkAttach"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_marginEnd="4dp"
+                    android:layout_weight="1"
+                    android:text="📎 Attach"
+                    android:textSize="10sp" />
+
+                <Button
+                    android:id="@+id/btnBulkCalc"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="34dp"
+                    android:layout_weight="1"
+                    android:text="🧮 Calc"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/llBulkAttachList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <LinearLayout
+                android:id="@+id/llBulkCustomFields"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>

@@ -342,6 +342,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
                 currentSubCategories.add(0, new SubCategory(0, "Select Sub Category", catId));
             }
 
+// NEW
             ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentSubCategories);
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spSubCategory.setAdapter(adp);
@@ -355,7 +356,6 @@ public class TransactionEntryActivity extends AppCompatActivity {
                 }
                 pendingSubCategoryId = null;
             }
-
         }
     }
 
@@ -412,12 +412,13 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvKwSuggestion.setVisibility(View.VISIBLE);
     }
 
+    // NEW
     private void applyPendingSuggestion() {
         if (pendingSuggestion == null) return;
-        pendingSubCategoryId = pendingSuggestion.getSubCategoryId(); // consumed by the sub-category cascade above
+        pendingSubCategoryId = pendingSuggestion.getSubCategoryId(); // picked up by the cascade above
         for (int i = 0; i < currentCategories.size(); i++) {
             if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
-                spCategory.setSelection(i + 1); // +1 for the placeholder row
+                spCategory.setSelection(i + 1);
                 break;
             }
         }

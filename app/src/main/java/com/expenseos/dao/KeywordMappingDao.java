@@ -90,12 +90,31 @@ public class KeywordMappingDao {
         db.insertWithOnConflict("keyword_mappings", null, cv, SQLiteDatabase.CONFLICT_IGNORE);
     }
 
-    public void update(int id, String keyword, int categoryId, Integer subCategoryId) {
+    /**
+     * Existing mappings with the same keyword text (case-insensitive) and
+     * same type, in overlapping scope — used to block/flag Case-2 duplicates
+     * (same keyword pointing at two different category/sub-category pairs).
+     */
+    public List<KeywordMapping> findByKeyword(String keyword, String type, Integer bookId, Integer excludeId) {
+        String sql = BASE_SELECT + "WHERE LOWER(km.keyword)=LOWER(?) AND km.type=? " +
+                "AND (km.book_id IS NULL" + (bookId != null ? " OR km.book_id=" + bookId : "") + ")" +
+                (excludeId != null ? " AND km.id<>" + excludeId : "");
+        List<KeywordMapping> list = new ArrayList<>();
+        try (Cursor c = db.rawQuery(sql, new String[]{keyword.trim(), type})) {
+            while (c.moveToNext()) list.add(fromCursor(c));
+        }
+        return list;
+    }
+
+    // NEW
+    public void update(int id, String keyword, int categoryId, Integer subCategoryId, Integer bookId) {
         ContentValues cv = new ContentValues();
         cv.put("keyword", keyword.trim());
         cv.put("category_id", categoryId);
         if (subCategoryId != null) cv.put("sub_category_id", subCategoryId);
         else cv.putNull("sub_category_id");
+        if (bookId != null) cv.put("book_id", bookId);
+        else cv.putNull("book_id");
         db.update("keyword_mappings", cv, "id=?", new String[]{String.valueOf(id)});
     }
 

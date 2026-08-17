@@ -72,8 +72,7 @@ public class EventDao {
     public List<EventReminder> findReminders(long eventId, String type) {
         List<EventReminder> out = new ArrayList<>();
         try (Cursor c = db.getReadableDatabase().rawQuery(
-                "SELECT er.id, er.event_id, er.reminder_id, r.name, er.type, " +
-                        "er.offset_direction, er.offset_days, er.time_hour, er.time_minute " +
+                "SELECT er.id, er.event_id, er.reminder_id, r.name " +
                         "FROM event_reminders er JOIN reminders r ON r.id = er.reminder_id " +
                         "WHERE er.event_id=? AND er.type=?",
                 new String[]{String.valueOf(eventId), type})) {
@@ -83,48 +82,24 @@ public class EventDao {
                 er.setEventId(c.getLong(1));
                 er.setReminderId(c.getLong(2));
                 er.setReminderName(c.getString(3));
-                er.setType(c.getString(4));
-                er.setOffsetDirection(c.getString(5));
-                er.setOffsetDays(c.getInt(6));
-                er.setTimeHour(c.getInt(7));
-                er.setTimeMinute(c.getInt(8));
+                er.setType(type);
                 out.add(er);
             }
         }
         return out;
     }
 
-    public void saveReminder(EventReminder er) {
-        SQLiteDatabase wdb = db.getWritableDatabase();
-        ContentValues cv = new ContentValues();
-        cv.put("event_id", er.getEventId());
-        cv.put("reminder_id", er.getReminderId());
-        cv.put("type", er.getType());
-        cv.put("offset_direction", er.getOffsetDirection());
-        cv.put("offset_days", er.getOffsetDays());
-        cv.put("time_hour", er.getTimeHour());
-        cv.put("time_minute", er.getTimeMinute());
-
-        if (er.getId() > 0) {
-            wdb.update("event_reminders", cv, "id=?", new String[]{String.valueOf(er.getId())});
-        } else {
-            long id = db.getNextId("event_reminders");
-            cv.put("id", id);
-            wdb.insert("event_reminders", null, cv);
-        }
-    }
-
     /**
-     * Replaces all NOTIFICATION or ALARM rows for an event in one go (used by Save on AddEventActivity).
+     * Sets (or replaces) the single NOTIFICATION or ALARM reminder link for an event.
      */
-    public void replaceReminders(long eventId, String type, List<EventReminder> list) {
+    public void setReminder(long eventId, String type, long reminderId) {
         SQLiteDatabase wdb = db.getWritableDatabase();
         wdb.delete("event_reminders", "event_id=? AND type=?", new String[]{String.valueOf(eventId), type});
-        for (EventReminder er : list) {
-            er.setId(0);
-            er.setEventId(eventId);
-            er.setType(type);
-            saveReminder(er);
-        }
+        ContentValues cv = new ContentValues();
+        cv.put("id", db.getNextId("event_reminders"));
+        cv.put("event_id", eventId);
+        cv.put("reminder_id", reminderId);
+        cv.put("type", type);
+        wdb.insert("event_reminders", null, cv);
     }
 }

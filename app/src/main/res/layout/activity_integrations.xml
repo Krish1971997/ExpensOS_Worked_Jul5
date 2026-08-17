@@ -19,49 +19,30 @@
             android:orientation="horizontal"
             android:paddingHorizontal="8dp">
 
-            <Button
-                android:id="@+id/btnGoogleConnect"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_margin="12dp"
-                android:textSize="12sp" />
-
-            <ImageButton
-                android:id="@+id/btnIntegrationsBack"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_revert"
-                android:tint="@color/primary" />
-
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
                 android:text="🔗 Integrations"
                 android:textColor="@color/primary"
                 android:textSize="17sp"
                 android:textStyle="bold" />
-
-            <!-- 👇 ithu add pannunga (existing back button and title-oda same LinearLayout la) -->
-            <ImageButton
-                android:id="@+id/btnOpenCalendar"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_menu_my_calendar"
-                android:tint="@color/primary" />
         </LinearLayout>
 
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabConfigType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:tabIndicatorColor="@color/primary"
+            app:tabSelectedTextColor="@color/primary" />
+
         <TextView
-            android:id="@+id/tvNoEvents"
+            android:id="@+id/tvNoItems"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="40dp"
             android:gravity="center"
-            android:text="No events yet. Tap + to create one."
+            android:text="Nothing here yet. Tap + to create one."
             android:textColor="@color/text_muted"
             android:visibility="gone" />
 
@@ -71,16 +52,22 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:padding="8dp" />
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNavIntegrations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:menu="@menu/menu_integrations_bottom_nav" />
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabAddEvent"
+        android:id="@+id/fabAdd"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
-        android:layout_margin="20dp"
-        android:contentDescription="Add event"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="76dp"
+        android:contentDescription="Add"
         android:src="@android:drawable/ic_input_add"
         app:backgroundTint="@color/primary" />
-
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

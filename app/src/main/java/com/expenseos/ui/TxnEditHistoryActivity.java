@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -38,9 +39,22 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
         List<AuditLog> newestFirst = new ArrayList<>(history);
         java.util.Collections.reverse(newestFirst);
 
-        ((TextView) findViewById(R.id.tvHistoryCount)).setText("Showing " + newestFirst.size() + " activities");
-
+        TextView tvCount = findViewById(R.id.tvHistoryCount);
+        View emptyState = findViewById(R.id.emptyHistoryState);
         RecyclerView rv = findViewById(R.id.rvHistory);
+
+        if (newestFirst.isEmpty()) {
+            tvCount.setVisibility(View.GONE);
+            rv.setVisibility(View.GONE);
+            emptyState.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        emptyState.setVisibility(View.GONE);
+        rv.setVisibility(View.VISIBLE);
+        tvCount.setVisibility(View.VISIBLE);
+        tvCount.setText(newestFirst.size() + (newestFirst.size() == 1 ? " activity" : " activities"));
+
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setAdapter(new HistoryAdapter(newestFirst));
     }
@@ -52,6 +66,28 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
         int type;
         String headerText;
         AuditLog log;
+    }
+
+    // Per-action icon glyph + accent color — drives both the icon circle
+    // and (lightly) the title, so the timeline reads at a glance.
+    private record ActionStyle(String glyph, int colorRes) {
+    }
+
+    private ActionStyle styleFor(String action) {
+        switch (action) {
+            case "CREATE":
+                return new ActionStyle("+", R.color.green);
+            case "DELETE":
+                return new ActionStyle("🗑", R.color.red);
+            case "RECEIPT_ADD":
+                return new ActionStyle("📎", R.color.green);
+            case "RECEIPT_DEL":
+                return new ActionStyle("📎", R.color.red);
+            case "UPDATE":
+                return new ActionStyle("✎", R.color.primary);
+            default:
+                return new ActionStyle("•", R.color.text_muted);
+        }
     }
 
     class HistoryAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
@@ -93,10 +129,11 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
         }
 
         class EntryVH extends RecyclerView.ViewHolder {
-            TextView tvTitle, tvTime, tvDetail;
+            TextView tvIcon, tvTitle, tvTime, tvDetail;
 
             EntryVH(View v) {
                 super(v);
+                tvIcon = v.findViewById(R.id.tvHistIcon);
                 tvTitle = v.findViewById(R.id.tvHistTitle);
                 tvTime = v.findViewById(R.id.tvHistTime);
                 tvDetail = v.findViewById(R.id.tvHistDetail);
@@ -113,12 +150,24 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
 
             EntryVH h = (EntryVH) holder;
             AuditLog a = row.log;
+
+            ActionStyle style = styleFor(a.getAction());
+            h.tvIcon.setText(style.glyph);
+            int color = h.itemView.getContext().getColor(style.colorRes);
+            Object bg = h.tvIcon.getBackground();
+            if (bg instanceof GradientDrawable) {
+                GradientDrawable gd = (GradientDrawable) ((GradientDrawable) bg).mutate();
+                gd.setColor(withAlpha(color, 0x22));
+                h.tvIcon.setBackground(gd);
+            }
+            h.tvIcon.setTextColor(color);
+
             h.tvTitle.setText(titleFor(a));
             h.tvTime.setText(a.getChangedAt() != null ? a.getChangedAt().format(TIME_FMT) : "");
 
             if ("UPDATE".equals(a.getAction()) && a.getFieldName() != null) {
                 h.tvDetail.setVisibility(View.VISIBLE);
-                h.tvDetail.setText("To: " + safe(a.getNewValue()) + "\nFrom: " + safe(a.getOldValue()));
+                h.tvDetail.setText("New: " + safe(a.getNewValue()) + "  ·  Previous: " + safe(a.getOldValue()));
             } else if (a.getNote() != null && !a.getNote().isEmpty()) {
                 h.tvDetail.setVisibility(View.VISIBLE);
                 h.tvDetail.setText(a.getNote());
@@ -127,18 +176,22 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
             }
         }
 
+        private int withAlpha(int color, int alpha) {
+            return (color & 0x00FFFFFF) | (alpha << 24);
+        }
+
         private String titleFor(AuditLog a) {
             switch (a.getAction()) {
                 case "CREATE":
-                    return "Created Entry : ";
+                    return "Entry created";
                 case "DELETE":
-                    return "Deleted Entry : ";
+                    return "Entry deleted";
                 case "RECEIPT_ADD":
-                    return "Added 1 attachment : ";
+                    return "Attachment added";
                 case "RECEIPT_DEL":
-                    return "Removed 1 attachment : ";
+                    return "Attachment removed";
                 case "UPDATE":
-                    return "Edited : " + (a.getFieldName() != null ? a.getFieldDisplay() : "entry");
+                    return "Edited " + (a.getFieldName() != null ? a.getFieldDisplay() : "entry");
                 default:
                     return a.getAction();
             }

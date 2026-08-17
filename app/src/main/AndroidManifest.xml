@@ -84,7 +84,12 @@
             android:name=".ui.CalendarViewActivity"
             android:exported="false"
             android:label="Calendar View" />
-
+        <activity
+            android:name=".ui.AddReminderActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.RemindersListActivity"
+            android:exported="false" />
         <!-- Needed for camera capture in TransactionEntryActivity — the
              camera app writes the photo to a content:// URI we hand it,
              which requires a FileProvider rather than a raw file:// path. -->
