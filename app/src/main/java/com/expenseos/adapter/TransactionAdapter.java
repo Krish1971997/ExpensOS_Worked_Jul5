@@ -28,7 +28,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
@@ -72,6 +74,51 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private final List<Row> rows = new ArrayList<>();
     private final OnTxnLongClick onLongClick;
     private final OnTxnClick onClick;
+
+    // ── Long-press multi-select ──────────────────────────
+    public interface OnSelectionChanged {
+        void onChanged(int selectedCount);
+    }
+
+    private final Set<Integer> selectedIds = new LinkedHashSet<>();
+    private boolean selectionMode = false;
+    private OnSelectionChanged selectionListener;
+
+    public void setOnSelectionChanged(OnSelectionChanged l) {
+        this.selectionListener = l;
+    }
+
+    public boolean isSelectionMode() {
+        return selectionMode;
+    }
+
+    public int getSelectableCount() {
+        int n = 0;
+        for (Row r : rows) if (r.type == TYPE_TXN) n++;
+        return n;
+    }
+
+    public List<Transaction> getSelectedTransactions() {
+        List<Transaction> out = new ArrayList<>();
+        for (Row r : rows)
+            if (r.type == TYPE_TXN && selectedIds.contains(r.txn.getId())) out.add(r.txn);
+        return out;
+    }
+
+    public void selectAll() {
+        selectedIds.clear();
+        for (Row r : rows) if (r.type == TYPE_TXN) selectedIds.add(r.txn.getId());
+        selectionMode = !selectedIds.isEmpty();
+        notifyDataSetChanged();
+        if (selectionListener != null) selectionListener.onChanged(selectedIds.size());
+    }
+
+    public void clearSelection() {
+        selectedIds.clear();
+        selectionMode = false;
+        notifyDataSetChanged();
+        if (selectionListener != null) selectionListener.onChanged(0);
+    }
 
     // NEW constructor — for All Transactions screen
     public TransactionAdapter(Context ctx, List<Transaction> list,
@@ -229,14 +276,30 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             h.tvAttachments.setVisibility(View.GONE);
         }
 
-        if (onClick != null)
-            h.itemView.setOnClickListener(v -> onClick.onClick(t));
+        boolean selected = selectedIds.contains(t.getId());
+        h.itemView.setBackgroundColor(selected ? Color.parseColor("#E3F2FD") : Color.TRANSPARENT);
 
-        if (onLongClick != null)
-            h.itemView.setOnLongClickListener(v -> {
-                onLongClick.onLongClick(t);
-                return true;
-            });
+        h.itemView.setOnClickListener(v -> {
+            if (selectionMode) {
+                if (!selectedIds.remove(t.getId())) selectedIds.add(t.getId());
+                if (selectedIds.isEmpty()) selectionMode = false;
+                notifyDataSetChanged();
+                if (selectionListener != null) selectionListener.onChanged(selectedIds.size());
+            } else if (onClick != null) {
+                onClick.onClick(t);
+            }
+        });
+
+        h.itemView.setOnLongClickListener(v -> {
+            if (!selectionMode) {
+                selectionMode = true;
+                selectedIds.add(t.getId());
+                notifyDataSetChanged();
+                if (selectionListener != null) selectionListener.onChanged(selectedIds.size());
+            }
+            if (onLongClick != null) onLongClick.onLongClick(t);
+            return true;
+        });
     }
 
     @Override

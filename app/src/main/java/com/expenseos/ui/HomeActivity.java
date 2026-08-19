@@ -174,12 +174,19 @@ public class HomeActivity extends AppCompatActivity {
         });
 
         // NEW
+// NEW
         View drawerMonthlyReport = findViewById(R.id.drawerMonthlyReport);
         if (drawerMonthlyReport != null) drawerMonthlyReport.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             Intent i = new Intent(this, MonthlyCategoryReportActivity.class);
             i.putExtra("bookId", bookId);
             startActivity(i);
+        });
+
+        View drawerSequence = findViewById(R.id.drawerSequence);
+        if (drawerSequence != null) drawerSequence.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, SequenceActivity.class));
         });
 
         View drawerBulkAdd = findViewById(R.id.drawerBulkAdd);

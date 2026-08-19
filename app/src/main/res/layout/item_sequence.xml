@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp">
+
+    <TextView
+        android:id="@+id/tvTableName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/text"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        tools:text="transactions" />
+
+    <TextView
+        android:id="@+id/tvNextId"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="12dp"
+        android:textColor="@color/text_muted"
+        android:textSize="14sp"
+        tools:text="next_id: 145" />
+
+    <ImageButton
+        android:id="@+id/btnEdit"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_menu_edit"
+        android:contentDescription="Edit" />
+
+    <ImageButton
+        android:id="@+id/btnResync"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_popup_sync"
+        android:contentDescription="Resync" />
+
+</LinearLayout>

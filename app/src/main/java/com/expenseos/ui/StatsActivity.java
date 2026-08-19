@@ -4,6 +4,9 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -47,6 +50,14 @@ public class StatsActivity extends AppCompatActivity {
     private TextView tabIncome, tabExpense;
     private View btnPrevMonth, btnNextMonth;
 
+    // Home-page ("all cashbooks") entry only — lets the user jump straight
+    // to any book's stats via Series -> Book, instead of only cycling
+    // month-by-month within whatever series they happened to land on.
+    private static final String[] SERIES_OPTIONS = {"All", "Default", "Credit Card", "Expense", "Others"};
+    private Spinner spSeriesFilter, spBookFilter;
+    private boolean isHomeEntry;
+    private boolean suppressBookFilterCallback; // guards Android's async auto-fire on setAdapter
+
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
@@ -74,6 +85,9 @@ public class StatsActivity extends AppCompatActivity {
         rvCategories = findViewById(R.id.rvStatsCategories);
         rvCategories.setLayoutManager(new LinearLayoutManager(this));
 
+        spSeriesFilter = findViewById(R.id.spSeriesFilter);
+        spBookFilter = findViewById(R.id.spBookFilter);
+
         tabIncome = findViewById(R.id.tabIncome);
         tabExpense = findViewById(R.id.tabExpense);
         tabIncome.setOnClickListener(v -> {
@@ -90,6 +104,7 @@ public class StatsActivity extends AppCompatActivity {
         // "August 2026 Credit Card") or an irregular one-off book
         // ("Temple trip August 2026", "trip expense aug 2026").
         int scopeBookId = getIntent().getIntExtra("scopeBookId", -1);
+        isHomeEntry = scopeBookId <= 0;
         if (scopeBookId > 0) {
             CashBook scopeBook = new CashBookDao(this).findById(scopeBookId);
             if (scopeBook != null) {
@@ -111,8 +126,162 @@ public class StatsActivity extends AppCompatActivity {
             }
         }
 
+        if (isHomeEntry) {
+            findViewById(R.id.llStatsFilters).setVisibility(View.VISIBLE);
+            setupSeriesFilter(); // populates the dropdowns and triggers the first refresh() itself
+        } else {
+            refresh();
+        }
+    }
+
+    private void setupSeriesFilter() {
+        ArrayAdapter<String> adp = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, SERIES_OPTIONS);
+        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spSeriesFilter.setAdapter(adp);
+        spSeriesFilter.setSelection(1, false); // "Default" — matches the old hardcoded behavior
+
+        spBookFilter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                if (suppressBookFilterCallback) return;
+                Object tag = spBookFilter.getTag();
+                if (tag instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<CashBook> shown = (List<CashBook>) tag;
+                    if (pos >= 0 && pos < shown.size()) selectBookFromDropdown(shown.get(pos));
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
+
+        // Attached AFTER the setSelection(1) above, so picking "Default"
+        // programmatically here doesn't also fire this listener.
+        spSeriesFilter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                populateBookDropdown(SERIES_OPTIONS[pos]);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
+
+        populateBookDropdown(SERIES_OPTIONS[1]);
+    }
+
+    // "Default" = plain "<Month> <Year>" books ("August 2026")
+    // "Credit Card" / "Expense" = that exact suffix
+    // "Others" = everything else — irregular names AND any other suffix
+    //            (e.g. "August 2026 Business") that isn't one of the three above
+    private String classifySeries(CashBook book) {
+        YearMonth ym = MonthBookResolver.parseYearMonth(book.getName());
+        if (ym == null) return "Others";
+        String suffix = MonthBookResolver.extractSuffix(book.getName());
+        if (suffix.isEmpty()) return "Default";
+        if (suffix.equalsIgnoreCase("Credit Card")) return "Credit Card";
+        if (suffix.equalsIgnoreCase("Expense")) return "Expense";
+        return "Others";
+    }
+
+    private void populateBookDropdown(String seriesFilter) {
+        List<CashBook> all = new CashBookDao(this).findAll();
+        List<CashBook> shown = new ArrayList<>();
+        for (CashBook b : all) {
+            if (seriesFilter.equals("All") || classifySeries(b).equals(seriesFilter)) {
+                shown.add(b);
+            }
+        }
+        // Newest month first where the name is parseable; unparseable
+        // ("Others") names fall back to alphabetical, listed after those.
+        shown.sort((a, b) -> {
+            YearMonth ya = MonthBookResolver.parseYearMonth(a.getName());
+            YearMonth yb = MonthBookResolver.parseYearMonth(b.getName());
+            if (ya != null && yb != null) return yb.compareTo(ya);
+            if (ya != null) return -1;
+            if (yb != null) return 1;
+            return a.getName().compareToIgnoreCase(b.getName());
+        });
+
+        List<String> names = new ArrayList<>();
+        for (CashBook b : shown) names.add(b.getName());
+        if (names.isEmpty()) names.add("No cash books");
+
+        ArrayAdapter<String> adp = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, names);
+        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        suppressBookFilterCallback = true;
+        spBookFilter.setAdapter(adp);
+        spBookFilter.setTag(shown);
+        // Clear the guard one message-loop pass later, after Android's own
+        // queued selection-changed callback for this setAdapter has run —
+        // otherwise that auto-fire double-triggers selectBookFromDropdown()
+        // on top of the explicit call below.
+        spBookFilter.post(() -> suppressBookFilterCallback = false);
+
+        if (!shown.isEmpty()) {
+            selectBookFromDropdown(shown.get(0));
+        } else {
+            directBook = null;
+            tvEmpty.setVisibility(View.VISIBLE);
+            tvEmpty.setText("No cash books in this series");
+            pieChart.setVisibility(View.GONE);
+            rvCategories.setVisibility(View.GONE);
+        }
+    }
+
+    // Same month-pattern-vs-irregular split used for the scoped (Type 2)
+    // entry — reused here so the header's Prev/Next month arrows keep
+    // working for any Default/Credit Card/Expense book picked from the
+    // dropdown, and get disabled for an irregular ("Others") one.
+    private void selectBookFromDropdown(CashBook book) {
+        YearMonth parsed = MonthBookResolver.parseYearMonth(book.getName());
+        if (parsed != null) {
+            directBook = null;
+            seriesSuffix = MonthBookResolver.extractSuffix(book.getName());
+            currentMonth = parsed;
+            btnPrevMonth.setEnabled(true);
+            btnNextMonth.setEnabled(true);
+            btnPrevMonth.setAlpha(1f);
+            btnNextMonth.setAlpha(1f);
+        } else {
+            directBook = book;
+            btnPrevMonth.setEnabled(false);
+            btnNextMonth.setEnabled(false);
+            btnPrevMonth.setAlpha(0.3f);
+            btnNextMonth.setAlpha(0.3f);
+        }
         refresh();
     }
+
+    // Keeps spBookFilter's visible selection in step with whatever book is
+    // actually being shown — needed because Prev/Next month changes the
+    // book without going through selectBookFromDropdown().
+    private void syncBookDropdownSelection(CashBook book) {
+        Object tag = spBookFilter.getTag();
+        if (!(tag instanceof List)) return;
+        @SuppressWarnings("unchecked")
+        List<CashBook> shown = (List<CashBook>) tag;
+        for (int i = 0; i < shown.size(); i++) {
+            if (shown.get(i).getId() == book.getId()) {
+                if (spBookFilter.getSelectedItemPosition() != i) {
+                    suppressBookFilterCallback = true;
+                    spBookFilter.setSelection(i, false);
+                    spBookFilter.post(() -> suppressBookFilterCallback = false);
+                }
+                return;
+            }
+        }
+    }
+    // Book isn't in the currently-shown series list at all (e.g. Prev
+    // month arrow moved to a book outside whatever series filter is
+    // selected) — leave the dropdown as-is rather than force a mismatch.
+
 
     private void refresh() {
         tabExpense.setTextColor(showExpense ? Color.parseColor("#DC2626") : Color.GRAY);
@@ -137,6 +306,8 @@ public class StatsActivity extends AppCompatActivity {
             tvTotalBalance.setText("₹0.00");
             return;
         }
+
+        if (isHomeEntry) syncBookDropdownSelection(book);
 
         TransactionDao dao = new TransactionDao(this);
         List<Map<String, Object>> rows = showExpense
@@ -171,8 +342,10 @@ public class StatsActivity extends AppCompatActivity {
         ds.setColors(colors, 255);
         ds.setValueTextSize(11f);
         ds.setValueTextColor(Color.WHITE);
+        ds.setSliceSpace(2f);
         pieChart.setData(new PieData(ds));
         pieChart.setUsePercentValues(true);
+        pieChart.setDrawEntryLabels(false);
         pieChart.getDescription().setEnabled(false);
         pieChart.setDrawHoleEnabled(true);
         pieChart.invalidate();

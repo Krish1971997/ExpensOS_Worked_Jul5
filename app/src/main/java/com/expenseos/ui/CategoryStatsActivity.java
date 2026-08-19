@@ -204,8 +204,10 @@ public class CategoryStatsActivity extends AppCompatActivity {
     }
 
     private void loadSubcategorySplit(String type, int year, int month) {
-        // Pass 0 to query globally across books for this month
-        List<Map<String, Object>> allSub = dao.subCategoryBreakdownByMonth(type, year, month, 0);
+        // Scoped to THIS cashbook only — categories with the same name can
+        // exist in other books, so bookId=0 (global) was silently summing
+        // those in too.
+        List<Map<String, Object>> allSub = dao.subCategoryBreakdownByMonth(type, year, month, bookId);
 
         List<Map<String, Object>> mine = new ArrayList<>();
         BigDecimal overallCategoryTotal = BigDecimal.ZERO;
@@ -347,7 +349,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
 
     private void loadTransactionList(String type, int activeYear, int activeMonth) {
         TransactionFilter f = new TransactionFilter();
-        f.setBookId(0);
+        f.setBookId(bookId);
         f.setType(type);
         if (categoryId > 0) {
             f.setCategoryIds(List.of(categoryId));

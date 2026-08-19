@@ -51,7 +51,38 @@
             android:src="@android:drawable/ic_media_next" />
     </LinearLayout>
 
-    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E5E7EB" />
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E5E7EB" />
+
+    <!-- Series filter — only shown on the home/global Stats entry point,
+         not when opened scoped to a specific cashbook -->
+    <LinearLayout
+        android:id="@+id/llStatsFilters"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <Spinner
+            android:id="@+id/spSeriesFilter"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_input_box"
+            android:paddingHorizontal="10dp" />
+
+        <Spinner
+            android:id="@+id/spBookFilter"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_input_box"
+            android:paddingHorizontal="10dp" />
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"

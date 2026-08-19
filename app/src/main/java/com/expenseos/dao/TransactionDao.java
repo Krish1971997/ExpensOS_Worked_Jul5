@@ -160,6 +160,26 @@ public class TransactionDao {
         }
     }
 
+    // delete(int id) method-க்கு கீழே இதை add பண்ணுங்க
+    // ── MOVE (change book) — used by bulk "Move to another cashbook".
+    // Lighter than update(oldT,newT) since only book_id changes; still
+    // writes to the audit trail so the move is traceable.
+    public void updateBookId(int id, int newBookId) {
+        Transaction existing = findById(id);
+        ContentValues cv = new ContentValues();
+        cv.put("book_id", newBookId);
+        cv.put("updated_at", LocalDateTime.now().format(TS_FMT));
+        cv.put("synced", 0);
+        db.update("transactions", cv, "id = ?", new String[]{String.valueOf(id)});
+
+        if (existing != null) {
+            CashBookDao cashBookDao = new CashBookDao(ctx);
+            auditDao.logUpdate(id, "user", "book",
+                    cashBookDao.findById(existing.getBookId()).getName(),
+                    cashBookDao.findById(newBookId).getName());
+        }
+    }
+
     // ── Tombstone helper — shared by every DAO's delete() so
     // the sync service can find & propagate deletions. ─────
     // Requires a UNIQUE(table_name, record_id) index on deleted_records.
@@ -632,7 +652,7 @@ public class TransactionDao {
             }
             sql.append(")");
         }
-        
+
         if (f.getType() != null && !f.getType().isBlank()) {
             sql.append(" AND t.type = ?");
             params.add(f.getType());

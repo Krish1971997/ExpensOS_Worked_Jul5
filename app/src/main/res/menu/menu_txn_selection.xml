@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_select_all"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="Select All"
+        app:showAsAction="always" />
+
+
+    <!-- action_move item-க்கு மேல் இதை சேருங்க -->
+    <item
+        android:id="@+id/action_edit"
+        android:icon="@android:drawable/ic_menu_edit"
+        android:title="Edit"
+        app:showAsAction="always" />
+    
+    <item
+        android:id="@+id/action_move"
+        android:icon="@android:drawable/ic_menu_send"
+        android:title="Move"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_export"
+        android:icon="@android:drawable/ic_menu_save"
+        android:title="Export"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_delete"
+        android:icon="@android:drawable/ic_menu_delete"
+        android:title="Delete"
+        app:showAsAction="always" />
+</menu>

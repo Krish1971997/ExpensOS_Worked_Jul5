@@ -118,6 +118,7 @@ public class TransactionFilterDialog extends Dialog {
         }
 
         bindViews();
+        applySingleBookVisibility();
         loadCategoriesAndSubCategories();
         wireTabs();
         wireDatePanel();
@@ -185,7 +186,23 @@ public class TransactionFilterDialog extends Dialog {
         etAmount2 = findViewById(R.id.etAmount2);
     }
 
+    // NEW — Cash Book only makes sense when this dialog is filtering across
+    // multiple books (All Transactions screen, bookId == null). Inside a
+    // single cashbook (Home screen, bookId is a real id) every row already
+    // belongs to that one book, so the tab is redundant — hide it there.
+    private boolean isSingleBookContext() {
+        return bookId != null && bookId > 0;
+    }
+
+    private void applySingleBookVisibility() {
+        if (!isSingleBookContext()) return;
+        tabCashBook.setVisibility(View.GONE);
+        panelCashBook.setVisibility(View.GONE);
+    }
+
     // ── Tabs (Index Order Fixed) ─────────────────────────────
+// NEW — guard against a caller accidentally opening tab 0 (Cash Book) in
+// single-book context; land on Date instead rather than showing a blank panel.
     private void wireTabs() {
         tabCashBook.setOnClickListener(v -> selectTab(0));
         tabDate.setOnClickListener(v -> selectTab(1));
@@ -193,7 +210,7 @@ public class TransactionFilterDialog extends Dialog {
         tabSubCategory.setOnClickListener(v -> selectTab(3));
         tabAmount.setOnClickListener(v -> selectTab(4));
         tabPaymentType.setOnClickListener(v -> selectTab(5));
-        selectTab(initialTab);
+        selectTab(isSingleBookContext() && initialTab == 0 ? 1 : initialTab);
     }
 
     private void selectTab(int index) {
@@ -295,12 +312,16 @@ public class TransactionFilterDialog extends Dialog {
         buildCategoryCheckboxes();
         buildSubCategoryCheckboxes();
 
+// NEW — skip the Cash Book query entirely in single-book context; the
+// panel's hidden anyway, no need to hit CashBookDao or build checkboxes.
         allPaymentTypes = new PaymentTypeDao(getContext()).findAll();
         buildPaymentTypeCheckboxes();
 
-        CashBookDao cashBookDao = new CashBookDao(getContext());
-        allCashBooks = cashBookDao.findAll();
-        buildCashBookCheckboxes();
+        if (!isSingleBookContext()) {
+            CashBookDao cashBookDao = new CashBookDao(getContext());
+            allCashBooks = cashBookDao.findAll();
+            buildCashBookCheckboxes();
+        }
     }
 
     private void buildCashBookCheckboxes() {

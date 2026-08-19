@@ -283,6 +283,20 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
+    // Long-press on any list row's name shows its raw DB id via a Toast.
+    // Kept out of the normal UI — ids aren't meant to be visible day-to-day,
+    // this is just a quick peek for debugging/support when someone needs it.
+    private void attachIdPeek(View target, String label, int id) {
+        attachIdPeek(target, label, "ID: " + id);
+    }
+
+    private void attachIdPeek(View target, String label, String idInfo) {
+        target.setOnLongClickListener(v -> {
+            Toast.makeText(SettingsActivity.this, label + " → " + idInfo, Toast.LENGTH_SHORT).show();
+            return true;
+        });
+    }
+
     class CategoryListAdapter extends RecyclerView.Adapter<CategoryListAdapter.VH> {
         private final List<Category> list;
 
@@ -316,6 +330,17 @@ public class SettingsActivity extends AppCompatActivity {
             h.tvName.setText(c.getName());
             h.tvScope.setText(c.isCommon() ? "Common" : "Book only");
             h.tvScope.setTextColor(getColor(c.isCommon() ? R.color.primary : R.color.amber));
+            attachIdPeek(h.tvName, c.getName(), c.getId());
+
+            // Long-press the name to peek the category ID — kept off the
+            // normal UI on purpose; user shouldn't see raw ids day-to-day,
+            // but devs/support need a quick way to check it when debugging.
+            h.tvName.setOnLongClickListener(v -> {
+                Toast.makeText(SettingsActivity.this,
+                        c.getName() + " → ID: " + c.getId(),
+                        Toast.LENGTH_SHORT).show();
+                return true;
+            });
 
             h.btnEdit.setOnClickListener(v -> showEditCategoryDialog(c));
 
@@ -451,6 +476,10 @@ public class SettingsActivity extends AppCompatActivity {
         Spinner spSub = new Spinner(this);
         form.addView(spSub);
 
+        // NEW — reference to the scope spinner, filled in once it's built below,
+        // so the category listener can reach it.
+        final Spinner[] spScopeRef = new Spinner[1];
+
         Runnable[] refreshSubRef = new Runnable[1];
         // Category list always starts with a "Select Category" placeholder —
         // for Add it's the real default (nothing pre-picked); for Edit it's
@@ -510,10 +539,12 @@ public class SettingsActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> p) {
             }
         });
+
         spCat.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 refreshSubRef[0].run();
+                enforceScopeForCategory(spCat, spScopeRef[0]);
             }
 
             @Override
@@ -524,6 +555,7 @@ public class SettingsActivity extends AppCompatActivity {
         // Scope — shown for both Add and Edit now, so a wrong pick can be
         // corrected later instead of forcing a delete + re-add.
         Spinner spScope = null;
+        TextView tvScopeLocked = null;
         if (bookScoped) {
             TextView lblScope = new TextView(this);
             lblScope.setText("Cashbook Scope");
@@ -543,9 +575,21 @@ public class SettingsActivity extends AppCompatActivity {
             spScope.setAdapter(scopeAdp);
             spScope.setSelection(existing != null ? (existing.isCommon() ? 0 : 1) : 0); // default: Common
             form.addView(spScope);
+
+            tvScopeLocked = new TextView(this);
+            tvScopeLocked.setTextSize(10);
+            tvScopeLocked.setTextColor(getColor(R.color.amber));
+            tvScopeLocked.setPadding(0, (int) (2 * getResources().getDisplayMetrics().density), 0, 0);
+            tvScopeLocked.setVisibility(View.GONE);
+            form.addView(tvScopeLocked);
+
+            spScopeRef[0] = spScope;
+            enforceScopeForCategory(spCat, spScope, tvScopeLocked); // in case Edit pre-selected a book-only category
         }
 
         Spinner finalSpScope = spScope;
+        TextView finalTvScopeLocked = tvScopeLocked;
+
         new AlertDialog.Builder(this)
                 .setTitle(existing == null ? "Add Keyword Mapping" : "Edit Keyword Mapping")
                 .setView(form)
@@ -556,6 +600,16 @@ public class SettingsActivity extends AppCompatActivity {
                         return;
                     }
                     String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
+
+                    Category selectedCat = (Category) spCat.getSelectedItem();
+                    boolean catIsBookSpecific = selectedCat.getBookId() != null;
+                    boolean scopeIsCommon = finalSpScope == null || finalSpScope.getSelectedItemPosition() == 0;
+                    if (catIsBookSpecific && scopeIsCommon) {
+                        // Safety net — UI already locks this, but guard the save too.
+                        Toast.makeText(this, "\"" + selectedCat.getName() +
+                                "\" is a this-book-only category — this mapping can't be Common.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
 
                     List<KeywordMapping> dupes = kwDao.findByKeyword(keyword, type,
                             bookScoped && bookId > 0 ? bookId : null,
@@ -584,6 +638,29 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    // enforceScopeForCategory() — puthu helper method add பண்ணுங்க (showKeywordDialog()-க்கு கீழே)
+    // A keyword mapping can't be "Common" while its target category is
+    // book-specific — a common mapping fires from every book, and the
+    // category simply won't exist in the others. Lock the scope spinner to
+    // "This book only" (and explain why) whenever that's the case.
+    private void enforceScopeForCategory(Spinner spCat, Spinner spScope) {
+        enforceScopeForCategory(spCat, spScope, null);
+    }
+
+    private void enforceScopeForCategory(Spinner spCat, Spinner spScope, TextView tvLocked) {
+        if (spScope == null || spCat.getSelectedItemPosition() <= 0) return;
+        Category selected = (Category) spCat.getSelectedItem();
+        boolean bookSpecific = selected != null && selected.getBookId() != null;
+        spScope.setEnabled(!bookSpecific);
+        if (bookSpecific) spScope.setSelection(1); // This book only
+        if (tvLocked != null) {
+            tvLocked.setVisibility(bookSpecific ? View.VISIBLE : View.GONE);
+            tvLocked.setText(bookSpecific
+                    ? "⚠ \"" + selected.getName() + "\" is a this-book-only category — scope locked to This book only."
+                    : "");
+        }
     }
 
     // NEW
@@ -635,6 +712,7 @@ public class SettingsActivity extends AppCompatActivity {
             }
             h.tvScope.setText(k.isCommon() ? "Common" : "Book only");
             h.tvScope.setTextColor(getColor(k.isCommon() ? R.color.primary : R.color.amber));
+            attachIdPeek(h.tvKeyword, k.getKeyword(), k.getId());
 
             h.btnEdit.setOnClickListener(v -> showKeywordDialog(k));
 
@@ -882,6 +960,8 @@ public class SettingsActivity extends AppCompatActivity {
             SubCategory sc = list.get(pos);
             h.tvCategory.setText(catNameById.getOrDefault(sc.getParentCategoryId(), "?"));
             h.tvName.setText(sc.getName());
+            attachIdPeek(h.tvName, sc.getName(),
+                    "Sub-Cat ID: " + sc.getId() + "  |  Parent Cat ID: " + sc.getParentCategoryId());
 
             h.btnEdit.setOnClickListener(v -> showEditSubCategoryDialog(sc));
 
@@ -966,6 +1046,7 @@ public class SettingsActivity extends AppCompatActivity {
         public void onBindViewHolder(VH h, int pos) {
             ColumnDefinition col = list.get(pos);
             h.tvName.setText(col.getColName());
+            attachIdPeek(h.tvName, col.getColName(), col.getId());
 
             h.btnEdit.setOnClickListener(v ->
                     showRenameDialog("Rename Column", col.getColName(),
@@ -1199,12 +1280,13 @@ public class SettingsActivity extends AppCompatActivity {
             // 1. Text Concatenation-க்கு பதிலாக Name மட்டும் வைக்கப்படுகிறது
             h.tvName.setText(pt.getName());
 
-            // 2. Default status-ஐப் பொறுத்து Badge காட்டுவது/மறைப்பது
+// 2. Default status-ஐப் பொறுத்து Badge காட்டுவது/மறைப்பது
             if (pt.isDefault()) {
                 h.tvDefaultBadge.setVisibility(View.VISIBLE);
             } else {
                 h.tvDefaultBadge.setVisibility(View.GONE);
             }
+            attachIdPeek(h.tvName, pt.getName(), pt.getId());
 
             h.itemView.setOnClickListener(v -> {
                 payDao.setDefault(pt.getId());
