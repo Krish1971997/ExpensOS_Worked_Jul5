@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -84,6 +85,15 @@ public class BudgetActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBudgetBack).setOnClickListener(v -> finish());
 
+        // Configure Budget button navigation
+        findViewById(R.id.btnConfigureBudget).setOnClickListener(v -> {
+            Intent i = new Intent(this, BudgetConfigActivity.class);
+            i.putExtra("bookId", bookId);
+            i.putExtra("year", selYear);
+            i.putExtra("month", selMonth);
+            startActivity(i);
+        });
+
         bindTabs();
         setupMonthNav();
         setupOverallLimitSave();
@@ -91,6 +101,17 @@ public class BudgetActivity extends AppCompatActivity {
         setupTrendMonthsSpinner();
 
         switchTab(0);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Automatically refreshes the current tab data when coming back from BudgetConfigActivity
+        if (panelBudget != null && panelBudget.getVisibility() == View.VISIBLE) {
+            loadBudget();
+        } else if (panelTrend != null && panelTrend.getVisibility() == View.VISIBLE) {
+            loadTrend(currentTrendMonths());
+        }
     }
 
     // ── Tabs ────────────────────────────────────────────────
@@ -224,7 +245,8 @@ public class BudgetActivity extends AppCompatActivity {
     private void showAddCategoryBudgetDialog() {
         List<Category> allExpenseCats = catDao.findByType("EXPENSE", bookId);
         List<Integer> alreadyBudgeted = new ArrayList<>();
-        for (BudgetCategory bc : currentBudget.getCategories()) alreadyBudgeted.add(bc.getCategoryId());
+        for (BudgetCategory bc : currentBudget.getCategories())
+            alreadyBudgeted.add(bc.getCategoryId());
 
         List<Category> available = new ArrayList<>();
         for (Category c : allExpenseCats)
@@ -478,10 +500,17 @@ public class BudgetActivity extends AppCompatActivity {
         chart.getXAxis().setValueFormatter(new ValueFormatter() {
             @Override
             public String getFormattedValue(float v) {
-                int idx = (int) v;
-                return idx < labels.size() ? labels.get(idx) : "";
+                int idx = Math.round(v);
+                return idx >= 0 && idx < labels.size() ? labels.get(idx) : "";
             }
         });
+
+        chart.getXAxis().setGranularity(1f);
+        chart.getXAxis().setGranularityEnabled(true);
+        chart.getXAxis().setLabelCount(Math.max(labels.size(), 1), false);
+        chart.getXAxis().setAxisMinimum(-0.5f);
+        chart.getXAxis().setAxisMaximum(Math.max(labels.size() - 0.5f, 0.5f));
+        chart.getXAxis().setCenterAxisLabels(false);
         chart.getDescription().setEnabled(false);
         chart.setFitBars(true);
         chart.invalidate();
@@ -490,9 +519,6 @@ public class BudgetActivity extends AppCompatActivity {
     private void loadCategoryTrendChart(int months) {
         List<Map<String, Object>> data = budgetDao.categoryTrend(bookId, months);
 
-        // categoryTrend() returns one row per (month, category) — aggregate
-        // to a total-per-category for the whole period, since a pie chart
-        // shows share-of-total rather than a month-by-month breakdown.
         Map<String, BigDecimal> totals = new LinkedHashMap<>();
         for (Map<String, Object> row : data) {
             String cat = (String) row.get("category");
@@ -515,6 +541,13 @@ public class BudgetActivity extends AppCompatActivity {
         ds.setValueTextSize(11f);
         ds.setValueTextColor(Color.WHITE);
 
+        ds.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float v) {
+                return v < 4f ? "" : String.format(Locale.ENGLISH, "%.0f%%", v);
+            }
+        });
+
         PieChart pie = findViewById(R.id.pieCategoryTrend);
         pie.setData(new PieData(ds));
         pie.setUsePercentValues(true);
@@ -522,6 +555,9 @@ public class BudgetActivity extends AppCompatActivity {
         pie.setDrawHoleEnabled(true);
         pie.setHoleRadius(42f);
         pie.setCenterText("By Category");
+        pie.setDrawEntryLabels(false);
+        pie.getLegend().setEnabled(true);
+        pie.getLegend().setWordWrapEnabled(true);
         pie.invalidate();
     }
 }

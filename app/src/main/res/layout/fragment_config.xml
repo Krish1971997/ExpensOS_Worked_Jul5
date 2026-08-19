@@ -186,6 +186,23 @@
                     android:hint="xxxx xxxx xxxx xxxx"
                     android:layout_marginBottom="12dp" />
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="SCHEDULER FAILURE ALERT EMAIL"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_muted"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etCfgAlertEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:inputType="textEmailAddress"
+                    android:hint="alerts@example.com"
+                    android:layout_marginBottom="12dp" />
+
                 <Button
                     android:id="@+id/btnSaveCfgGmail"
                     style="@style/BtnPrimary"

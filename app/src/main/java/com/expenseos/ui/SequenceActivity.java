@@ -15,7 +15,9 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
+import com.expenseos.adapter.SequenceAdapter;
 import com.expenseos.db.LocalDB;
+import com.expenseos.util.ConsoleLogger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,7 @@ import java.util.List;
 public class SequenceActivity extends AppCompatActivity implements SequenceAdapter.Listener {
 
     private LocalDB localDB;
+    private final ConsoleLogger log = ConsoleLogger.get();
     private SequenceAdapter adapter;
     private final List<SequenceAdapter.SequenceRow> rows = new ArrayList<>();
 
@@ -85,7 +88,37 @@ public class SequenceActivity extends AppCompatActivity implements SequenceAdapt
                 .show();
     }
 
+    /**
+     * Checks whether newNextId would collide with a row that already exists
+     * in tableName's "id" column. Manual next_id edits must stay AHEAD of
+     * the highest id currently in use, or the very next insert would reuse
+     * an id that's already taken.
+     */
+    private boolean idAlreadyInUse(String tableName, long candidateNextId) {
+        SQLiteDatabase db = localDB.getReadableDatabase();
+        try (Cursor c = db.rawQuery(
+                "SELECT COUNT(*) FROM " + tableName + " WHERE id >= ?",
+                new String[]{String.valueOf(candidateNextId)})) {
+            if (c.moveToFirst()) return c.getInt(0) > 0;
+        } catch (Exception e) {
+            // Table might not have a plain "id" column (edge case) — don't
+            // block the edit if we can't verify, just let it through.
+            return false;
+        }
+        return false;
+    }
+
     private void updateNextId(String tableName, long newNextId) {
+        if (idAlreadyInUse(tableName, newNextId)) {
+            String msg = "Blocked edit on " + tableName + ": id " + newNextId + " already in use (would collide on next insert)";
+            log.warn(msg);
+            Toast.makeText(this,
+                    "Blocked: " + tableName + " already has a row with id ≥ " + newNextId
+                            + ". Pick a value higher than the current max id.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+
         SQLiteDatabase wdb = localDB.getWritableDatabase();
         ContentValues cv = new ContentValues();
         cv.put("next_id", newNextId);
@@ -93,8 +126,10 @@ public class SequenceActivity extends AppCompatActivity implements SequenceAdapt
         if (rowsUpdated > 0) {
             adapter.updateRow(tableName, newNextId);
             Toast.makeText(this, tableName + " → next_id set to " + newNextId, Toast.LENGTH_SHORT).show();
+            log.success("Sequence edited: " + tableName + " → next_id=" + newNextId);
         } else {
             Toast.makeText(this, "Update failed", Toast.LENGTH_SHORT).show();
+            log.error("Sequence edit failed for " + tableName + " (no row updated)");
         }
     }
 
@@ -103,6 +138,7 @@ public class SequenceActivity extends AppCompatActivity implements SequenceAdapt
         localDB.resyncSequences(tableName);
         loadRows();
         Toast.makeText(this, tableName + " resynced from data", Toast.LENGTH_SHORT).show();
+        log.info("Sequence resynced: " + tableName);
     }
 
     private void resyncAll() {
@@ -111,5 +147,6 @@ public class SequenceActivity extends AppCompatActivity implements SequenceAdapt
         localDB.resyncSequences(tables);
         loadRows();
         Toast.makeText(this, "All sequences resynced", Toast.LENGTH_SHORT).show();
+        log.info("Sequence resynced ALL (" + tables.length + " tables)");
     }
 }

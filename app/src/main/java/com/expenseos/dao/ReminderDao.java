@@ -12,9 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ReminderDao {
+    private final Context ctx;
     private final LocalDB db;
 
     public ReminderDao(Context ctx) {
+        this.ctx = ctx;
         db = LocalDB.getInstance(ctx);
     }
 
@@ -70,8 +72,25 @@ public class ReminderDao {
      * Cascade delete: event_reminders rows referencing this reminder go too (FK ON DELETE — see note below).
      */
     public void delete(long id) {
-        db.getWritableDatabase().delete("event_reminders", "reminder_id=?", new String[]{String.valueOf(id)});
-        db.getWritableDatabase().delete("reminders", "id=?", new String[]{String.valueOf(id)});
+        SQLiteDatabase wdb = db.getWritableDatabase();
+        try (Cursor c = wdb.rawQuery(
+                "SELECT name, offset_value, offset_unit, time_hour, time_minute FROM reminders WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("offset_value", c.getInt(1));
+                    row.put("offset_unit", c.getString(2));
+                    row.put("time_hour", c.getInt(3));
+                    row.put("time_minute", c.getInt(4));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("reminders", (int) id, row);
+            }
+        }
+        wdb.delete("event_reminders", "reminder_id=?", new String[]{String.valueOf(id)});
+        wdb.delete("reminders", "id=?", new String[]{String.valueOf(id)});
     }
 
     private ContentValues toCv(Reminder r) {

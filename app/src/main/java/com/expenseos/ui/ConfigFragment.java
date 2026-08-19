@@ -34,7 +34,7 @@ public class ConfigFragment extends Fragment {
     // DB Config
     private EditText etDbUrl, etDbUser, etDbPass;
     // Gmail Config
-    private EditText etGmailFrom, etGmailPass;
+    private EditText etGmailFrom, etGmailPass, etAlertEmail;
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
 
     // Status views — keep references to avoid findViewById on wrong view
@@ -63,6 +63,7 @@ public class ConfigFragment extends Fragment {
         etDbPass = v.findViewById(R.id.etCfgDbPass);
         etGmailFrom = v.findViewById(R.id.etCfgGmailFrom);
         etGmailPass = v.findViewById(R.id.etCfgGmailPass);
+        etAlertEmail = v.findViewById(R.id.etCfgAlertEmail);
 
         etZohoClientId = v.findViewById(R.id.etCfgZohoClientId);
         etZohoClientSecret = v.findViewById(R.id.etCfgZohoClientSecret);
@@ -81,6 +82,7 @@ public class ConfigFragment extends Fragment {
         etDbPass.setText(prefs.getString("db_pass", ""));
         etGmailFrom.setText(prefs.getString("gmail_from", ""));
         etGmailPass.setText(prefs.getString("gmail_pass", ""));
+        etAlertEmail.setText(com.expenseos.util.AppConfig.get(requireContext()).getSchedulerAlertEmail());
 
         // Zoho fields are saved via AppConfig.setZoho() (see btnSaveCfgZoho
         // handler below), never to `prefs` — so they must be loaded from
@@ -269,11 +271,13 @@ public class ConfigFragment extends Fragment {
     private void saveGmailPrefs() {
         String from = etGmailFrom.getText().toString().trim();
         String pass = etGmailPass.getText().toString().trim();
+        String alertEmail = etAlertEmail.getText().toString().trim();
 
         // Save to BOTH — AppConfig (used by GmailSender for the Monthly
         // Category Report) is the source of truth; keep the old prefs write
         // too so nothing else silently breaks.
         com.expenseos.util.AppConfig.get(requireContext()).setGmail(from, pass);
+        com.expenseos.util.AppConfig.get(requireContext()).setSchedulerAlertEmail(alertEmail);
         prefs.edit()
                 .putString("gmail_from", from)
                 .putString("gmail_pass", pass)

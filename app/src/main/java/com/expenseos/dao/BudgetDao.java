@@ -25,28 +25,30 @@ import java.util.Map;
  * - ::txn_type casts removed (SQLite has no enum types; `type` is plain TEXT).
  * - EXTRACT(YEAR/MONTH FROM ...) -> CAST(strftime('%Y'/'%m', ...) AS INTEGER).
  * - NOW() -> datetime('now') in SQL, or Java-side LocalDateTime.now() formatted
- *   the same way dates are stored elsewhere ("yyyy-MM-dd HH:mm:ss").
+ * the same way dates are stored elsewhere ("yyyy-MM-dd HH:mm:ss").
  * - INTERVAL arithmetic -> datetime('now', '-' || ? || ' months').
  * - INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING id has no reliable
- *   Android/SQLite equivalent (RETURNING support varies by bundled SQLite
- *   version) -> upsert() does a manual "find existing row, then update or
- *   insert" instead.
+ * Android/SQLite equivalent (RETURNING support varies by bundled SQLite
+ * version) -> upsert() does a manual "find existing row, then update or
+ * insert" instead.
  * - ON CONFLICT (budget_id, category_id) DO UPDATE -> insertWithOnConflict(
- *   ..., CONFLICT_REPLACE), which requires the UNIQUE(budget_id, category_id)
- *   index that budget_categories already has.
+ * ..., CONFLICT_REPLACE), which requires the UNIQUE(budget_id, category_id)
+ * index that budget_categories already has.
  * - overall_limit / cat_limit are stored as REAL columns (unlike
- *   transactions.amount, which the rest of the app stores as TEXT via
- *   BigDecimal.toString() into a REAL-affinity column) — written here via
- *   BigDecimal.doubleValue() and read back via BigDecimal.valueOf(double),
- *   which is safe for currency amounts at this precision.
+ * transactions.amount, which the rest of the app stores as TEXT via
+ * BigDecimal.toString() into a REAL-affinity column) — written here via
+ * BigDecimal.doubleValue() and read back via BigDecimal.valueOf(double),
+ * which is safe for currency amounts at this precision.
  */
 public class BudgetDao {
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final Context ctx;
     private final SQLiteDatabase db;
 
     public BudgetDao(Context ctx) {
+        this.ctx = ctx;
         db = LocalDB.getInstance(ctx).getWritableDatabase();
     }
 
@@ -89,6 +91,22 @@ public class BudgetDao {
 
     // ── Delete category budget row ─────────────────────────
     public void deleteCategory(int budgetId, int categoryId) {
+        try (Cursor c = db.rawQuery(
+                "SELECT id, cat_limit, alert_pct FROM budget_categories WHERE budget_id=? AND category_id=?",
+                new String[]{String.valueOf(budgetId), String.valueOf(categoryId)})) {
+            if (c.moveToFirst()) {
+                int rowId = c.getInt(0);
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("budget_id", budgetId);
+                    row.put("category_id", categoryId);
+                    row.put("cat_limit", c.getDouble(1));
+                    row.put("alert_pct", c.getInt(2));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("budget_categories", rowId, row);
+            }
+        }
         db.delete("budget_categories", "budget_id=? AND category_id=?",
                 new String[]{String.valueOf(budgetId), String.valueOf(categoryId)});
     }

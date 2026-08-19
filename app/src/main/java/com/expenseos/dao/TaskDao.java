@@ -12,9 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TaskDao {
+    private final Context ctx;
     private final LocalDB db;
 
     public TaskDao(Context ctx) {
+        this.ctx = ctx;
         db = LocalDB.getInstance(ctx);
     }
 
@@ -86,8 +88,25 @@ public class TaskDao {
     }
 
     public void delete(long id) {
-        db.getWritableDatabase().execSQL("PRAGMA foreign_keys = ON;");
-        db.getWritableDatabase().delete("tasks", "id=?", new String[]{String.valueOf(id)});
+        SQLiteDatabase wdb = db.getWritableDatabase();
+        try (Cursor c = wdb.rawQuery(
+                "SELECT name, task_datetime, description, color, google_event_id FROM tasks WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("task_datetime", c.getString(1));
+                    row.put("description", c.isNull(2) ? org.json.JSONObject.NULL : c.getString(2));
+                    row.put("color", c.isNull(3) ? org.json.JSONObject.NULL : c.getString(3));
+                    row.put("google_event_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getString(4));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("tasks", (int) id, row);
+            }
+        }
+        wdb.execSQL("PRAGMA foreign_keys = ON;");
+        wdb.delete("tasks", "id=?", new String[]{String.valueOf(id)});
     }
 
     private void saveEventLinks(long taskId, List<Long> eventIds) {

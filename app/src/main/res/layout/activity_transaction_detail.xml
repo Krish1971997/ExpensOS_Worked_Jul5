@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background"
     android:orientation="vertical">
 
     <!-- Top bar: Back | Prev | Title/Type | Next -->
@@ -387,9 +387,21 @@
         android:padding="12dp">
 
         <Button
-            android:id="@+id/btnDetailSave"
-            android:layout_width="match_parent"
+            android:id="@+id/btnDetailCancel"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
             android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:text="CANCEL"
+            android:textColor="@color/primary"
+            app:strokeColor="@color/primary" />
+
+        <Button
+            android:id="@+id/btnDetailSave"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="2"
             android:backgroundTint="@color/primary"
             android:text="SAVE"
             android:textColor="#FFFFFF" />

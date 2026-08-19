@@ -20,6 +20,9 @@ public class AppConfig {
     public static final String KEY_GMAIL_FROM = "GMAIL_FROM";
     public static final String KEY_GMAIL_APP_PASS = "GMAIL_APP_PASS";
 
+    // ── Scheduler failure alert ──────────────────────────────
+    public static final String KEY_SCHEDULER_ALERT_EMAIL = "scheduler.alert.email";
+
     // ── Zoho WorkDrive keys ─────────────────────────────────
     public static final String KEY_ZOHO_CLIENT_ID = "zoho.client.id";
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
@@ -72,6 +75,10 @@ public class AppConfig {
         return prefs.getString(KEY_GMAIL_APP_PASS, "");
     }
 
+    public String getSchedulerAlertEmail() {
+        return prefs.getString(KEY_SCHEDULER_ALERT_EMAIL, "");
+    }
+
     public String getZohoClientId() {
         return prefs.getString(KEY_ZOHO_CLIENT_ID, "");
     }
@@ -122,6 +129,10 @@ public class AppConfig {
                 .putString(KEY_GMAIL_FROM, from)
                 .putString(KEY_GMAIL_APP_PASS, appPass)
                 .apply();
+    }
+
+    public void setSchedulerAlertEmail(String email) {
+        prefs.edit().putString(KEY_SCHEDULER_ALERT_EMAIL, email).apply();
     }
 
     public void setZoho(String clientId, String secret, String refreshToken, String folderId) {

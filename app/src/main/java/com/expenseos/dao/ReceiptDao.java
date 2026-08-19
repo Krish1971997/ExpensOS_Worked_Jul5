@@ -23,11 +23,13 @@ public class ReceiptDao {
     private static final String TAG = "ReceiptDao";
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
     private final AuditLogDao auditDao;
 
     public ReceiptDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
         auditDao = new AuditLogDao(ctx);
@@ -68,7 +70,9 @@ public class ReceiptDao {
         return list;
     }
 
-    /** Metadata only (no file_data) for listing */
+    /**
+     * Metadata only (no file_data) for listing
+     */
     public List<Receipt> findMetaByTransactionId(int txnId) {
         String sql = "SELECT id, transaction_id, file_name, file_type, file_size, uploaded_at "
                 + "FROM transaction_receipts WHERE transaction_id = ? ORDER BY uploaded_at DESC";
@@ -98,8 +102,29 @@ public class ReceiptDao {
         }
     }
 
-    public void delete(int id, String fileName) {
-        auditDao.logReceiptDelete(id, "user", fileName);
+    public void delete(int id, int transactionId, String fileName) {
+        // file_data is a BLOB — base64-encode it into the JSON snapshot so
+        // it round-trips through recycle_bin's TEXT column.
+        try (Cursor c = db.rawQuery(
+                "SELECT transaction_id, file_name, file_type, file_data, file_size FROM transaction_receipts WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("transaction_id", c.getInt(0));
+                    row.put("file_name", c.getString(1));
+                    row.put("file_type", c.getString(2));
+                    byte[] blob = c.getBlob(3);
+                    row.put("file_data", blob != null
+                            ? android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
+                            : org.json.JSONObject.NULL);
+                    row.put("file_size", c.getInt(4));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("transaction_receipts", id, row);
+            }
+        }
+        auditDao.logReceiptDelete(transactionId, "user", fileName);
         db.delete("transaction_receipts", "id = ?", new String[]{String.valueOf(id)});
     }
 

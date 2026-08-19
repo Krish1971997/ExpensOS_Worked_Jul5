@@ -5,8 +5,9 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical"
+    android:background="@color/surface"
     android:paddingHorizontal="16dp"
-    android:paddingVertical="12dp">
+    android:paddingVertical="14dp">
 
     <TextView
         android:id="@+id/tvTableName"
@@ -16,16 +17,17 @@
         android:textColor="@color/text"
         android:textSize="15sp"
         android:textStyle="bold"
-        tools:text="transactions" />
+        tools:text="backup_history" />
 
     <TextView
         android:id="@+id/tvNextId"
-        android:layout_width="wrap_content"
+        android:layout_width="90dp"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="12dp"
+        android:gravity="end"
+        android:layout_marginEnd="16dp"
         android:textColor="@color/text_muted"
         android:textSize="14sp"
-        tools:text="next_id: 145" />
+        tools:text="next_id: 127" />
 
     <ImageButton
         android:id="@+id/btnEdit"
@@ -44,3 +46,7 @@
         android:contentDescription="Resync" />
 
 </LinearLayout>
+
+    <!-- Add a 1dp divider view in the parent RecyclerView via addItemDecoration
+         (DividerItemDecoration) — already added in SequenceActivity below, so
+         rows render with the horizontal-rule look from your screenshot. -->

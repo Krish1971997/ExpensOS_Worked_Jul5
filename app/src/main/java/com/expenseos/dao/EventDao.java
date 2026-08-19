@@ -13,9 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class EventDao {
+    private final Context ctx;
     private final LocalDB db;
 
     public EventDao(Context ctx) {
+        this.ctx = ctx;
         db = LocalDB.getInstance(ctx);
     }
 
@@ -64,6 +66,20 @@ public class EventDao {
      */
     public void delete(long eventId) {
         SQLiteDatabase wdb = db.getWritableDatabase();
+        try (Cursor c = wdb.rawQuery("SELECT name, offset_direction, offset_days, header FROM events WHERE id=?",
+                new String[]{String.valueOf(eventId)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("offset_direction", c.getString(1));
+                    row.put("offset_days", c.getInt(2));
+                    row.put("header", c.isNull(3) ? org.json.JSONObject.NULL : c.getString(3));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("events", (int) eventId, row);
+            }
+        }
         wdb.execSQL("PRAGMA foreign_keys = ON;");
         wdb.delete("events", "id=?", new String[]{String.valueOf(eventId)});
     }

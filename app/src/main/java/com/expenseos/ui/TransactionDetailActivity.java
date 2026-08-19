@@ -104,6 +104,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private Spinner spCategory, spSubCategory, spPaymentType, spMoveBook;
     private TextView tvSubCategoryLabel;
     private Button btnPrev, btnNext;
+    private boolean isDirty = false; // true once the user touches any field after load
 
     @Override
     protected void onCreate(Bundle s) {
@@ -152,9 +153,11 @@ public class TransactionDetailActivity extends AppCompatActivity {
         btnNext = findViewById(R.id.btnDetailNext);
     }
 
+    // NEW
     private void setupButtons() {
         findViewById(R.id.btnDetailBack).setOnClickListener(v -> finish());
-        findViewById(R.id.btnDetailSave).setOnClickListener(v -> saveTransaction());
+        findViewById(R.id.btnDetailCancel).setOnClickListener(v -> finish()); // discard — nothing is written until Save
+        findViewById(R.id.btnDetailSave).setOnClickListener(v -> saveTransaction(true, true));
         findViewById(R.id.btnDetailDuplicate).setOnClickListener(v -> showDuplicateDialog());
         findViewById(R.id.btnDetailMove).setOnClickListener(v -> moveTransaction());
         findViewById(R.id.btnDetailDelete).setOnClickListener(v ->
@@ -169,18 +172,53 @@ public class TransactionDetailActivity extends AppCompatActivity {
                         .setNegativeButton("Cancel", null)
                         .show());
 
-        btnPrev.setOnClickListener(v -> navigateTo(txnDao.findPrevId(txnId, bookId)));
-        btnNext.setOnClickListener(v -> navigateTo(txnDao.findNextId(txnId, bookId)));
+        // Prev/Next used to silently discard unsaved edits (loadTransaction()
+        // just overwrites the form). Now: if the form's dirty, save first —
+        // only navigate once that save succeeds, so a failed validation
+        // keeps you on the current entry instead of losing the edit.
+        btnPrev.setOnClickListener(v -> {
+            if (!isDirty || saveTransaction(true, false)) {
+                navigateTo(txnDao.findPrevId(txnId, bookId));
+            }
+        });
+        btnNext.setOnClickListener(v -> {
+            if (!isDirty || saveTransaction(true, false)) {
+                navigateTo(txnDao.findNextId(txnId, bookId));
+            }
+        });
 
         boxDetailDate.setOnClickListener(v -> showDatePicker());
         boxDetailTime.setOnClickListener(v -> showTimePicker());
         btnDetailAttach.setOnClickListener(v -> pickAttachment());
+
+        markDirtyOn(etAmount);
+        markDirtyOn(etNote);
+    }
+
+    // Flags the form dirty on the first genuine user edit. Attach to any
+    // widget whose change should trigger auto-save on Prev/Next.
+    private void markDirtyOn(EditText field) {
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable e) {
+                isDirty = true;
+            }
+        });
     }
 
     // ── Date / Time pickers — same UX as the Add/Edit screen ──────────
     private void showDatePicker() {
         new DatePickerDialog(this, (view, y, m, d) -> {
             selectedDate = LocalDate.of(y, m + 1, d);
+            isDirty = true;
             updateDateTimeText();
         }, selectedDate.getYear(), selectedDate.getMonthValue() - 1, selectedDate.getDayOfMonth()).show();
     }
@@ -188,6 +226,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private void showTimePicker() {
         new TimePickerDialog(this, (view, h, min) -> {
             selectedTime = LocalTime.of(h, min);
+            isDirty = true;
             updateDateTimeText();
         }, selectedTime.getHour(), selectedTime.getMinute(), false).show();
     }
@@ -264,6 +303,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
                     isInitial = false;
                     return;
                 }
+                isDirty = true;
                 if (pos >= 0 && pos < currentCategories.size()) {
                     loadSubCategoriesFor(currentCategories.get(pos).getId());
                 }
@@ -290,12 +330,59 @@ public class TransactionDetailActivity extends AppCompatActivity {
             bookNames.add(books.get(i).getName());
             if (books.get(i).getId() == current.getBookId()) selBook = i;
         }
+// NEW
         ArrayAdapter<String> bAdp = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, bookNames);
         bAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spMoveBook.setAdapter(bAdp);
         spMoveBook.setSelection(selBook);
         spMoveBook.setTag(books);
+
+        // A fresh load (initial open, or after Prev/Next) is a clean slate —
+        // reset dirty tracking, and attach the item-selected listeners AFTER
+        // the programmatic setSelection() calls above so loading the record
+        // doesn't itself mark the form dirty.
+        isDirty = false;
+        spCategory.post(() -> spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                isDirty = true;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        }));
+        spSubCategory.post(() -> spSubCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                isDirty = true;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        }));
+        spPaymentType.post(() -> spPaymentType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                isDirty = true;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        }));
+        spMoveBook.post(() -> spMoveBook.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                isDirty = true;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        }));
 
         // Prev / Next availability — findPrevId/findNextId return boxed
         // Integer and are null when there's no adjacent transaction, so
@@ -549,7 +636,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
                 .setTitle("Delete attachment?")
                 .setMessage(r.getFileName())
                 .setPositiveButton("Delete", (d, w) -> {
-                    receiptDao.delete(r.getId(), r.getFileName());
+                    receiptDao.delete(r.getId(), r.getTransactionId(), r.getFileName());
                     attachmentList.removeView(row);
                 })
                 .setNegativeButton("Cancel", null)
@@ -593,23 +680,27 @@ public class TransactionDetailActivity extends AppCompatActivity {
     }
 
     // ── Save (update) — same validations as TransactionEntryActivity ──
-    private void saveTransaction() {
+// NEW — now returns whether the save actually happened, and takes flags
+// for whether to toast/reload (Prev/Next calls this with reload=false
+// since navigateTo() is about to load a different transaction anyway).
+    private boolean saveTransaction(boolean showToast, boolean reload) {
         String amtStr = etAmount.getText().toString().trim();
         if (amtStr.isEmpty()) {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
+
         BigDecimal amount;
         try {
             amount = new BigDecimal(amtStr);
         } catch (Exception e) {
             Toast.makeText(this, "Invalid amount", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
 
         if (spCategory.getSelectedItem() == null) {
             Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
         Category selCat = (Category) spCategory.getSelectedItem();
 
@@ -618,13 +709,13 @@ public class TransactionDetailActivity extends AppCompatActivity {
             selSub = (SubCategory) spSubCategory.getSelectedItem();
             if (selSub == null || selSub.getId() == 0) {
                 Toast.makeText(this, "Please select a subcategory", Toast.LENGTH_SHORT).show();
-                return;
+                return false;
             }
         }
 
         if (spPaymentType.getSelectedItem() == null) {
             Toast.makeText(this, "Select a payment type", Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
 
         // Resolve selected book (move)
@@ -653,8 +744,10 @@ public class TransactionDetailActivity extends AppCompatActivity {
         txnDao.update(current, updated);
         txnDao.saveCustomValues(txnId, customValues);
         saveAttachments(txnId);
-        Toast.makeText(this, "✓ Saved!", Toast.LENGTH_SHORT).show();
-        loadTransaction(); // refresh display (also re-renders newly-saved attachments)
+        isDirty = false;
+        if (showToast) Toast.makeText(this, "✓ Saved!", Toast.LENGTH_SHORT).show();
+        if (reload) loadTransaction(); // refresh display (also re-renders newly-saved attachments)
+        return true;
     }
 
     private void saveAttachments(int forTxnId) {

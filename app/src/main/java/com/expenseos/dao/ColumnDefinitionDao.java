@@ -18,10 +18,12 @@ import java.util.List;
  */
 public class ColumnDefinitionDao {
 
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public ColumnDefinitionDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -62,6 +64,19 @@ public class ColumnDefinitionDao {
     }
 
     public void delete(int id) {
+        try (Cursor c = db.rawQuery("SELECT col_name, col_key, type FROM column_definitions WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("col_name", c.getString(0));
+                    row.put("col_key", c.getString(1));
+                    row.put("type", c.getString(2));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("column_definitions", id, row);
+            }
+        }
         db.beginTransaction();
         try {
             db.delete("transaction_custom_values", "col_def_id = ?", new String[]{String.valueOf(id)});

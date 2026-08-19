@@ -95,10 +95,10 @@ public class SchedulerWorker extends Worker {
                     break;
                 }
                 case "BUDGET": {
-                    // No Budget feature ported to the Android app yet — skip
-                    // gracefully instead of failing every tick.
-                    ok = true;
-                    message = "Budget feature not available on mobile yet — skipped";
+                    BudgetOutcome o = runBudgetAllocation(ctx);
+                    ok = o.ok;
+                    message = o.message;
+                    rows = o.categoriesAllocated;
                     break;
                 }
                 case "NEON_SYNC_PUSH": {
@@ -137,6 +137,28 @@ public class SchedulerWorker extends Worker {
             LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
             dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
             log.error("✘ " + s.getDisplayName() + " failed: " + e.getMessage());
+            sendFailureAlert(ctx, s, e);
+        }
+    }
+
+    // Best-effort email on any scheduler failure — swallowed on error so an
+    // alert-sending problem (bad SMTP creds, no network) never masks the
+    // original failure that's already been logged above.
+    private void sendFailureAlert(Context ctx, SchedulerConfig s, Exception failure) {
+        String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
+        if (alertEmail == null || alertEmail.isBlank()) {
+            log.warn("Scheduler failure alert skipped — no alert email configured");
+            return;
+        }
+        try {
+            String subject = "ExpenseOS scheduler failed: " + s.getDisplayName();
+            String html = "<p><b>Scheduler:</b> " + s.getDisplayName() + " (" + s.getName() + ")</p>"
+                    + "<p><b>Failed at:</b> " + LocalDateTime.now() + "</p>"
+                    + "<p><b>Error:</b> " + (failure.getMessage() != null ? failure.getMessage() : failure.toString()) + "</p>";
+            com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, null);
+            log.info("Failure alert emailed to " + alertEmail + " for " + s.getDisplayName());
+        } catch (Exception mailEx) {
+            log.error("Failed to send scheduler failure alert: " + mailEx.getMessage());
         }
     }
 
@@ -260,6 +282,83 @@ public class SchedulerWorker extends Worker {
     private static class MonthlyReportOutcome {
         boolean ok = false;
         String message = "";
+    }
+
+    // ── BUDGET: applies the saved allocation-template (% split per
+    // category, set once via BudgetConfigActivity) to the CURRENT month for
+    // the active book. Mirrors MONTHLY_CATEGORY_REPORT's single-active-book
+    // convention rather than looping every book. If no template was ever
+    // saved for this book, skip cleanly (don't fail the tick).
+    private BudgetOutcome runBudgetAllocation(Context ctx) {
+        BudgetOutcome outcome = new BudgetOutcome();
+        try {
+            int bookId = com.expenseos.util.AppConfig.get(ctx).getActiveBookId();
+            com.expenseos.dao.BudgetTemplateDao templateDao = new com.expenseos.dao.BudgetTemplateDao(ctx);
+
+            if (!templateDao.hasTemplate(bookId)) {
+                outcome.ok = true;
+                outcome.message = "No budget template configured for this book — skipped";
+                return outcome;
+            }
+
+            java.time.LocalDate now = java.time.LocalDate.now();
+            int year = now.getYear();
+            int month = now.getMonthValue();
+
+            java.math.BigDecimal overallLimit = templateDao.loadDefaultOverallLimit(bookId);
+            java.util.Map<Integer, java.math.BigDecimal> percents = templateDao.loadPercents(bookId);
+
+            if (overallLimit == null || percents.isEmpty()) {
+                outcome.ok = true;
+                outcome.message = "Budget template incomplete — skipped";
+                return outcome;
+            }
+
+            com.expenseos.dao.BudgetDao budgetDao = new com.expenseos.dao.BudgetDao(ctx);
+
+            // Don't overwrite a budget the user already has for this month
+            // (e.g. they already opened Budget tab and set/adjusted it manually).
+            if (budgetDao.findByMonth(bookId, year, month) != null) {
+                outcome.ok = true;
+                outcome.message = "Budget already exists for " + month + "/" + year + " — skipped";
+                return outcome;
+            }
+
+            com.expenseos.model.Budget b = new com.expenseos.model.Budget();
+            b.setBookId(bookId);
+            b.setYear(year);
+            b.setMonth(month);
+            b.setOverallLimit(overallLimit);
+            int budgetId = budgetDao.upsert(b);
+
+            int count = 0;
+            for (java.util.Map.Entry<Integer, java.math.BigDecimal> e : percents.entrySet()) {
+                java.math.BigDecimal amt = overallLimit.multiply(e.getValue())
+                        .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                com.expenseos.model.BudgetCategory bc = new com.expenseos.model.BudgetCategory();
+                bc.setBudgetId(budgetId);
+                bc.setCategoryId(e.getKey());
+                bc.setCatLimit(amt);
+                bc.setAlertPct(80);
+                budgetDao.upsertCategory(bc);
+                count++;
+            }
+
+            outcome.ok = true;
+            outcome.categoriesAllocated = count;
+            outcome.message = "Budget auto-created for " + java.time.Month.of(month) + " " + year
+                    + " (" + count + " categories, ₹" + overallLimit.stripTrailingZeros().toPlainString() + " total)";
+        } catch (Exception e) {
+            outcome.ok = false;
+            outcome.message = e.getMessage() != null ? e.getMessage() : e.toString();
+        }
+        return outcome;
+    }
+
+    private static class BudgetOutcome {
+        boolean ok = false;
+        String message = "";
+        int categoriesAllocated = 0;
     }
 
     // ── Blocking wrapper around SyncManager's callback-based API ────

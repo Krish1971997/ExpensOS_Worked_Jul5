@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SubCategoryDao {
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public SubCategoryDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -58,6 +60,18 @@ public class SubCategoryDao {
     }
 
     public void delete(int id) {
+        try (Cursor c = db.rawQuery("SELECT name, category_id FROM sub_categories WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("category_id", c.getInt(1));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("sub_categories", id, row);
+            }
+        }
         db.execSQL("UPDATE transactions SET sub_cat_id=NULL WHERE sub_cat_id=?",
                 new Object[]{id});
         db.delete("sub_categories", "id=?", new String[]{String.valueOf(id)});

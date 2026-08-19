@@ -189,10 +189,23 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, SequenceActivity.class));
         });
 
+// NEW
         View drawerBulkAdd = findViewById(R.id.drawerBulkAdd);
         if (drawerBulkAdd != null) drawerBulkAdd.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, BulkAddActivity.class));
+        });
+
+        View drawerRecycleBin = findViewById(R.id.drawerRecycleBin);
+        if (drawerRecycleBin != null) drawerRecycleBin.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, RecycleBinActivity.class));
+        });
+
+        View drawerSqlConsole = findViewById(R.id.drawerSqlConsole);
+        if (drawerSqlConsole != null) drawerSqlConsole.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, SqlConsoleActivity.class));
         });
     }
 

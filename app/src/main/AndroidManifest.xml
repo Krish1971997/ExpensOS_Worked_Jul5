@@ -91,6 +91,11 @@
             android:name=".ui.RemindersListActivity"
             android:exported="false" />
         <activity android:name=".ui.SequenceActivity" />
+        <activity android:name=".ui.BudgetConfigActivity" />
+        <activity android:name=".ui.SqlConsoleActivity" />
+        <activity
+            android:name=".ui.RecycleBinActivity"
+            android:exported="false" />
         <!-- Needed for camera capture in TransactionEntryActivity — the
              camera app writes the photo to a content:// URI we hand it,
              which requires a FileProvider rather than a raw file:// path. -->

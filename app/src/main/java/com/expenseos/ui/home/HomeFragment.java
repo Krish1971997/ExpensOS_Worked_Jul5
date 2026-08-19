@@ -133,7 +133,11 @@ public class HomeFragment extends Fragment {
                 if (layoutManager != null) {
                     int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();
 
-                    if (firstVisibleItemPosition != RecyclerView.NO_POSITION && !transactions.isEmpty()) {
+                    // FIXED: Added check for firstVisibleItemPosition < transactions.size()
+                    if (firstVisibleItemPosition != RecyclerView.NO_POSITION
+                            && firstVisibleItemPosition < transactions.size()
+                            && !transactions.isEmpty()) {
+
                         Transaction currentTxn = transactions.get(firstVisibleItemPosition);
 
                         if (currentTxn != null && currentTxn.getFormattedDate() != null && tvStickyDateHeader != null) {
@@ -143,6 +147,7 @@ public class HomeFragment extends Fragment {
                 }
             }
         });
+// ──────────────────────────────────────────────────────────────────
         // ──────────────────────────────────────────────────────────────────
 
         currentFilter.setPageSize(Integer.MAX_VALUE);

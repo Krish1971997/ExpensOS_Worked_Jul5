@@ -149,9 +149,68 @@ public class TransactionDao {
     // propagate this delete on the next sync (a plain DELETE leaves no
     // trace for an "updated_at >= ?" sync query to find).
     public void delete(int id) {
-        auditDao.logDelete(id, "user");
+        try (Cursor c = db.rawQuery(
+                "SELECT type, txn_datetime, amount, category_id, sub_categories_id, note, payment_type, book_id " +
+                        "FROM transactions WHERE id=?", new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("type", c.getString(0));
+                    row.put("txn_datetime", c.getString(1));
+                    row.put("amount", c.getString(2));
+                    row.put("category_id", c.isNull(3) ? org.json.JSONObject.NULL : c.getInt(3));
+                    row.put("sub_categories_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getInt(4));
+                    row.put("note", c.isNull(5) ? org.json.JSONObject.NULL : c.getString(5));
+                    row.put("payment_type", c.isNull(6) ? org.json.JSONObject.NULL : c.getString(6));
+                    row.put("book_id", c.isNull(7) ? org.json.JSONObject.NULL : c.getInt(7));
+
+                    // 🟢 1. Attachments JSON (Base64) - snapshot
+                    org.json.JSONArray receiptsArr = new org.json.JSONArray();
+                    try (Cursor rc = db.rawQuery("SELECT id, file_name, file_type, file_data, file_size FROM transaction_receipts WHERE transaction_id=?", new String[]{String.valueOf(id)})) {
+                        while (rc.moveToNext()) {
+                            org.json.JSONObject rObj = new org.json.JSONObject();
+                            rObj.put("id", rc.getInt(0));
+                            rObj.put("file_name", rc.getString(1));
+                            rObj.put("file_type", rc.getString(2));
+                            byte[] blob = rc.getBlob(3);
+                            rObj.put("file_data", blob != null ? android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP) : org.json.JSONObject.NULL);
+                            rObj.put("file_size", rc.getInt(4));
+                            receiptsArr.put(rObj);
+                        }
+                    }
+                    row.put("receipts_data", receiptsArr);
+
+                    // 🟢 2. Audit Logs JSON - snapshot
+                    org.json.JSONArray auditArr = new org.json.JSONArray();
+                    try (Cursor ac = db.rawQuery("SELECT id, action, changed_by, field_name, old_value, new_value, note, changed_at FROM transaction_audit_log WHERE transaction_id=?", new String[]{String.valueOf(id)})) {
+                        while (ac.moveToNext()) {
+                            org.json.JSONObject aObj = new org.json.JSONObject();
+                            aObj.put("id", ac.getInt(0));
+                            aObj.put("action", ac.getString(1));
+                            aObj.put("changed_by", ac.getString(2));
+                            aObj.put("field_name", ac.getString(3));
+                            aObj.put("old_value", ac.getString(4));
+                            aObj.put("new_value", ac.getString(5));
+                            aObj.put("note", ac.getString(6));
+                            aObj.put("changed_at", ac.getString(7));
+                            auditArr.put(aObj);
+                        }
+                    }
+                    row.put("audit_data", auditArr);
+
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("transactions", id, row);
+            }
+        }
+
         db.beginTransaction();
         try {
+            // Child tables deletion
+            db.delete("transaction_receipts", "transaction_id = ?", new String[]{String.valueOf(id)});
+            db.delete("transaction_audit_log", "transaction_id = ?", new String[]{String.valueOf(id)});
+
+            // Parent transaction delete
             db.delete("transactions", "id = ?", new String[]{String.valueOf(id)});
             recordTombstone("transactions", id);
             db.setTransactionSuccessful();

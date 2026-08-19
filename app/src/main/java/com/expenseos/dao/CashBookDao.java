@@ -26,10 +26,12 @@ public class CashBookDao {
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public CashBookDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -126,9 +128,24 @@ public class CashBookDao {
     }
 
     public void delete(int id) {
-        // Only delete if no transactions exist
-        db.execSQL("DELETE FROM cash_books WHERE id=? AND NOT EXISTS (SELECT 1 FROM transactions WHERE book_id=?)",
-                new Object[]{id, id});
+        // Only delete if no transactions exist — same guard as before
+        try (Cursor chk = db.rawQuery("SELECT COUNT(*) FROM transactions WHERE book_id=?", new String[]{String.valueOf(id)})) {
+            if (chk.moveToFirst() && chk.getInt(0) > 0) return;
+        }
+        try (Cursor c = db.rawQuery("SELECT name, description, is_active FROM cash_books WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("description", c.isNull(1) ? org.json.JSONObject.NULL : c.getString(1));
+                    row.put("is_active", c.getInt(2));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("cash_books", id, row);
+            }
+        }
+        db.delete("cash_books", "id=?", new String[]{String.valueOf(id)});
     }
 
     /**
@@ -167,9 +184,60 @@ public class CashBookDao {
      * Cascade delete: transactions → sub_categories(book-specific) → categories(book-specific) → the book itself.
      */
     public void deleteCascade(int bookId) {
+        // Best-effort snapshot before the cascade — recovers the book, its
+        // categories, and its transactions if this was hit by mistake.
+        // (sub_categories and transaction_custom_values are NOT individually
+        // snapshotted — restoring after a cascade gets the structure back,
+        // not every sub-category/custom-field value under it.)
+        RecycleBinDao bin = new RecycleBinDao(ctx);
+        try (Cursor c = db.rawQuery("SELECT name, description, is_active FROM cash_books WHERE id=?",
+                new String[]{String.valueOf(bookId)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("description", c.isNull(1) ? org.json.JSONObject.NULL : c.getString(1));
+                    row.put("is_active", c.getInt(2));
+                } catch (org.json.JSONException ignored) {
+                }
+                bin.put("cash_books", bookId, row);
+            }
+        }
+        try (Cursor c = db.rawQuery("SELECT id, name, type, book_id FROM categories WHERE book_id=?",
+                new String[]{String.valueOf(bookId)})) {
+            while (c.moveToNext()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(1));
+                    row.put("type", c.getString(2));
+                    row.put("book_id", c.getInt(3));
+                } catch (org.json.JSONException ignored) {
+                }
+                bin.put("categories", c.getInt(0), row);
+            }
+        }
+        try (Cursor c = db.rawQuery(
+                "SELECT id, type, txn_datetime, amount, category_id, sub_categories_id, note, payment_type, book_id " +
+                        "FROM transactions WHERE book_id=?", new String[]{String.valueOf(bookId)})) {
+            while (c.moveToNext()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("type", c.getString(1));
+                    row.put("txn_datetime", c.getString(2));
+                    row.put("amount", c.getString(3));
+                    row.put("category_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getInt(4));
+                    row.put("sub_categories_id", c.isNull(5) ? org.json.JSONObject.NULL : c.getInt(5));
+                    row.put("note", c.isNull(6) ? org.json.JSONObject.NULL : c.getString(6));
+                    row.put("payment_type", c.isNull(7) ? org.json.JSONObject.NULL : c.getString(7));
+                    row.put("book_id", c.getInt(8));
+                } catch (org.json.JSONException ignored) {
+                }
+                bin.put("transactions", c.getInt(0), row);
+            }
+        }
+
         db.beginTransaction();
         try {
-            // sub_categories under this book's categories
             db.execSQL(
                     "DELETE FROM sub_categories WHERE category_id IN (SELECT id FROM categories WHERE book_id=?)",
                     new Object[]{bookId});

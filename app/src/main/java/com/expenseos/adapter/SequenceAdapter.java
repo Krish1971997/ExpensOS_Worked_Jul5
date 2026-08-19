@@ -1,4 +1,4 @@
-package com.expenseos.ui;
+package com.expenseos.adapter;
 
 import android.view.LayoutInflater;
 import android.view.View;

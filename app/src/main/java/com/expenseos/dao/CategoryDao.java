@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CategoryDao {
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public CategoryDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -84,6 +86,21 @@ public class CategoryDao {
     }
 
     public void delete(int id) {
+        // Snapshot into the recycle bin before removing, so it (and every
+        // transaction currently pointing at it) can be restored later.
+        try (Cursor c = db.rawQuery("SELECT name, type, book_id FROM categories WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("type", c.getString(1));
+                    row.put("book_id", c.isNull(2) ? org.json.JSONObject.NULL : c.getInt(2));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("categories", id, row);
+            }
+        }
         db.execSQL("UPDATE transactions SET category_id=NULL WHERE category_id=?", new Object[]{id});
         db.delete("categories", "id=?", new String[]{String.valueOf(id)});
     }

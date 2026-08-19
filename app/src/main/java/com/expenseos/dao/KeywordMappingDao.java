@@ -20,6 +20,7 @@ import java.util.Locale;
  * scoping convention as CategoryDao.
  */
 public class KeywordMappingDao {
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
@@ -31,6 +32,7 @@ public class KeywordMappingDao {
                     "LEFT JOIN sub_categories sc ON sc.id = km.sub_category_id ";
 
     public KeywordMappingDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -119,6 +121,22 @@ public class KeywordMappingDao {
     }
 
     public void delete(int id) {
+        try (Cursor c = db.rawQuery(
+                "SELECT keyword, type, category_id, sub_category_id, book_id FROM keyword_mappings WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("keyword", c.getString(0));
+                    row.put("type", c.getString(1));
+                    row.put("category_id", c.getInt(2));
+                    row.put("sub_category_id", c.isNull(3) ? org.json.JSONObject.NULL : c.getInt(3));
+                    row.put("book_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getInt(4));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("keyword_mappings", id, row);
+            }
+        }
         db.delete("keyword_mappings", "id=?", new String[]{String.valueOf(id)});
     }
 

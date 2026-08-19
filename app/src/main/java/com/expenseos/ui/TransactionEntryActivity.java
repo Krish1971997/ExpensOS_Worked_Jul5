@@ -648,7 +648,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
                 .setTitle("Delete attachment?")
                 .setMessage(r.getFileName())
                 .setPositiveButton("Delete", (d, w) -> {
-                    receiptDao.delete(r.getId(), r.getFileName());
+                    receiptDao.delete(r.getId(), r.getTransactionId(), r.getFileName());
                     attachmentList.removeView(row);
                 })
                 .setNegativeButton("Cancel", null)

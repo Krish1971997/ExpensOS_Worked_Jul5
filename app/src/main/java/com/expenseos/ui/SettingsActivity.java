@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -97,6 +98,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     // ── Keywords tab state (auto-suggest category/sub-category from description) ──
     private String kwSearch = "";
+    private int titleTapCount = 0;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -128,6 +130,16 @@ public class SettingsActivity extends AppCompatActivity {
         tvMode.setText(bookScoped
                 ? "📘 Cashbook Settings — applies to this book (or Common)"
                 : "🌐 Global Settings — common categories only");
+
+        // Hidden SQL Console trigger (Tap 7 times)
+        tvMode.setOnClickListener(v -> {
+            titleTapCount++;
+            if (titleTapCount >= 7) {
+                titleTapCount = 0;
+                Toast.makeText(this, "Opening SQL Console...", Toast.LENGTH_SHORT).show();
+                startActivity(new Intent(this, SqlConsoleActivity.class));
+            }
+        });
 
         findViewById(R.id.btnBackSettings).setOnClickListener(v -> finish());
 

@@ -12,10 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PaymentTypeDao {
+    private final Context ctx;
     private final LocalDB helper;
     private final SQLiteDatabase db;
 
     public PaymentTypeDao(Context ctx) {
+        this.ctx = ctx;
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -56,6 +58,18 @@ public class PaymentTypeDao {
         // Transactions already using this type keep their stored text value
         // (payment_type is a plain TEXT column, not a foreign key) — deleting
         // the type here only removes it from future selection.
+        try (Cursor c = db.rawQuery("SELECT name, is_default FROM payment_types WHERE id=?",
+                new String[]{String.valueOf(id)})) {
+            if (c.moveToFirst()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("name", c.getString(0));
+                    row.put("is_default", c.getInt(1));
+                } catch (org.json.JSONException ignored) {
+                }
+                new RecycleBinDao(ctx).put("payment_types", id, row);
+            }
+        }
         db.delete("payment_types", "id=?", new String[]{String.valueOf(id)});
     }
 }

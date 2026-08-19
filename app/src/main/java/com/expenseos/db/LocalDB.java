@@ -11,8 +11,9 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 33; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 35; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
+    // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
     private final ConsoleLogger log = ConsoleLogger.get();
     // Every table that has a manually-assigned "id" column now gets a row
@@ -23,7 +24,8 @@ public class LocalDB extends SQLiteOpenHelper {
             "transactions", "transaction_custom_values", "deleted_records",
             "transaction_audit_log", "transaction_receipts", "schedulers",
             "scheduler_log", "budgets", "budget_categories", "payment_types",
-            "keyword_mappings", "events", "reminders", "event_reminders", "tasks", "task_events", "task_alarms"
+            "keyword_mappings", "events", "reminders", "event_reminders", "tasks",
+            "task_events", "task_alarms", "recycle_bin", "budget_allocation_template"
     };
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -329,6 +331,27 @@ public class LocalDB extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE IF NOT EXISTS id_sequences (" +
                 "table_name TEXT PRIMARY KEY," +
                 "next_id    INTEGER NOT NULL DEFAULT 1)");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS budget_allocation_template (" +
+                "id INTEGER PRIMARY KEY, " +
+                "book_id INTEGER NOT NULL, " +
+                "category_id INTEGER NOT NULL, " +
+                "percent REAL NOT NULL, " +
+                "default_overall_limit REAL, " +
+                "updated_at TEXT, " +
+                "UNIQUE(book_id, category_id))");
+
+        // recycle_bin — soft-delete holding area. record_id keeps the row's
+        // ORIGINAL id from its source table so restore() puts it back
+        // exactly where it was; record_json is a full column snapshot.
+        db.execSQL("CREATE TABLE IF NOT EXISTS recycle_bin (" +
+                "id          INTEGER PRIMARY KEY," +
+                "table_name  TEXT NOT NULL," +
+                "record_id   INTEGER NOT NULL," +
+                "record_json TEXT NOT NULL," +
+                "deleted_at  TEXT DEFAULT (datetime('now'))," +
+                "UNIQUE(table_name, record_id))");
+
         // Seed default categories
         String[] incomes = {"Salary", "Freelance", "Gift", "Other"};
         String[] expenses = {"Food", "Transport", "Merchandise",
@@ -340,7 +363,9 @@ public class LocalDB extends SQLiteOpenHelper {
         // Now that every table exists (and seed rows are in), initialise
         // each table's sequence to MAX(id)+1 so the next insert doesn't
         // collide with anything already present.
+
         initSequences(db);
+
     }
 
     @Override
@@ -731,7 +756,34 @@ public class LocalDB extends SQLiteOpenHelper {
                     "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
                     "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
                     "UNIQUE(event_id, type))");
+
+            initSequences(db);
         }
+
+        if (oldV < 34) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS budget_allocation_template (" +
+                    "id INTEGER PRIMARY KEY, " +
+                    "book_id INTEGER NOT NULL, " +
+                    "category_id INTEGER NOT NULL, " +
+                    "percent REAL NOT NULL, " +
+                    "default_overall_limit REAL, " +
+                    "updated_at TEXT, " +
+                    "UNIQUE(book_id, category_id))");
+
+            initSequences(db);
+        }
+
+        if (oldV < 35) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS recycle_bin (" +
+                    "id          INTEGER PRIMARY KEY," +
+                    "table_name  TEXT NOT NULL," +
+                    "record_id   INTEGER NOT NULL," +
+                    "record_json TEXT NOT NULL," +
+                    "deleted_at  TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(table_name, record_id))");
+            initSequences(db);
+        }
+
 
     }
 
@@ -796,6 +848,17 @@ public class LocalDB extends SQLiteOpenHelper {
         }
         seedDefaultPaymentTypes(db);
         db.execSQL("UPDATE transactions SET payment_type='UPI' WHERE payment_type IS NULL OR payment_type=''");
+
+        if (!tableExists(db, "recycle_bin")) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS recycle_bin (" +
+                    "id          INTEGER PRIMARY KEY," +
+                    "table_name  TEXT NOT NULL," +
+                    "record_id   INTEGER NOT NULL," +
+                    "record_json TEXT NOT NULL," +
+                    "deleted_at  TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(table_name, record_id))");
+        }
+
     }
 
     // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க
@@ -835,9 +898,21 @@ public class LocalDB extends SQLiteOpenHelper {
     private void initSequences(SQLiteDatabase db) {
         for (String table : ID_TABLES) {
             if (!tableExists(db, table)) continue;
-            db.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
-                    "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
+            db.execSQL(nextIdSql(db, table));
         }
+    }
+
+    // next_id must clear BOTH the live table's own ids AND anything sitting
+    // in the recycle bin for that table — otherwise a new row can steal an
+    // id a later Restore needs, and the restore fails or overwrites it.
+    private String nextIdSql(SQLiteDatabase db, String table) {
+        String binMax = tableExists(db, "recycle_bin")
+                ? "COALESCE((SELECT MAX(record_id) FROM recycle_bin WHERE table_name='" + table + "'),0)"
+                : "0";
+        return "INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
+                "VALUES('" + table + "', MAX(" +
+                "COALESCE((SELECT MAX(id) FROM " + table + "),0), " + binMax +
+                ") + 1)";
     }
 
     private boolean tableExists(SQLiteDatabase db, String tableName) {
@@ -895,8 +970,7 @@ public class LocalDB extends SQLiteOpenHelper {
         SQLiteDatabase wdb = getWritableDatabase();
         for (String table : tables) {
             if (!tableExists(wdb, table)) continue;
-            wdb.execSQL("INSERT OR REPLACE INTO id_sequences(table_name, next_id) " +
-                    "VALUES('" + table + "', (SELECT COALESCE(MAX(id),0)+1 FROM " + table + "))");
+            wdb.execSQL(nextIdSql(wdb, table));
         }
     }
 
