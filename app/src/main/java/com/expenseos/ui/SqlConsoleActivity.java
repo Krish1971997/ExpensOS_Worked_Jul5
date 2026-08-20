@@ -5,10 +5,14 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -19,7 +23,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.expenseos.R;
 import com.expenseos.db.LocalDB;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Developer SQL console for the app's local SQLite DB.
@@ -46,11 +54,35 @@ public class SqlConsoleActivity extends AppCompatActivity {
     private TableLayout resultTable;
     private HorizontalScrollView resultScroll;
 
+    // NEW
     private boolean txnPending = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable timeoutRunnable;
     private Runnable tickRunnable;
     private long txnDeadline;
+
+    // ── SELECT pagination — pgAdmin-style, 100 rows a page ────
+    private static final int PAGE_SIZE = 100;
+    private String lastSelectSql;
+    private int currentPage = 0;
+    private int totalRows = 0;
+    private LinearLayout paginationRow;
+    private TextView tvPageInfo;
+    private Button btnPrevPage, btnNextPage;
+
+    // ── Query history — lets you switch back to an earlier SELECT after
+    // running an UPDATE, without retyping it. Newest first, deduped, capped.
+    private static final int MAX_HISTORY = 10;
+    private final List<String> queryHistory = new ArrayList<>();
+    private HorizontalScrollView scrollHistory;
+    private LinearLayout llHistory;
+
+    // ── Autocomplete ─────────────────────────────────────
+    private static final String[] SQL_KEYWORDS = {"SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "AND", "OR", "NOT", "NULL", "IN", "LIKE", "LIMIT", "OFFSET", "ORDER", "BY", "GROUP", "ASC", "DESC", "AS", "JOIN", "LEFT", "INNER", "ON", "DISTINCT", "COUNT", "SUM", "AVG", "MAX", "MIN"};
+    private final List<String> tableNames = new ArrayList<>();
+    private final List<String> allColumns = new ArrayList<>(); // deduped, across every table
+    private HorizontalScrollView scrollSuggestions;
+    private LinearLayout llSuggestions;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -66,6 +98,12 @@ public class SqlConsoleActivity extends AppCompatActivity {
         btnRollback = findViewById(R.id.btnSqlRollback);
         resultTable = findViewById(R.id.tableSqlResults);
         resultScroll = findViewById(R.id.scrollSqlResults);
+        paginationRow = findViewById(R.id.rowSqlPagination);
+        tvPageInfo = findViewById(R.id.tvSqlPageInfo);
+        btnPrevPage = findViewById(R.id.btnSqlPrevPage);
+        btnNextPage = findViewById(R.id.btnSqlNextPage);
+        btnPrevPage.setOnClickListener(v -> loadPage(currentPage - 1));
+        btnNextPage.setOnClickListener(v -> loadPage(currentPage + 1));
 
         findViewById(R.id.btnSqlBack).setOnClickListener(v -> {
             if (txnPending) {
@@ -75,9 +113,164 @@ public class SqlConsoleActivity extends AppCompatActivity {
             finish();
         });
 
+        scrollSuggestions = findViewById(R.id.scrollSqlSuggestions);
+        llSuggestions = findViewById(R.id.llSqlSuggestions);
+
+        scrollHistory = findViewById(R.id.scrollSqlHistory);
+        llHistory = findViewById(R.id.llSqlHistory);
+
         findViewById(R.id.btnSqlRun).setOnClickListener(v -> runQuery());
         btnCommit.setOnClickListener(v -> commitTxn());
         btnRollback.setOnClickListener(v -> rollbackTxn(false));
+
+        loadSchema();
+        wireAutocomplete();
+    }
+
+    private void pushHistory(String sql) {
+        queryHistory.remove(sql); // move to front if it's already there
+        queryHistory.add(0, sql);
+        while (queryHistory.size() > MAX_HISTORY) queryHistory.remove(queryHistory.size() - 1);
+        renderHistory();
+    }
+
+    private void renderHistory() {
+        llHistory.removeAllViews();
+        if (queryHistory.isEmpty()) {
+            scrollHistory.setVisibility(View.GONE);
+            return;
+        }
+        scrollHistory.setVisibility(View.VISIBLE);
+        for (String sql : queryHistory) {
+            TextView chip = new TextView(this);
+            String label = sql.length() > 28 ? sql.substring(0, 28) + "…" : sql;
+            chip.setText(label);
+            chip.setTextSize(11);
+            chip.setTextColor(getColor(R.color.primary));
+            chip.setBackgroundResource(R.drawable.bg_chip_suggestion);
+            chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMarginEnd(dp(6));
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(v -> {
+                etSql.setText(sql);
+                etSql.setSelection(sql.length());
+            });
+            llHistory.addView(chip);
+        }
+    }
+
+    // ── Load table/column names once, from sqlite_master + PRAGMA ────
+    private void loadSchema() {
+        try (Cursor c = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name", null)) {
+            while (c.moveToNext()) tableNames.add(c.getString(0));
+        } catch (Exception ignored) {
+        }
+
+        Set<String> cols = new LinkedHashSet<>();
+        for (String table : tableNames) {
+            try (Cursor c = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+                int nameIdx = c.getColumnIndex("name");
+                while (c.moveToNext()) cols.add(c.getString(nameIdx));
+            } catch (Exception ignored) {
+            }
+        }
+        allColumns.addAll(cols);
+    }
+
+    // ── Suggestion chips — filtered by whatever word the cursor is
+    // currently inside, refreshed on every keystroke ─────────────────
+    private void wireAutocomplete() {
+        etSql.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                updateSuggestions();
+            }
+        });
+    }
+
+    private void updateSuggestions() {
+        String text = etSql.getText().toString();
+        int cursor = etSql.getSelectionStart();
+        if (cursor < 0 || cursor > text.length()) {
+            hideSuggestions();
+            return;
+        }
+
+        int start = cursor;
+        while (start > 0 && isWordChar(text.charAt(start - 1))) start--;
+        String prefix = text.substring(start, cursor);
+
+        if (prefix.isEmpty()) {
+            hideSuggestions();
+            return;
+        }
+
+        List<String> matches = new ArrayList<>();
+        String prefixUpper = prefix.toUpperCase(Locale.ROOT);
+        for (String kw : SQL_KEYWORDS) if (kw.startsWith(prefixUpper)) matches.add(kw);
+        for (String t : tableNames)
+            if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)) matches.add(t);
+        for (String col : allColumns)
+            if (col.toUpperCase(Locale.ROOT).startsWith(prefixUpper)) matches.add(col);
+
+        if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(prefix))) {
+            hideSuggestions();
+            return;
+        }
+
+        showSuggestions(matches, start, cursor);
+    }
+
+    private boolean isWordChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
+    }
+
+    private void showSuggestions(List<String> matches, int wordStart, int wordEnd) {
+        llSuggestions.removeAllViews();
+        int max = Math.min(matches.size(), 15);
+        for (int i = 0; i < max; i++) {
+            String word = matches.get(i);
+            llSuggestions.addView(suggestionChip(word, wordStart, wordEnd));
+        }
+        scrollSuggestions.setVisibility(View.VISIBLE);
+    }
+
+    private void hideSuggestions() {
+        scrollSuggestions.setVisibility(View.GONE);
+        llSuggestions.removeAllViews();
+    }
+
+    private TextView suggestionChip(String word, int wordStart, int wordEnd) {
+        TextView chip = new TextView(this);
+        chip.setText(word);
+        chip.setTextSize(12);
+        chip.setTextColor(getColor(R.color.primary));
+        chip.setBackgroundResource(R.drawable.bg_chip_suggestion);
+        chip.setPadding(dp(10), dp(6), dp(10), dp(6));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMarginEnd(dp(6));
+        chip.setLayoutParams(lp);
+        chip.setGravity(Gravity.CENTER);
+
+        chip.setOnClickListener(v -> {
+            String text = etSql.getText().toString();
+            String replacement = word + " ";
+            String newText = text.substring(0, wordStart) + replacement + text.substring(wordEnd);
+            etSql.setText(newText);
+            etSql.setSelection(wordStart + replacement.length());
+            hideSuggestions();
+        });
+        return chip;
     }
 
     private void runQuery() {
@@ -88,11 +281,13 @@ public class SqlConsoleActivity extends AppCompatActivity {
         String keyword = firstWord(sql).toUpperCase(Locale.ROOT);
         switch (keyword) {
             case "SELECT":
+                pushHistory(sql);
                 runSelect(sql);
                 break;
             case "INSERT":
             case "UPDATE":
             case "DELETE":
+                pushHistory(sql);
                 runDml(sql, keyword);
                 break;
             default:
@@ -108,14 +303,55 @@ public class SqlConsoleActivity extends AppCompatActivity {
 
     // ── SELECT — always read-only; runs on the live connection so it also
     // sees any uncommitted change from a currently-open transaction ──────
+    // ── SELECT — always read-only; runs on the live connection so it also
+    // sees any uncommitted change from a currently-open transaction.
+    // Results are paged (100/page) instead of loading everything at once —
+    // a bare `SELECT * FROM transactions` on a table with a couple thousand
+    // rows would otherwise stall the UI trying to render every row.
     private void runSelect(String sql) {
-        try (Cursor c = db.rawQuery(sql, null)) {
-            renderResults(c);
-            tvStatus.setText(c.getCount() + " row" + (c.getCount() == 1 ? "" : "s") + " returned");
-            tvStatus.setTextColor(getColor(R.color.text_secondary));
+        lastSelectSql = sql;
+        try {
+            totalRows = countRows(sql);
         } catch (Exception e) {
             showError(e.getMessage());
+            return;
         }
+        loadPage(0);
+    }
+
+    private int countRows(String sql) throws Exception {
+        try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM (" + sql + ")", null)) {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        }
+    }
+
+    private void loadPage(int page) {
+        if (lastSelectSql == null || page < 0) return;
+        int offset = page * PAGE_SIZE;
+        String pagedSql = "SELECT * FROM (" + lastSelectSql + ") LIMIT " + PAGE_SIZE + " OFFSET " + offset;
+        try (Cursor c = db.rawQuery(pagedSql, null)) {
+            renderResults(c);
+        } catch (Exception e) {
+            showError(e.getMessage());
+            return;
+        }
+
+        currentPage = page;
+        int shownFrom = totalRows == 0 ? 0 : offset + 1;
+        int shownTo = Math.min(offset + PAGE_SIZE, totalRows);
+        tvStatus.setText(totalRows + " row" + (totalRows == 1 ? "" : "s") + " total — showing " + shownFrom + "–" + shownTo);
+        tvStatus.setTextColor(getColor(R.color.text_secondary));
+        updatePaginationUi();
+    }
+
+    private void updatePaginationUi() {
+        int totalPages = (int) Math.ceil(totalRows / (double) PAGE_SIZE);
+        boolean showPager = totalRows > PAGE_SIZE;
+        paginationRow.setVisibility(showPager ? View.VISIBLE : View.GONE);
+        if (!showPager) return;
+        tvPageInfo.setText("Page " + (currentPage + 1) + " of " + Math.max(1, totalPages));
+        btnPrevPage.setEnabled(currentPage > 0);
+        btnNextPage.setEnabled((currentPage + 1) < totalPages);
     }
 
     private void renderResults(Cursor c) {
@@ -167,7 +403,11 @@ public class SqlConsoleActivity extends AppCompatActivity {
             return;
         }
 
-        db.beginTransaction(); // deliberately NOT ended here — stays open until Commit/Rollback
+// NEW — non-exclusive so a SELECT on this same connection can still run
+// while the transaction is pending. beginTransaction() takes an EXCLUSIVE
+// lock by default, which was silently blocking every subsequent query
+// (no error, no toast — it just hangs waiting on the lock).
+        db.beginTransactionNonExclusive(); // deliberately NOT ended here — stays open until Commit/Rollback
         try {
             db.execSQL(sql);
             int affected;
@@ -176,6 +416,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
             }
             resultTable.removeAllViews();
             resultScroll.setVisibility(View.GONE);
+            paginationRow.setVisibility(View.GONE); // DML has no result page to browse
             tvStatus.setText(keyword + " OK — " + affected + " row" + (affected == 1 ? "" : "s") +
                     " affected. NOT committed yet — tap Commit to keep it.");
             tvStatus.setTextColor(getColor(R.color.amber));
@@ -244,6 +485,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
     private void showError(String msg) {
         resultTable.removeAllViews();
         resultScroll.setVisibility(View.GONE);
+        paginationRow.setVisibility(View.GONE);
         tvStatus.setText("✕ " + (msg != null ? msg : "Error"));
         tvStatus.setTextColor(getColor(R.color.red));
     }

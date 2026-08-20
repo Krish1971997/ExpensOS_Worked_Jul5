@@ -171,6 +171,10 @@ public class EntryDetailActivity extends AppCompatActivity {
             lp.rightMargin = (int) (8 * getResources().getDisplayMetrics().density);
             thumb.setLayoutParams(lp);
             thumb.setOnClickListener(v -> openAttachmentPreview(r));
+            thumb.setOnLongClickListener(v -> {
+                Toast.makeText(this, r.getFileName() + " → Receipt ID: " + r.getId(), Toast.LENGTH_SHORT).show();
+                return true;
+            });
             container.addView(thumb);
         }
     }

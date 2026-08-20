@@ -1,5 +1,7 @@
 package com.expenseos.util;
 
+// imports — OLD
+
 import com.expenseos.model.Transaction;
 import com.itextpdf.text.BaseColor;
 import com.itextpdf.text.Document;
@@ -7,14 +9,19 @@ import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
 import com.itextpdf.text.PageSize;
 import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.pdf.BaseFont;
+import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfPageEventHelper;
+import com.itextpdf.text.pdf.PdfTemplate;
 import com.itextpdf.text.pdf.PdfWriter;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -102,19 +109,49 @@ public class ReportGenerator {
     }
 
     // ── PDF (iText 5) ────────────────────────────────────────
+    // Backward-compat overload — no cashbook name / custom title.
     public static void writePdf(List<Transaction> txns, String reportType, OutputStream out) throws Exception {
-        Document doc = new Document(PageSize.A4, 24, 24, 32, 32);
-        PdfWriter.getInstance(doc, out);
+        writePdf(txns, reportType, null, null, out);
+    }
+
+    /**
+     * @param cashbookName printed under the title as "Cashbook: <name>" —
+     *                     pass null/blank to omit.
+     * @param customTitle  overrides the default report title (e.g. "August
+     *                     2026 Expense Report") — pass null/blank to use the
+     *                     default title for the report type.
+     */
+    public static void writePdf(List<Transaction> txns, String reportType, String cashbookName,
+                                String customTitle, OutputStream out) throws Exception {
+        Document doc = new Document(PageSize.A4, 24, 24, 32, 40); // extra bottom margin for the footer
+        PdfWriter writer = PdfWriter.getInstance(doc, out);
+        writer.setPageEvent(new FooterEvent());
         doc.open();
 
         Font titleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
+        Font metaFont = new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL, BaseColor.GRAY);
         Font headFont = new Font(Font.FontFamily.HELVETICA, 10, Font.BOLD, BaseColor.WHITE);
         Font cellFont = new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL);
 
-        Paragraph title = new Paragraph(reportTitle(reportType), titleFont);
+        String titleText = (customTitle != null && !customTitle.trim().isEmpty())
+                ? customTitle.trim() : reportTitle(reportType);
+        Paragraph title = new Paragraph(titleText, titleFont);
         title.setAlignment(Element.ALIGN_CENTER);
-        title.setSpacingAfter(16);
+        title.setSpacingAfter(4);
         doc.add(title);
+
+        if (cashbookName != null && !cashbookName.trim().isEmpty()) {
+            Paragraph cb = new Paragraph("Cashbook: " + cashbookName.trim(), metaFont);
+            cb.setAlignment(Element.ALIGN_CENTER);
+            cb.setSpacingAfter(2);
+            doc.add(cb);
+        }
+
+        String generatedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"));
+        Paragraph gen = new Paragraph("Generated: " + generatedAt, metaFont);
+        gen.setAlignment(Element.ALIGN_CENTER);
+        gen.setSpacingAfter(16);
+        doc.add(gen);
 
         switch (reportType) {
             case TYPE_DAYWISE -> addDaywiseTable(doc, txns, headFont, cellFont);
@@ -126,6 +163,68 @@ public class ReportGenerator {
         }
 
         doc.close();
+    }
+
+    // Draws "Page X of Y" (bottom-right) and "Powered by ExpenseOS"
+    // (bottom-center) on every page. The "of Y" part needs the total page
+    // count, which iText only knows once the whole document is closed — so
+    // a blank PdfTemplate placeholder is reserved on each page and filled
+    // in with the real total at onCloseDocument(), the standard iText 5
+    // trick for this.
+    private static class FooterEvent extends PdfPageEventHelper {
+        private PdfTemplate totalPagesTemplate;
+        private BaseFont baseFont;
+        private static final float FONT_SIZE = 8f;
+
+        @Override
+        public void onOpenDocument(PdfWriter writer, Document document) {
+            try {
+                baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+            } catch (Exception ignored) {
+            }
+            totalPagesTemplate = writer.getDirectContent().createTemplate(30, 16);
+        }
+
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            if (baseFont == null) return;
+            PdfContentByte cb = writer.getDirectContent();
+            float y = document.bottom() - 20;
+            cb.saveState();
+            cb.setColorFill(BaseColor.GRAY);
+
+            // "Page X of " + [template with total], right-aligned
+            String pageLabel = "Page " + writer.getPageNumber() + " of ";
+            float pageLabelWidth = baseFont.getWidthPoint(pageLabel, FONT_SIZE);
+            cb.beginText();
+            cb.setFontAndSize(baseFont, FONT_SIZE);
+            cb.setTextMatrix(document.right() - pageLabelWidth - 30, y);
+            cb.showText(pageLabel);
+            cb.endText();
+            cb.addTemplate(totalPagesTemplate, document.right() - 30, y);
+
+            // "Powered by ExpenseOS", centered
+            String powered = "Powered by ExpenseOS";
+            float poweredWidth = baseFont.getWidthPoint(powered, FONT_SIZE);
+            cb.beginText();
+            cb.setFontAndSize(baseFont, FONT_SIZE);
+            cb.setTextMatrix((document.left() + document.right() - poweredWidth) / 2, y);
+            cb.showText(powered);
+            cb.endText();
+
+            cb.restoreState();
+        }
+
+        @Override
+        public void onCloseDocument(PdfWriter writer, Document document) {
+            if (baseFont == null) return;
+            totalPagesTemplate.beginText();
+            totalPagesTemplate.setFontAndSize(baseFont, FONT_SIZE);
+            totalPagesTemplate.setColorFill(BaseColor.GRAY);
+            totalPagesTemplate.setTextMatrix(0, 0);
+            totalPagesTemplate.showText(String.valueOf(writer.getPageNumber()));
+            totalPagesTemplate.endText();
+        }
     }
 
     private static String reportTitle(String type) {

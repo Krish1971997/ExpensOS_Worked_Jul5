@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 35; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 36; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -341,13 +341,11 @@ public class LocalDB extends SQLiteOpenHelper {
                 "updated_at TEXT, " +
                 "UNIQUE(book_id, category_id))");
 
-        // recycle_bin — soft-delete holding area. record_id keeps the row's
-        // ORIGINAL id from its source table so restore() puts it back
-        // exactly where it was; record_json is a full column snapshot.
         db.execSQL("CREATE TABLE IF NOT EXISTS recycle_bin (" +
                 "id          INTEGER PRIMARY KEY," +
                 "table_name  TEXT NOT NULL," +
                 "record_id   INTEGER NOT NULL," +
+                "book_id     INTEGER," +
                 "record_json TEXT NOT NULL," +
                 "deleted_at  TEXT DEFAULT (datetime('now'))," +
                 "UNIQUE(table_name, record_id))");
@@ -784,6 +782,11 @@ public class LocalDB extends SQLiteOpenHelper {
             initSequences(db);
         }
 
+        if (oldV < 36) {
+            if (!isColumnExists(db, "recycle_bin", "book_id")) {
+                db.execSQL("ALTER TABLE recycle_bin ADD COLUMN book_id INTEGER");
+            }
+        }
 
     }
 
@@ -854,11 +857,13 @@ public class LocalDB extends SQLiteOpenHelper {
                     "id          INTEGER PRIMARY KEY," +
                     "table_name  TEXT NOT NULL," +
                     "record_id   INTEGER NOT NULL," +
+                    "book_id     INTEGER," +
                     "record_json TEXT NOT NULL," +
                     "deleted_at  TEXT DEFAULT (datetime('now'))," +
                     "UNIQUE(table_name, record_id))");
+        } else if (!isColumnExists(db, "recycle_bin", "book_id")) {
+            db.execSQL("ALTER TABLE recycle_bin ADD COLUMN book_id INTEGER");
         }
-
     }
 
     // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க

@@ -233,6 +233,10 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         h.typeBadge.setBackgroundColor(ContextCompat.getColor(ctx, badgeBg));
 
         h.tvCat.setText(t.getCategoryName() != null ? t.getCategoryName() : "");
+        h.tvCat.setOnLongClickListener(v -> {
+            android.widget.Toast.makeText(ctx, "Transaction ID: " + t.getId(), android.widget.Toast.LENGTH_SHORT).show();
+            return true;
+        });
 
         String sub = t.getSubCategoryName();
         h.tvSubCat.setText(sub != null ? sub : "");

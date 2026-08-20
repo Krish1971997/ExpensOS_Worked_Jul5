@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -81,6 +82,12 @@ public class AuditLogActivity extends AppCompatActivity {
             AuditLog item = data.get(pos);
 
             h.tvId.setText("Txn #" + item.getTransactionId());
+            h.tvId.setOnLongClickListener(v -> {
+                Toast.makeText(v.getContext(),
+                        "Audit Log ID: " + item.getId() + "  |  Transaction ID: " + item.getTransactionId(),
+                        Toast.LENGTH_SHORT).show();
+                return true;
+            });
 
             // CREATE / UPDATE / DELETE Action
             String action = item.getAction() != null ? item.getAction() : "";

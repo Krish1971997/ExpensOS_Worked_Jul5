@@ -63,13 +63,26 @@ public class SubCategoryDao {
         try (Cursor c = db.rawQuery("SELECT name, category_id FROM sub_categories WHERE id=?",
                 new String[]{String.valueOf(id)})) {
             if (c.moveToFirst()) {
+                int categoryId = c.getInt(1);
+                Integer subBookId = null;
+                try (Cursor bc = db.rawQuery("SELECT book_id FROM categories WHERE id=?",
+                        new String[]{String.valueOf(categoryId)})) {
+                    if (bc.moveToFirst() && !bc.isNull(0)) subBookId = bc.getInt(0);
+                }
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("name", c.getString(0));
-                    row.put("category_id", c.getInt(1));
+                    row.put("category_id", categoryId);
+
+                    org.json.JSONArray txnIds = new org.json.JSONArray();
+                    try (Cursor tc = db.rawQuery("SELECT id FROM transactions WHERE sub_cat_id=?",
+                            new String[]{String.valueOf(id)})) {
+                        while (tc.moveToNext()) txnIds.put(tc.getInt(0));
+                    }
+                    row.put("unlinked_transaction_ids", txnIds);
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("sub_categories", id, row);
+                new RecycleBinDao(ctx).put("sub_categories", id, subBookId, row);
             }
         }
         db.execSQL("UPDATE transactions SET sub_cat_id=NULL WHERE sub_cat_id=?",

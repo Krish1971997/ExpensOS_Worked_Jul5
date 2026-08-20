@@ -92,10 +92,13 @@ public class BudgetDao {
     // ── Delete category budget row ─────────────────────────
     public void deleteCategory(int budgetId, int categoryId) {
         try (Cursor c = db.rawQuery(
-                "SELECT id, cat_limit, alert_pct FROM budget_categories WHERE budget_id=? AND category_id=?",
+                "SELECT bc.id, bc.cat_limit, bc.alert_pct, b.book_id " +
+                        "FROM budget_categories bc JOIN budgets b ON b.id = bc.budget_id " +
+                        "WHERE bc.budget_id=? AND bc.category_id=?",
                 new String[]{String.valueOf(budgetId), String.valueOf(categoryId)})) {
             if (c.moveToFirst()) {
                 int rowId = c.getInt(0);
+                int bookId = c.getInt(3);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("budget_id", budgetId);
@@ -104,7 +107,7 @@ public class BudgetDao {
                     row.put("alert_pct", c.getInt(2));
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("budget_categories", rowId, row);
+                new RecycleBinDao(ctx).put("budget_categories", rowId, bookId, row);
             }
         }
         db.delete("budget_categories", "budget_id=? AND category_id=?",

@@ -125,16 +125,17 @@ public class KeywordMappingDao {
                 "SELECT keyword, type, category_id, sub_category_id, book_id FROM keyword_mappings WHERE id=?",
                 new String[]{String.valueOf(id)})) {
             if (c.moveToFirst()) {
+                Integer mapBookId = c.isNull(4) ? null : c.getInt(4);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("keyword", c.getString(0));
                     row.put("type", c.getString(1));
                     row.put("category_id", c.getInt(2));
                     row.put("sub_category_id", c.isNull(3) ? org.json.JSONObject.NULL : c.getInt(3));
-                    row.put("book_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getInt(4));
+                    row.put("book_id", mapBookId == null ? org.json.JSONObject.NULL : mapBookId);
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("keyword_mappings", id, row);
+                new RecycleBinDao(ctx).put("keyword_mappings", id, mapBookId, row);
             }
         }
         db.delete("keyword_mappings", "id=?", new String[]{String.valueOf(id)});

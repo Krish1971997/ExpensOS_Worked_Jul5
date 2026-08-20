@@ -142,7 +142,7 @@ public class CashBookDao {
                     row.put("is_active", c.getInt(2));
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("cash_books", id, row);
+                new RecycleBinDao(ctx).put("cash_books", id, id, row);
             }
         }
         db.delete("cash_books", "id=?", new String[]{String.valueOf(id)});
@@ -184,12 +184,8 @@ public class CashBookDao {
      * Cascade delete: transactions → sub_categories(book-specific) → categories(book-specific) → the book itself.
      */
     public void deleteCascade(int bookId) {
-        // Best-effort snapshot before the cascade — recovers the book, its
-        // categories, and its transactions if this was hit by mistake.
-        // (sub_categories and transaction_custom_values are NOT individually
-        // snapshotted — restoring after a cascade gets the structure back,
-        // not every sub-category/custom-field value under it.)
         RecycleBinDao bin = new RecycleBinDao(ctx);
+
         try (Cursor c = db.rawQuery("SELECT name, description, is_active FROM cash_books WHERE id=?",
                 new String[]{String.valueOf(bookId)})) {
             if (c.moveToFirst()) {
@@ -200,26 +196,42 @@ public class CashBookDao {
                     row.put("is_active", c.getInt(2));
                 } catch (org.json.JSONException ignored) {
                 }
-                bin.put("cash_books", bookId, row);
+                bin.put("cash_books", bookId, bookId, row);
             }
         }
+
         try (Cursor c = db.rawQuery("SELECT id, name, type, book_id FROM categories WHERE book_id=?",
                 new String[]{String.valueOf(bookId)})) {
             while (c.moveToNext()) {
+                int catId = c.getInt(0);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("name", c.getString(1));
                     row.put("type", c.getString(2));
                     row.put("book_id", c.getInt(3));
+
+                    org.json.JSONArray subsArr = new org.json.JSONArray();
+                    try (Cursor sc = db.rawQuery("SELECT id, name FROM sub_categories WHERE category_id=?",
+                            new String[]{String.valueOf(catId)})) {
+                        while (sc.moveToNext()) {
+                            org.json.JSONObject sObj = new org.json.JSONObject();
+                            sObj.put("id", sc.getInt(0));
+                            sObj.put("name", sc.getString(1));
+                            subsArr.put(sObj);
+                        }
+                    }
+                    row.put("sub_categories_data", subsArr);
                 } catch (org.json.JSONException ignored) {
                 }
-                bin.put("categories", c.getInt(0), row);
+                bin.put("categories", catId, bookId, row);
             }
         }
+
         try (Cursor c = db.rawQuery(
                 "SELECT id, type, txn_datetime, amount, category_id, sub_categories_id, note, payment_type, book_id " +
                         "FROM transactions WHERE book_id=?", new String[]{String.valueOf(bookId)})) {
             while (c.moveToNext()) {
+                int txnId = c.getInt(0);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("type", c.getString(1));
@@ -230,19 +242,133 @@ public class CashBookDao {
                     row.put("note", c.isNull(6) ? org.json.JSONObject.NULL : c.getString(6));
                     row.put("payment_type", c.isNull(7) ? org.json.JSONObject.NULL : c.getString(7));
                     row.put("book_id", c.getInt(8));
+
+                    org.json.JSONArray customArr = new org.json.JSONArray();
+                    try (Cursor vc = db.rawQuery(
+                            "SELECT id, col_def_id, value FROM transaction_custom_values WHERE transaction_id=?",
+                            new String[]{String.valueOf(txnId)})) {
+                        while (vc.moveToNext()) {
+                            org.json.JSONObject vObj = new org.json.JSONObject();
+                            vObj.put("id", vc.getInt(0));
+                            vObj.put("col_def_id", vc.getInt(1));
+                            vObj.put("value", vc.isNull(2) ? org.json.JSONObject.NULL : vc.getString(2));
+                            customArr.put(vObj);
+                        }
+                    }
+                    row.put("custom_values_data", customArr);
+
+                    // 🟢 receipts (was missing entirely before — orphaned on cascade delete)
+                    org.json.JSONArray receiptsArr = new org.json.JSONArray();
+                    try (Cursor rc = db.rawQuery(
+                            "SELECT id, file_name, file_type, file_data, file_size FROM transaction_receipts WHERE transaction_id=?",
+                            new String[]{String.valueOf(txnId)})) {
+                        while (rc.moveToNext()) {
+                            org.json.JSONObject rObj = new org.json.JSONObject();
+                            rObj.put("id", rc.getInt(0));
+                            rObj.put("file_name", rc.getString(1));
+                            rObj.put("file_type", rc.getString(2));
+                            byte[] blob = rc.getBlob(3);
+                            rObj.put("file_data", blob != null
+                                    ? android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
+                                    : org.json.JSONObject.NULL);
+                            rObj.put("file_size", rc.getInt(4));
+                            receiptsArr.put(rObj);
+                        }
+                    }
+                    row.put("receipts_data", receiptsArr);
+
+                    // 🟢 audit log (also was missing entirely before)
+                    org.json.JSONArray auditArr = new org.json.JSONArray();
+                    try (Cursor ac = db.rawQuery(
+                            "SELECT id, action, changed_by, field_name, old_value, new_value, note, changed_at " +
+                                    "FROM transaction_audit_log WHERE transaction_id=?", new String[]{String.valueOf(txnId)})) {
+                        while (ac.moveToNext()) {
+                            org.json.JSONObject aObj = new org.json.JSONObject();
+                            aObj.put("id", ac.getInt(0));
+                            aObj.put("action", ac.getString(1));
+                            aObj.put("changed_by", ac.getString(2));
+                            aObj.put("field_name", ac.getString(3));
+                            aObj.put("old_value", ac.getString(4));
+                            aObj.put("new_value", ac.getString(5));
+                            aObj.put("note", ac.getString(6));
+                            aObj.put("changed_at", ac.getString(7));
+                            auditArr.put(aObj);
+                        }
+                    }
+                    row.put("audit_data", auditArr);
                 } catch (org.json.JSONException ignored) {
                 }
-                bin.put("transactions", c.getInt(0), row);
+                bin.put("transactions", txnId, bookId, row);
+            }
+        }
+
+        // 🟢 book-specific keyword mappings (book_id IS NULL / common ones are never touched)
+        try (Cursor c = db.rawQuery(
+                "SELECT id, keyword, type, category_id, sub_category_id FROM keyword_mappings WHERE book_id=?",
+                new String[]{String.valueOf(bookId)})) {
+            while (c.moveToNext()) {
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("keyword", c.getString(1));
+                    row.put("type", c.getString(2));
+                    row.put("category_id", c.getInt(3));
+                    row.put("sub_category_id", c.isNull(4) ? org.json.JSONObject.NULL : c.getInt(4));
+                    row.put("book_id", bookId);
+                } catch (org.json.JSONException ignored) {
+                }
+                bin.put("keyword_mappings", c.getInt(0), bookId, row);
+            }
+        }
+
+        // 🟢 budgets (was never touched at all before — orphaned rows left
+        // behind on every cascade delete) + their budget_categories nested in
+        try (Cursor c = db.rawQuery("SELECT id, year, month, overall_limit FROM budgets WHERE book_id=?",
+                new String[]{String.valueOf(bookId)})) {
+            while (c.moveToNext()) {
+                int budgetId = c.getInt(0);
+                org.json.JSONObject row = new org.json.JSONObject();
+                try {
+                    row.put("book_id", bookId);
+                    row.put("year", c.getInt(1));
+                    row.put("month", c.getInt(2));
+                    row.put("overall_limit", c.getDouble(3));
+
+                    org.json.JSONArray catsArr = new org.json.JSONArray();
+                    try (Cursor bcc = db.rawQuery(
+                            "SELECT id, category_id, cat_limit, alert_pct FROM budget_categories WHERE budget_id=?",
+                            new String[]{String.valueOf(budgetId)})) {
+                        while (bcc.moveToNext()) {
+                            org.json.JSONObject bcObj = new org.json.JSONObject();
+                            bcObj.put("id", bcc.getInt(0));
+                            bcObj.put("category_id", bcc.getInt(1));
+                            bcObj.put("cat_limit", bcc.getDouble(2));
+                            bcObj.put("alert_pct", bcc.getInt(3));
+                            catsArr.put(bcObj);
+                        }
+                    }
+                    row.put("budget_categories_data", catsArr);
+                } catch (org.json.JSONException ignored) {
+                }
+                bin.put("budgets", budgetId, bookId, row);
             }
         }
 
         db.beginTransaction();
+
         try {
+            db.execSQL("DELETE FROM transaction_receipts WHERE transaction_id IN " +
+                    "(SELECT id FROM transactions WHERE book_id=?)", new Object[]{bookId});
+            db.execSQL("DELETE FROM transaction_audit_log WHERE transaction_id IN " +
+                    "(SELECT id FROM transactions WHERE book_id=?)", new Object[]{bookId});
+            db.execSQL("DELETE FROM transaction_custom_values WHERE transaction_id IN " +
+                    "(SELECT id FROM transactions WHERE book_id=?)", new Object[]{bookId});
+            db.execSQL("DELETE FROM keyword_mappings WHERE book_id=?", new Object[]{bookId});
+            db.execSQL("DELETE FROM budget_categories WHERE budget_id IN (SELECT id FROM budgets WHERE book_id=?)",
+                    new Object[]{bookId});
+            db.execSQL("DELETE FROM budgets WHERE book_id=?", new Object[]{bookId});
             db.execSQL(
                     "DELETE FROM sub_categories WHERE category_id IN (SELECT id FROM categories WHERE book_id=?)",
                     new Object[]{bookId});
-            db.execSQL("DELETE FROM transaction_custom_values WHERE transaction_id IN " +
-                    "(SELECT id FROM transactions WHERE book_id=?)", new Object[]{bookId});
             db.execSQL("DELETE FROM transactions WHERE book_id=?", new Object[]{bookId});
             db.execSQL("DELETE FROM categories WHERE book_id=?", new Object[]{bookId});
             db.execSQL("DELETE FROM cash_books WHERE id=?", new Object[]{bookId});

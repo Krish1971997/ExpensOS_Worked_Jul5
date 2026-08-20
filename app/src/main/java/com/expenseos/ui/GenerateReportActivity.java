@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
+import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.SubCategoryDao;
@@ -47,6 +48,7 @@ public class GenerateReportActivity extends AppCompatActivity {
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
     private int bookId;
+    private String cashbookName;
     private TransactionDao txnDao;
     private CategoryDao catDao;
     private SubCategoryDao subCatDao;
@@ -81,6 +83,8 @@ public class GenerateReportActivity extends AppCompatActivity {
 //        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
 //        bookId = prefs.getInt("active_book_id", 0);
         bookId = com.expenseos.util.AppConfig.get(this).getActiveBookId();
+        com.expenseos.model.CashBook activeBook = new CashBookDao(this).findById(bookId);
+        cashbookName = activeBook != null ? activeBook.getName() : "";
         txnDao = new TransactionDao(this);
         catDao = new CategoryDao(this);
         subCatDao = new SubCategoryDao(this);
@@ -448,6 +452,7 @@ public class GenerateReportActivity extends AppCompatActivity {
     }
 
     // ── PDF — Show Preview / Save to Downloads Folder ───────
+
     private void showPdfOptionsSheet() {
         com.google.android.material.bottomsheet.BottomSheetDialog sheet =
                 new com.google.android.material.bottomsheet.BottomSheetDialog(this);
@@ -462,17 +467,42 @@ public class GenerateReportActivity extends AppCompatActivity {
         title.setPadding(dp(20), dp(12), dp(20), dp(12));
         container.addView(title);
 
+        // Editable header/title — defaults to the report type's usual title,
+        // but the user can rename it (e.g. "August 2026 Expense Report")
+        // before either preview or save.
+        android.widget.EditText etTitle = new android.widget.EditText(this);
+        etTitle.setHint("Report title (optional)");
+        etTitle.setText(defaultReportTitle());
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        etLp.leftMargin = dp(20);
+        etLp.rightMargin = dp(20);
+        etLp.bottomMargin = dp(8);
+        etTitle.setLayoutParams(etLp);
+        container.addView(etTitle);
+
         container.addView(sheetOption("👁", "Show Preview", () -> {
             sheet.dismiss();
-            previewPdf();
+            previewPdf(etTitle.getText().toString());
         }));
         container.addView(sheetOption("⬇", "Save to Downloads Folder", () -> {
             sheet.dismiss();
-            if (ensureStoragePermission("pdf-save")) savePdfToDownloads();
+            String customTitle = etTitle.getText().toString();
+            if (ensureStoragePermission("pdf-save")) savePdfToDownloads(customTitle);
         }));
 
         sheet.setContentView(container);
         sheet.show();
+    }
+
+    private String defaultReportTitle() {
+        return switch (currentReportType()) {
+            case ReportGenerator.TYPE_DAYWISE -> "Day-wise Summary";
+            case ReportGenerator.TYPE_CATEGORYWISE -> "Category-wise Summary";
+            case ReportGenerator.TYPE_SUBCATEGORYWISE -> "Sub Category-wise Summary";
+            case ReportGenerator.TYPE_PAYMENTTYPEWISE -> "Payment Type-wise Summary";
+            default -> "All Entries Report";
+        };
     }
 
     private View sheetOption(String emoji, String label, Runnable onClick) {
@@ -509,7 +539,7 @@ public class GenerateReportActivity extends AppCompatActivity {
         return (int) (v * getResources().getDisplayMetrics().density);
     }
 
-    private void previewPdf() {
+    private void previewPdf(String customTitle) {
         try {
             List<Transaction> txns = loadFilteredTransactions();
             String reportType = currentReportType();
@@ -518,7 +548,7 @@ public class GenerateReportActivity extends AppCompatActivity {
             if (!dir.exists()) dir.mkdirs();
             File pdfFile = new File(dir, "preview_" + System.currentTimeMillis() + ".pdf");
             try (FileOutputStream out = new FileOutputStream(pdfFile)) {
-                ReportGenerator.writePdf(txns, reportType, out);
+                ReportGenerator.writePdf(txns, reportType, cashbookName, customTitle, out);
             }
 
             Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
@@ -531,13 +561,13 @@ public class GenerateReportActivity extends AppCompatActivity {
         }
     }
 
-    private void savePdfToDownloads() {
+    private void savePdfToDownloads(String customTitle) {
         List<Transaction> txns = loadFilteredTransactions();
         String reportType = currentReportType();
         String fileName = "Report_" + reportType + "_" + System.currentTimeMillis() + ".pdf";
         try {
             DownloadsSaver.Result result = DownloadsSaver.save(this, fileName, "application/pdf",
-                    out -> ReportGenerator.writePdf(txns, reportType, out));
+                    out -> ReportGenerator.writePdf(txns, reportType, cashbookName, customTitle, out));
             Toast.makeText(this, "Saved to " + result.displayLocation, Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(this, "Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -562,9 +592,11 @@ public class GenerateReportActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != REQ_STORAGE_PERM) return;
 
+// NEW — permission grant resumes the save flow with the default title since
+// the custom-title EditText from the bottom sheet is gone by this point.
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             if ("csv".equals(pendingAction)) generateExcel();
-            else if ("pdf-save".equals(pendingAction)) savePdfToDownloads();
+            else if ("pdf-save".equals(pendingAction)) savePdfToDownloads(defaultReportTitle());
         } else {
             Toast.makeText(this, "Storage permission needed to save to Downloads", Toast.LENGTH_SHORT).show();
         }

@@ -65,7 +65,12 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         CashBook b = data.get(pos);
         h.tvName.setText(b.getName());
+        h.tvName.setOnLongClickListener(v -> {
+            android.widget.Toast.makeText(v.getContext(), b.getName() + " → ID: " + b.getId(), android.widget.Toast.LENGTH_SHORT).show();
+            return true;
+        });
         h.tvCreated.setText("Created: " + b.getFormattedDate());
+        
         h.tvCreated.setText(b.getStatusLabel());
 
         BigDecimal income = b.getTotalIncome() != null ? b.getTotalIncome() : BigDecimal.ZERO;

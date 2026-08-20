@@ -200,7 +200,8 @@ public class TransactionDao {
 
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("transactions", id, row);
+                Integer txnBookId = c.isNull(7) ? null : c.getInt(7);
+                new RecycleBinDao(ctx).put("transactions", id, txnBookId, row);
             }
         }
 

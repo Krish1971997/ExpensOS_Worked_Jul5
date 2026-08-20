@@ -31,6 +31,14 @@
             android:textColor="@color/text"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spRecycleBinScope"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/bg_input_box"
+            android:paddingHorizontal="10dp" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

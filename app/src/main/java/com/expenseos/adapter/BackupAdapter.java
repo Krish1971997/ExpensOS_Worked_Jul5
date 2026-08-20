@@ -55,7 +55,12 @@ public class BackupAdapter extends RecyclerView.Adapter<BackupAdapter.VH> {
     public void onBindViewHolder(@NonNull VH h, int pos) {
         BackupManager.BackupEntry e = data.get(pos);
         h.tvFileName.setText(e.fileName != null ? e.fileName : "—");
+        h.tvFileName.setOnLongClickListener(v -> {
+            android.widget.Toast.makeText(v.getContext(), "Backup ID: " + e.id, android.widget.Toast.LENGTH_SHORT).show();
+            return true;
+        });
         h.tvType.setText(e.backupType != null ? e.backupType : "MANUAL");
+        
         h.tvSize.setText(e.getSizeFormatted());
         h.tvDate.setText(e.createdAt != null
                 ? e.createdAt.substring(0, Math.min(16, e.createdAt.length())) : "");

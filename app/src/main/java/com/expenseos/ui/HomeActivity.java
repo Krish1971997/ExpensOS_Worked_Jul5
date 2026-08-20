@@ -199,7 +199,9 @@ public class HomeActivity extends AppCompatActivity {
         View drawerRecycleBin = findViewById(R.id.drawerRecycleBin);
         if (drawerRecycleBin != null) drawerRecycleBin.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
-            startActivity(new Intent(this, RecycleBinActivity.class));
+            Intent i = new Intent(this, RecycleBinActivity.class);
+            i.putExtra("bookId", bookId);
+            startActivity(i);
         });
 
         View drawerSqlConsole = findViewById(R.id.drawerSqlConsole);

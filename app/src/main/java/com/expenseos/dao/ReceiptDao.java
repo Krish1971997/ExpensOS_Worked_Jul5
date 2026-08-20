@@ -102,13 +102,13 @@ public class ReceiptDao {
         }
     }
 
-    public void delete(int id, int transactionId, String fileName) {
-        // file_data is a BLOB — base64-encode it into the JSON snapshot so
-        // it round-trips through recycle_bin's TEXT column.
+    public void delete(int id, String fileName) {
         try (Cursor c = db.rawQuery(
-                "SELECT transaction_id, file_name, file_type, file_data, file_size FROM transaction_receipts WHERE id=?",
+                "SELECT r.transaction_id, r.file_name, r.file_type, r.file_data, r.file_size, t.book_id " +
+                        "FROM transaction_receipts r JOIN transactions t ON t.id = r.transaction_id WHERE r.id=?",
                 new String[]{String.valueOf(id)})) {
             if (c.moveToFirst()) {
+                Integer receiptBookId = c.isNull(5) ? null : c.getInt(5);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("transaction_id", c.getInt(0));
@@ -121,11 +121,18 @@ public class ReceiptDao {
                     row.put("file_size", c.getInt(4));
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("transaction_receipts", id, row);
+                new RecycleBinDao(ctx).put("transaction_receipts", id, receiptBookId, row);
             }
         }
-        auditDao.logReceiptDelete(transactionId, "user", fileName);
+        auditDao.logReceiptDelete(id, "user", fileName);
         db.delete("transaction_receipts", "id = ?", new String[]{String.valueOf(id)});
+    }
+
+    // Overload for callers that already have the transaction id handy —
+// same behavior; the row lookup by id alone already gives us
+// everything the recycle-bin snapshot needs.
+    public void delete(int id, int transactionId, String fileName) {
+        delete(id, fileName);
     }
 
     private Receipt mapRow(Cursor c) {

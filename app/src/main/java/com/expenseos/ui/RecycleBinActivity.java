@@ -4,6 +4,9 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -24,28 +27,58 @@ import java.util.List;
 public class RecycleBinActivity extends AppCompatActivity {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("d MMM yyyy, hh:mm a");
+    private static final String[] SCOPE_OPTIONS = {"This Cashbook", "All"};
 
+    private int bookId;
     private RecycleBinDao dao;
     private RecyclerView rv;
     private View emptyState;
+    private Spinner spScope;
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_recycle_bin);
 
+        bookId = getIntent().getIntExtra("bookId", -1);
         dao = new RecycleBinDao(this);
         rv = findViewById(R.id.rvRecycleBin);
         emptyState = findViewById(R.id.emptyRecycleBinState);
         rv.setLayoutManager(new LinearLayoutManager(this));
+        spScope = findViewById(R.id.spRecycleBinScope);
 
         findViewById(R.id.btnRecycleBinBack).setOnClickListener(v -> finish());
 
-        load();
+        if (bookId <= 0) {
+            spScope.setVisibility(View.GONE);
+            load(true);
+            return;
+        }
+
+        ArrayAdapter<String> adp = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, SCOPE_OPTIONS);
+        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spScope.setAdapter(adp);
+        spScope.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                load(pos == 1); // 1 = "All"
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
+        // defaults to position 0 ("This Cashbook") — the listener above
+        // fires once on attach and drives the first load(), no extra call needed
     }
 
-    private void load() {
-        List<RecycledItem> items = dao.findAll();
+    private boolean showingAll() {
+        return spScope.getVisibility() == View.VISIBLE && spScope.getSelectedItemPosition() == 1;
+    }
+
+    private void load(boolean showAll) {
+        List<RecycledItem> items = showAll || bookId <= 0 ? dao.findAll() : dao.findByBook(bookId);
         if (items.isEmpty()) {
             rv.setVisibility(View.GONE);
             emptyState.setVisibility(View.VISIBLE);
@@ -82,8 +115,11 @@ public class RecycleBinActivity extends AppCompatActivity {
                 return "Task";
             case "budget_categories":
                 return "Budget Limit";
+            case "budgets":
+                return "Budget";
             default:
                 return table;
+
         }
     }
 
@@ -120,6 +156,13 @@ public class RecycleBinActivity extends AppCompatActivity {
             RecycledItem item = items.get(pos);
             h.tvType.setText(labelFor(item.tableName()));
             h.tvName.setText(item.displayName());
+            h.tvName.setOnLongClickListener(v -> {
+                Toast.makeText(RecycleBinActivity.this,
+                        item.tableName() + " → ID: " + item.id(),
+                        Toast.LENGTH_SHORT).show();
+                return true;
+            });
+
             h.tvDeletedAt.setText(item.deletedAt() != null
                     ? LocalDateTime.parse(item.deletedAt().replace(" ", "T")).format(FMT)
                     : "");
@@ -128,7 +171,7 @@ public class RecycleBinActivity extends AppCompatActivity {
                 boolean ok = dao.restore(item.id());
                 Toast.makeText(RecycleBinActivity.this,
                         ok ? "Restored" : "Couldn't restore — that id is already in use", Toast.LENGTH_SHORT).show();
-                load();
+                load(showingAll());
             });
 
             h.btnPurge.setOnClickListener(v -> new AlertDialog.Builder(RecycleBinActivity.this)
@@ -136,7 +179,7 @@ public class RecycleBinActivity extends AppCompatActivity {
                     .setMessage(item.displayName() + " will be permanently removed and can't be restored.")
                     .setPositiveButton("Delete Forever", (d, w) -> {
                         dao.purge(item.id());
-                        load();
+                        load(showingAll());
                     })
                     .setNegativeButton("Cancel", null)
                     .show());

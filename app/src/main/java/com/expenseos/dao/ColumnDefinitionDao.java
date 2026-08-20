@@ -72,6 +72,22 @@ public class ColumnDefinitionDao {
                     row.put("col_name", c.getString(0));
                     row.put("col_key", c.getString(1));
                     row.put("type", c.getString(2));
+
+                    // Every transaction's saved value for this field — hard
+                    // deleted below, so snapshot each row to restore alongside it.
+                    org.json.JSONArray valuesArr = new org.json.JSONArray();
+                    try (Cursor vc = db.rawQuery(
+                            "SELECT id, transaction_id, value FROM transaction_custom_values WHERE col_def_id=?",
+                            new String[]{String.valueOf(id)})) {
+                        while (vc.moveToNext()) {
+                            org.json.JSONObject vObj = new org.json.JSONObject();
+                            vObj.put("id", vc.getInt(0));
+                            vObj.put("transaction_id", vc.getInt(1));
+                            vObj.put("value", vc.isNull(2) ? org.json.JSONObject.NULL : vc.getString(2));
+                            valuesArr.put(vObj);
+                        }
+                    }
+                    row.put("custom_values_data", valuesArr);
                 } catch (org.json.JSONException ignored) {
                 }
                 new RecycleBinDao(ctx).put("column_definitions", id, row);

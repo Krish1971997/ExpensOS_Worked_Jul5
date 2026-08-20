@@ -72,7 +72,12 @@ public class PassbookAdapter extends RecyclerView.Adapter<PassbookAdapter.VH> {
         h.tvAmount.setTextColor(ContextCompat.getColor(ctx, isCredit ? R.color.green : R.color.red));
 
         h.tvRemark.setText(e.getRemark() != null ? e.getRemark() : e.getRawBody());
+        h.tvRemark.setOnLongClickListener(v -> {
+            android.widget.Toast.makeText(ctx, "SMS ID: " + e.getSmsId(), android.widget.Toast.LENGTH_SHORT).show();
+            return true;
+        });
         h.tvSender.setText(e.getSender());
+        
         h.tvDate.setText(DATE_FMT.format(new java.util.Date(e.getTimestampMillis())));
 
         // Avoid firing the listener while we programmatically set state

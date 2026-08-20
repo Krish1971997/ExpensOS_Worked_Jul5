@@ -51,7 +51,14 @@ public class SchedulerAdapter extends RecyclerView.Adapter<SchedulerAdapter.VH> 
         SchedulerConfig s = items.get(position);
 
         h.tvName.setText(s.getDisplayName() != null ? s.getDisplayName() : s.getName());
+        h.tvName.setOnLongClickListener(v -> {
+            android.widget.Toast.makeText(v.getContext(),
+                    (s.getDisplayName() != null ? s.getDisplayName() : s.getName()) + " → ID: " + s.getId(),
+                    android.widget.Toast.LENGTH_SHORT).show();
+            return true;
+        });
         h.tvRepeat.setText(s.getRepeatDescription());
+        
         h.tvNextRun.setText("Next run: " + s.getNextRunDisplay());
         h.tvLastRun.setText("Last: " + s.getLastRunDisplay());
 

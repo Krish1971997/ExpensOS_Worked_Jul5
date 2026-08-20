@@ -86,19 +86,25 @@ public class CategoryDao {
     }
 
     public void delete(int id) {
-        // Snapshot into the recycle bin before removing, so it (and every
-        // transaction currently pointing at it) can be restored later.
         try (Cursor c = db.rawQuery("SELECT name, type, book_id FROM categories WHERE id=?",
                 new String[]{String.valueOf(id)})) {
             if (c.moveToFirst()) {
+                Integer catBookId = c.isNull(2) ? null : c.getInt(2);
                 org.json.JSONObject row = new org.json.JSONObject();
                 try {
                     row.put("name", c.getString(0));
                     row.put("type", c.getString(1));
-                    row.put("book_id", c.isNull(2) ? org.json.JSONObject.NULL : c.getInt(2));
+                    row.put("book_id", catBookId == null ? org.json.JSONObject.NULL : catBookId);
+
+                    org.json.JSONArray txnIds = new org.json.JSONArray();
+                    try (Cursor tc = db.rawQuery("SELECT id FROM transactions WHERE category_id=?",
+                            new String[]{String.valueOf(id)})) {
+                        while (tc.moveToNext()) txnIds.put(tc.getInt(0));
+                    }
+                    row.put("unlinked_transaction_ids", txnIds);
                 } catch (org.json.JSONException ignored) {
                 }
-                new RecycleBinDao(ctx).put("categories", id, row);
+                new RecycleBinDao(ctx).put("categories", id, catBookId, row);
             }
         }
         db.execSQL("UPDATE transactions SET category_id=NULL WHERE category_id=?", new Object[]{id});

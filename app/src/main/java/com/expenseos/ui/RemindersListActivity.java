@@ -72,8 +72,13 @@ public class RemindersListActivity extends AppCompatActivity {
             Reminder r = reminders.get(pos);
             h.tvName.setText(r.getName());
             h.tvSummary.setText(r.getSummary());
+            h.tvName.setOnLongClickListener(v -> {
+                Toast.makeText(RemindersListActivity.this, r.getName() + " → ID: " + r.getId(), Toast.LENGTH_SHORT).show();
+                return true;
+            });
 
             h.itemView.setOnClickListener(v -> openEdit(r));
+            
             h.btnMenu.setOnClickListener(v -> {
                 PopupMenu m = new PopupMenu(RemindersListActivity.this, v);
                 m.getMenu().add(0, 1, 0, "Edit");

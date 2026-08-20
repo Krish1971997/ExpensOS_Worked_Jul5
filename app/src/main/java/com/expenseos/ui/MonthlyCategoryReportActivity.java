@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
+import com.expenseos.dao.CashBookDao;
 import com.expenseos.util.CategoryComparisonReport;
 import com.expenseos.util.DownloadsSaver;
 import com.expenseos.util.GmailSender;
@@ -36,7 +37,9 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("MMM yyyy");
 
     private int bookId;
+    private String cashbookName;
     private CategoryComparisonReport.Result currentResult;
+
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -54,6 +57,9 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
             finish();
             return;
         }
+
+        com.expenseos.model.CashBook activeBook = new CashBookDao(this).findById(bookId);
+        cashbookName = activeBook != null ? activeBook.getName() : "";
 
         findViewById(R.id.btnMcrBack).setOnClickListener(v -> finish());
 
@@ -163,10 +169,26 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
     // ── Exports ──────────────────────────────────────────────
     private void exportPdf() {
         if (currentResult == null) return;
+
+        EditText etTitle = new EditText(this);
+        etTitle.setHint("Report title (optional)");
+        etTitle.setText("Monthly Category Report");
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        etTitle.setPadding(pad, pad, pad, pad);
+
+        new AlertDialog.Builder(this)
+                .setTitle("PDF title")
+                .setView(etTitle)
+                .setPositiveButton("Generate", (d, w) -> generatePdf(etTitle.getText().toString()))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void generatePdf(String customTitle) {
         exec.execute(() -> {
             try {
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                CategoryComparisonReport.writePdf(currentResult, bos);
+                CategoryComparisonReport.writePdf(currentResult, cashbookName, customTitle, bos);
                 String fileName = "category_report_" + System.currentTimeMillis() + ".pdf";
                 DownloadsSaver.Result r = DownloadsSaver.save(this, fileName, "application/pdf", out -> out.write(bos.toByteArray()));
                 mainHandler.post(() -> Toast.makeText(this, "Saved to " + r.displayLocation, Toast.LENGTH_LONG).show());
@@ -181,7 +203,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         exec.execute(() -> {
             try {
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                CategoryComparisonReport.writeXlsx(currentResult, bos);
+                CategoryComparisonReport.writeXlsx(currentResult, cashbookName, bos);
                 String fileName = "category_report_" + System.currentTimeMillis() + ".xlsx";
                 DownloadsSaver.Result r = DownloadsSaver.save(this, fileName,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -216,12 +238,13 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         exec.execute(() -> {
             try {
                 ByteArrayOutputStream pdfBytes = new ByteArrayOutputStream();
-                CategoryComparisonReport.writePdf(currentResult, pdfBytes);
+                CategoryComparisonReport.writePdf(currentResult, cashbookName, null, pdfBytes);
 
                 String subject = "Monthly Category Report — " +
                         currentResult.months.get(currentResult.months.size() - 1).getMonth()
                                 .getDisplayName(TextStyle.FULL, Locale.ENGLISH);
-                String html = CategoryComparisonReport.buildHtmlEmail(currentResult);
+                String html = CategoryComparisonReport.buildHtmlEmail(currentResult, cashbookName);
+                
                 GmailSender.Attachment attachment = new GmailSender.Attachment(
                         "monthly_category_report.pdf", pdfBytes.toByteArray(), "application/pdf");
 
