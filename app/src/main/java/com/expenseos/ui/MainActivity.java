@@ -52,26 +52,21 @@ public class MainActivity extends AppCompatActivity {
         com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
         requestNotificationPermissionIfNeeded();
 
-        // Settings
-//        findViewById(R.id.btnSettings).setOnClickListener(v ->
-//                startActivity(new Intent(this, SettingsActivity.class)));
-
         // ADD — bottom nav:
         findViewById(R.id.navCashbooks).setOnClickListener(v -> {
-            // already on this screen — just refresh
             loadBooks();
         });
 
-        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);   // <-- add this too
+        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);
 
         findViewById(R.id.navStats).setOnClickListener(v ->
                 startActivity(new Intent(this, StatsActivity.class)));
 
         findViewById(R.id.navPassbook).setOnClickListener(v -> {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(this,
-                    android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                androidx.core.app.ActivityCompat.requestPermissions(this,
-                        new String[]{android.Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
             } else {
                 startActivity(new Intent(this, PassbookActivity.class));
             }
@@ -83,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.navIntegrations).setOnClickListener(v ->
                 startActivity(new Intent(this, IntegrationsActivity.class)));
 
-        // Restore from Cloud — works even with zero local books
+        // Restore from Cloud
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
         findViewById(R.id.btnAllTxn).setOnClickListener(v ->
@@ -119,8 +114,6 @@ public class MainActivity extends AppCompatActivity {
         loadBooks();
     }
 
-    // API 33+ requires POST_NOTIFICATIONS to be granted at runtime, or the
-    // daily reminder notification silently won't show (guarded, not a crash).
     private void requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -185,20 +178,17 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
             return;
         }
-        AppConfig.get(this).setActiveBook(id, name);   // <-- replace SharedPreferences block with this
+        AppConfig.get(this).setActiveBook(id, name);
         startActivity(new Intent(this, HomeActivity.class));
     }
 
     // ── Inner RecyclerView adapter ────────────────────────
-    // NOTE: item_book.xml was redesigned to a single net-amount row with a
-    // per-item menu button (btn_book_menu) instead of separate income/expense
-    // text views and separate Open/Edit buttons. This adapter was updated to
-    // match: tap the row to open, tap the menu (⋮) for Open/Edit options.
     class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
 
         class VH extends RecyclerView.ViewHolder {
             View row;
-            TextView tvName, tvCreated, tvActiveBadge, tvNet;
+            TextView tvName, tvCreated, tvNet;
+            View vStatusBar;
             ImageButton btnMenu;
 
             VH(View v) {
@@ -206,7 +196,7 @@ public class MainActivity extends AppCompatActivity {
                 row = v.findViewById(R.id.row_book_item);
                 tvName = v.findViewById(R.id.tv_book_name);
                 tvCreated = v.findViewById(R.id.tv_book_created);
-                tvActiveBadge = v.findViewById(R.id.tv_book_active);
+                vStatusBar = v.findViewById(R.id.v_book_status_bar);
                 tvNet = v.findViewById(R.id.tv_book_net);
                 btnMenu = v.findViewById(R.id.btn_book_menu);
             }
@@ -227,15 +217,17 @@ public class MainActivity extends AppCompatActivity {
             BigDecimal net = income.subtract(expense);
 
             h.tvName.setText(b.getName());
-//            h.tvCreated.setText(b.getFormattedDate() != null ? b.getFormattedDate() : "");
             h.tvCreated.setText(b.getStatusLabel());
 
             boolean negative = net.signum() < 0;
             h.tvNet.setText((negative ? "-₹" : "₹") + String.format("%,.2f", net.abs()));
             h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
 
-            // Active badge — item_book.xml just shows/hides it (green pill), no INACTIVE state built in
-            h.tvActiveBadge.setVisibility(b.isActive() ? View.VISIBLE : View.GONE);
+            // Sets right-side status bar color based on active/inactive status
+            if (h.vStatusBar != null) {
+                int statusColor = Color.parseColor(b.isActive() ? "#4CAF50" : "#DC2626");
+                h.vStatusBar.setBackgroundColor(statusColor);
+            }
 
             // Row tap = open (only if active)
             h.row.setOnClickListener(v -> {
@@ -248,12 +240,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            // Menu button = Open / Edit
+            // Menu button = Open / Edit / Delete
             h.btnMenu.setOnClickListener(v -> {
                 PopupMenu popup = new PopupMenu(MainActivity.this, v);
                 popup.getMenu().add(0, 1, 0, "Open");
                 popup.getMenu().add(0, 2, 1, "Edit");
-                popup.getMenu().add(0, 3, 2, "Delete");   // <-- new
+                popup.getMenu().add(0, 3, 2, "Delete");
                 popup.setOnMenuItemClickListener(item -> {
                     if (item.getItemId() == 1) {
                         if (b.isActive()) openBook(b.getId(), b.getName());
@@ -263,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
                     } else if (item.getItemId() == 2) {
                         showEditDialog(b);
                         return true;
-                    } else if (item.getItemId() == 3) {          // <-- new
+                    } else if (item.getItemId() == 3) {
                         showDeleteBookDialog(b);
                         return true;
                     }
@@ -360,13 +352,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showRestoreCloudDialog() {
-        com.expenseos.util.AppConfig cfg = AppConfig.get(this);
+        AppConfig cfg = AppConfig.get(this);
         View v = LayoutInflater.from(this).inflate(R.layout.dialog_cloud_restore, null);
         EditText etUrl = v.findViewById(R.id.etRestoreDbUrl);
         EditText etUser = v.findViewById(R.id.etRestoreDbUser);
         EditText etPass = v.findViewById(R.id.etRestoreDbPass);
 
-        // Pre-fill if already configured before (e.g. re-entering after a cancel)
         etUrl.setText(cfg.getDbUrl());
         etUser.setText(cfg.getDbUser());
         etPass.setText(cfg.getDbPassword());
@@ -383,7 +374,7 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(this, "DB URL is required", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    cfg.setDb(url, user, pass); // saved to AppConfig — Config tab will show these too, once inside a book
+                    cfg.setDb(url, user, pass);
                     doCloudRestore();
                 })
                 .setNegativeButton("Cancel", null)
@@ -394,15 +385,15 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, "Restoring from cloud…", Toast.LENGTH_SHORT).show();
         com.expenseos.sync.SyncManager.get().restoreAllFromCloud(this, (ok, summary) -> {
             Toast.makeText(this, ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
-            if (ok) loadBooks(); // refresh the list — restored books now appear
+            if (ok) loadBooks();
         });
     }
 
     private void requestSmsPermissionIfNeeded() {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(this,
-                android.Manifest.permission.READ_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            androidx.core.app.ActivityCompat.requestPermissions(this,
-                    new String[]{android.Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
         }
     }
 }

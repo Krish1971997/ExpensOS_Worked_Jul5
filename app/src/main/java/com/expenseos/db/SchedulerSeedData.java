@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteDatabase;
  * last_run_msg are intentionally left NULL here — this is a fresh install,
  * so there's no real run history yet; the SchedulerWorker will populate
  * these itself the first time each job actually runs on-device.
- *
+ * <p>
  * Call this once from LocalDB.onCreate() (right after the CREATE TABLE
  * statements for `schedulers` / `scheduler_log`), guarded so it only ever
  * runs on first DB creation, not on every upgrade.
@@ -23,7 +23,7 @@ public class SchedulerSeedData {
                 "(1, 'BACKUP', 'Daily Backup', 1, 'DAILY', NULL, 21, 52, " +
                 "NULL, NULL, NULL, '2026-07-17 21:52:00', '2026-06-18 13:58:28', '2026-06-18 13:58:28'), " +
 
-                "(2, 'CASHBOOK', 'Auto Cash Book Creation', 1, 'MONTHLY', '1', 0, 0, " +
+                "(2, 'CASHBOOK', 'Auto Cash Book Creation', 1, 'DAILY', '1', 0, 0, " +
                 "NULL, NULL, NULL, '2026-08-01 00:00:00', '2026-06-18 13:58:28', '2026-06-18 13:58:28'), " +
 
                 "(3, 'BUDGET', 'Auto Budget Assignment', 1, 'MONTHLY', '1', 0, 30, " +

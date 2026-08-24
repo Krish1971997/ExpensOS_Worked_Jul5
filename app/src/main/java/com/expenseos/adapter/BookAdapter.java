@@ -35,7 +35,6 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
     private final int activeId;
     private final OnBookSelected openListener;
     private final OnBookEdit editListener;
-
     private final OnBookDelete deleteListener;
 
     public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener, OnBookEdit editListener, OnBookDelete deleteListener) {
@@ -46,7 +45,6 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
         this.deleteListener = deleteListener;
     }
 
-    // backward-compatible constructors — deleteListener null ஆ இருக்கும்
     public BookAdapter(List<CashBook> data, int activeId, OnBookSelected openListener, OnBookEdit editListener) {
         this(data, activeId, openListener, editListener, null);
     }
@@ -69,8 +67,7 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
             android.widget.Toast.makeText(v.getContext(), b.getName() + " → ID: " + b.getId(), android.widget.Toast.LENGTH_SHORT).show();
             return true;
         });
-        h.tvCreated.setText("Created: " + b.getFormattedDate());
-        
+
         h.tvCreated.setText(b.getStatusLabel());
 
         BigDecimal income = b.getTotalIncome() != null ? b.getTotalIncome() : BigDecimal.ZERO;
@@ -80,8 +77,14 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
         h.tvNet.setText((negative ? "-₹" : "₹") + net.abs().toPlainString());
         h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
 
+        // Status bar color based on active or positive status
         boolean isSelected = b.getId() == activeId;
-        h.tvActive.setVisibility((isSelected || b.isActive()) ? View.VISIBLE : View.GONE);
+        boolean isActiveBook = isSelected || b.isActive();
+        int statusColor = Color.parseColor(isActiveBook ? "#4CAF50" : "#DC2626"); // Green for active, Red for inactive
+
+        if (h.vStatusBar != null) {
+            h.vStatusBar.setBackgroundColor(statusColor);
+        }
 
         h.itemView.setBackgroundColor(isSelected ? Color.parseColor("#E8F5E9") : Color.WHITE);
 
@@ -94,7 +97,7 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
             PopupMenu popup = new PopupMenu(v.getContext(), v);
             popup.getMenu().add(0, 1, 0, "Open");
             popup.getMenu().add(0, 2, 1, "Edit");
-            popup.getMenu().add(0, 3, 2, "Delete");   // <-- new
+            popup.getMenu().add(0, 3, 2, "Delete");
             popup.setOnMenuItemClickListener(item -> {
                 if (item.getItemId() == 1) {
                     if (canOpen && openListener != null) openListener.onOpen(b);
@@ -102,7 +105,7 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
                 } else if (item.getItemId() == 2) {
                     if (editListener != null) editListener.onEdit(b);
                     return true;
-                } else if (item.getItemId() == 3) {                     // <-- new
+                } else if (item.getItemId() == 3) {
                     if (deleteListener != null) deleteListener.onDelete(b);
                     return true;
                 }
@@ -119,7 +122,8 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
 
     static class VH extends RecyclerView.ViewHolder {
         View row;
-        TextView tvName, tvCreated, tvActive, tvNet;
+        View vStatusBar;
+        TextView tvName, tvCreated, tvNet;
         ImageButton btnMenu;
 
         VH(View v) {
@@ -127,9 +131,9 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
             row = v.findViewById(R.id.row_book_item);
             tvName = v.findViewById(R.id.tv_book_name);
             tvCreated = v.findViewById(R.id.tv_book_created);
-            tvActive = v.findViewById(R.id.tv_book_active);
             tvNet = v.findViewById(R.id.tv_book_net);
             btnMenu = v.findViewById(R.id.btn_book_menu);
+            vStatusBar = v.findViewById(R.id.v_book_status_bar);
         }
     }
 }

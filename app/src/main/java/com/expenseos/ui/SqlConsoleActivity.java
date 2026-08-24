@@ -1,5 +1,7 @@
 package com.expenseos.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -77,6 +79,11 @@ public class SqlConsoleActivity extends AppCompatActivity {
     private HorizontalScrollView scrollHistory;
     private LinearLayout llHistory;
 
+    private TextView btnClear, btnCopyAll;
+    // Last-rendered result, kept in parallel to the on-screen table so
+    // "Copy All" doesn't have to re-query — header row first, then data rows.
+    private final List<List<String>> lastResultRows = new ArrayList<>();
+
     // ── Autocomplete ─────────────────────────────────────
     private static final String[] SQL_KEYWORDS = {"SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "AND", "OR", "NOT", "NULL", "IN", "LIKE", "LIMIT", "OFFSET", "ORDER", "BY", "GROUP", "ASC", "DESC", "AS", "JOIN", "LEFT", "INNER", "ON", "DISTINCT", "COUNT", "SUM", "AVG", "MAX", "MIN"};
     private final List<String> tableNames = new ArrayList<>();
@@ -118,10 +125,14 @@ public class SqlConsoleActivity extends AppCompatActivity {
 
         scrollHistory = findViewById(R.id.scrollSqlHistory);
         llHistory = findViewById(R.id.llSqlHistory);
+        btnClear = findViewById(R.id.btnSqlClear);
+        btnCopyAll = findViewById(R.id.btnSqlCopyAll);
 
         findViewById(R.id.btnSqlRun).setOnClickListener(v -> runQuery());
         btnCommit.setOnClickListener(v -> commitTxn());
         btnRollback.setOnClickListener(v -> rollbackTxn(false));
+        btnClear.setOnClickListener(v -> clearResults());
+        btnCopyAll.setOnClickListener(v -> copyAllToClipboard());
 
         loadSchema();
         wireAutocomplete();
@@ -374,14 +385,21 @@ public class SqlConsoleActivity extends AppCompatActivity {
     private void renderResults(Cursor c) {
         resultTable.removeAllViews();
         resultScroll.setVisibility(View.VISIBLE);
+        lastResultRows.clear();
 
-        TableRow header = new TableRow(this);
-        for (String col : c.getColumnNames()) header.addView(cell(col, true));
-        resultTable.addView(header);
+        List<String> header = new ArrayList<>();
+        TableRow headerRow = new TableRow(this);
+        for (String col : c.getColumnNames()) {
+            header.add(col);
+            headerRow.addView(cell(col, true));
+        }
+        resultTable.addView(headerRow);
+        lastResultRows.add(header);
 
         c.moveToPosition(-1);
         while (c.moveToNext()) {
             TableRow row = new TableRow(this);
+            List<String> rowValues = new ArrayList<>();
             for (int i = 0; i < c.getColumnCount(); i++) {
                 String val;
                 switch (c.getType(i)) {
@@ -394,21 +412,34 @@ public class SqlConsoleActivity extends AppCompatActivity {
                     default:
                         val = c.getString(i);
                 }
+                rowValues.add(val);
                 row.addView(cell(val, false));
             }
             resultTable.addView(row);
+            lastResultRows.add(rowValues);
         }
+
+        btnClear.setVisibility(View.VISIBLE);
+        btnCopyAll.setVisibility(lastResultRows.size() > 1 ? View.VISIBLE : View.GONE);
     }
 
+    // NEW — long-press any cell to copy just that value
     private TextView cell(String text, boolean header) {
+        String value = text != null ? text : "NULL";
         TextView tv = new TextView(this);
-        tv.setText(text != null ? text : "NULL");
+        tv.setText(value);
         tv.setPadding(dp(10), dp(6), dp(10), dp(6));
         tv.setTextSize(12);
         tv.setSingleLine(true);
         if (header) {
             tv.setTypeface(null, android.graphics.Typeface.BOLD);
             tv.setBackgroundColor(0xFFF1F5F9);
+        } else {
+            tv.setBackgroundResource(android.R.drawable.list_selector_background);
+            tv.setOnLongClickListener(v -> {
+                copyToClipboard(value, "Cell copied");
+                return true;
+            });
         }
         return tv;
     }
@@ -503,8 +534,42 @@ public class SqlConsoleActivity extends AppCompatActivity {
         resultTable.removeAllViews();
         resultScroll.setVisibility(View.GONE);
         paginationRow.setVisibility(View.GONE);
+        lastResultRows.clear();
+        btnCopyAll.setVisibility(View.GONE);
         tvStatus.setText("✕ " + (msg != null ? msg : "Error"));
         tvStatus.setTextColor(getColor(R.color.red));
+    }
+
+    // ── Clear / Copy All ──────────────────────────────────
+    // Resets the query box/results/status only — queryHistory (the chip
+    // row above the input) is deliberately untouched here. History should
+    // survive a Clear so past queries stay one tap away.
+    private void clearResults() {
+        resultTable.removeAllViews();
+        resultScroll.setVisibility(View.GONE);
+        paginationRow.setVisibility(View.GONE);
+        lastResultRows.clear();
+        etSql.setText("");
+        tvStatus.setText("");
+        btnClear.setVisibility(View.GONE);
+        btnCopyAll.setVisibility(View.GONE);
+        hideSuggestions();
+        // queryHistory / renderHistory() — NOT cleared, stays visible.
+    }
+
+    private void copyAllToClipboard() {
+        if (lastResultRows.isEmpty()) return;
+        StringBuilder sb = new StringBuilder();
+        for (List<String> row : lastResultRows) {
+            sb.append(String.join("\t", row)).append("\n");
+        }
+        copyToClipboard(sb.toString(), (lastResultRows.size() - 1) + " row(s) copied");
+    }
+
+    private void copyToClipboard(String text, String toastMsg) {
+        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText("SQL result", text));
+        Toast.makeText(this, toastMsg, Toast.LENGTH_SHORT).show();
     }
 
     private int dp(int v) {

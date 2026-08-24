@@ -987,7 +987,7 @@ public class LocalDB extends SQLiteOpenHelper {
     }
 
     private void seedDefaultPaymentTypes(SQLiteDatabase db) {
-        String[] defaults = {"UPI", "Cash", "SBI Credit Card", "Axis Credit Card", "Debit Card"};
+        String[] defaults = {"UPI", "Cash", "SBI Credit Card", "Debit Card"};
         for (String name : defaults) {
             db.execSQL("INSERT OR IGNORE INTO payment_types(name) VALUES(?)", new Object[]{name});
         }

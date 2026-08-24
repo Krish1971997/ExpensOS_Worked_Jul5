@@ -192,7 +192,7 @@ public class SchedulerWorker extends Worker {
     // ── CASHBOOK: create this month's set of 3 books if they don't exist ────
     private CashBookResult runCashBook(Context ctx) {
         java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
-        java.time.LocalDate nextMonth = thisMonth.plusMonths(1);
+        java.time.LocalDate nextMonth = thisMonth.plusMonths(2);
 
         String thisMonthName = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
         String nextMonthName = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
