@@ -191,6 +191,12 @@ public class TransactionDetailActivity extends AppCompatActivity {
         boxDetailTime.setOnClickListener(v -> showTimePicker());
         btnDetailAttach.setOnClickListener(v -> pickAttachment());
 
+        findViewById(R.id.btnDetailCalc).setOnClickListener(v ->
+                CalculatorDialog.show(this, etAmount.getText().toString(), resultText -> {
+                    etAmount.setText(resultText);
+                    isDirty = true;
+                }));
+
         markDirtyOn(etAmount);
         markDirtyOn(etNote);
     }

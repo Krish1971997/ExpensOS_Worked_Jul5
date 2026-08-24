@@ -39,8 +39,9 @@ public class SmsReaderService {
                 cv.put("amount", entry.getAmount().toPlainString());
                 cv.put("sender", entry.getSender());
                 cv.put("raw_body", entry.getRawBody());
-                cv.put("remark", entry.getRemark());   // <-- add this line next to cv.put("raw_body", ...)
-                cv.put("timestamp_millis", entry.getTimestampMillis());
+                cv.put("remark", entry.getRemark());
+                cv.put("payment_type", entry.getPaymentType()); // null-safe — ContentValues.put(String,null) stores NULL
+                cv.put("timestamp_millis", entry.getTimestampMillis()); // now the SMS body's own date/time when parsed
                 cv.put("copied", 0);
                 local.insertWithOnConflict("passbook_entries", null, cv, SQLiteDatabase.CONFLICT_IGNORE);
                 found++;

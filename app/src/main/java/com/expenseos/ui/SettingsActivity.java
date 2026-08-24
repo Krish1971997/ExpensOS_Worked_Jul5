@@ -287,6 +287,13 @@ public class SettingsActivity extends AppCompatActivity {
                     String name = etName.getText().toString().trim();
                     if (name.isEmpty()) return;
                     boolean thisBookOnly = finalSpScope != null && finalSpScope.getSelectedItemPosition() == 1;
+
+                    List<Category> dupes = catDao.findByName(name, type, bookScoped && bookId > 0 ? bookId : null, null);
+                    if (!dupes.isEmpty()) {
+                        Toast.makeText(this, "⚠ \"" + name + "\" already exists...", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
                     catDao.insert(name, type, thisBookOnly ? bookId : null);
                     loadCategoryList();
                     Toast.makeText(this, "Category added!", Toast.LENGTH_SHORT).show();
@@ -358,10 +365,10 @@ public class SettingsActivity extends AppCompatActivity {
 
             h.btnDel.setOnClickListener(v ->
                     new AlertDialog.Builder(SettingsActivity.this)
-                            .setTitle("Delete Payment Type")
-                            .setMessage("Delete \"" + c.getName() + "\"?")
+                            .setTitle("Delete Category")
+                            .setMessage("Delete \"" + c.getName() + "\"? Transactions using it will show as uncategorized.")
                             .setPositiveButton("Delete", (d, w) -> {
-                                payDao.delete(c.getId());
+                                catDao.delete(c.getId());
                                 int idx = list.indexOf(c);
                                 if (idx >= 0) {
                                     list.remove(idx);
@@ -1125,6 +1132,13 @@ public class SettingsActivity extends AppCompatActivity {
                 .setPositiveButton("Save", (d, w) -> {
                     String newName = etName.getText().toString().trim();
                     if (newName.isEmpty()) return;
+
+                    List<Category> dupes = catDao.findByName(newName, c.getType(), bookScoped && bookId > 0 ? bookId : null, c.getId());
+                    if (!dupes.isEmpty()) {
+                        Toast.makeText(this, "⚠ \"" + newName + "\" already exists...", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
                     catDao.update(c.getId(), newName);
                     if (finalSpScope != null) {
                         boolean thisBookOnly = finalSpScope.getSelectedItemPosition() == 1;

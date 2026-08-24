@@ -35,8 +35,7 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/tvPassbookType"
+                <TextView android:id="@+id/tvPassbookType"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:paddingHorizontal="8dp"
@@ -46,8 +45,7 @@
                     tools:text="DEBIT"
                     xmlns:tools="http://schemas.android.com/tools" />
 
-                <TextView
-                    android:id="@+id/tvPassbookSender"
+                <TextView android:id="@+id/tvPassbookSender"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
@@ -59,8 +57,7 @@
                     tools:text="AX-FEDBNK"
                     xmlns:tools="http://schemas.android.com/tools" />
 
-                <TextView
-                    android:id="@+id/tvPassbookAmount"
+                <TextView android:id="@+id/tvPassbookAmount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="14sp"
@@ -79,6 +76,19 @@
                 android:textColor="@color/text"
                 android:textSize="12sp"
                 tools:text="Paid to John Store" />
+
+            <!-- tvPassbookRemark-க்கு கீழே, tvPassbookDate-க்கு மேலே சேருங்க -->
+            <TextView android:id="@+id/tvPassbookPaymentType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="#F1F5F9"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="2dp"
+                android:textColor="@color/text_muted"
+                android:textSize="10sp"
+                tools:text="UPI"
+                xmlns:tools="http://schemas.android.com/tools" />
 
             <TextView
                 android:id="@+id/tvPassbookDate"

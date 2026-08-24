@@ -145,20 +145,46 @@ public class SchedulerWorker extends Worker {
     // alert-sending problem (bad SMTP creds, no network) never masks the
     // original failure that's already been logged above.
     private void sendFailureAlert(Context ctx, SchedulerConfig s, Exception failure) {
-        String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
+        log.info("📧 Attempting to send failure alert email for: " + s.getDisplayName());
+
+        com.expenseos.util.AppConfig appConfig = com.expenseos.util.AppConfig.get(ctx);
+        String alertEmail = appConfig.getSchedulerAlertEmail();
+        String gmailFrom = appConfig.getGmailFrom();
+        String gmailAppPass = appConfig.getGmailAppPass();
+
+        // 1. Alert Email Check
         if (alertEmail == null || alertEmail.isBlank()) {
-            log.warn("Scheduler failure alert skipped — no alert email configured");
+            log.warn("⚠️ Scheduler failure alert skipped — no alert email configured in AppConfig!");
             return;
         }
+
+        log.info("📧 Target Alert Email: " + alertEmail);
+        log.info("📧 Configured Gmail From: " + gmailFrom);
+
+        // 2. Sender Credentials Check (GMAIL_FROM & GMAIL_APP_PASS)
+        if (gmailFrom == null || gmailFrom.isBlank() || gmailAppPass == null || gmailAppPass.isBlank()) {
+            log.error("✘ Cannot send email! Sender credentials (getGmailFrom / getGmailAppPass) are missing in AppConfig.");
+            return;
+        }
+
         try {
             String subject = "ExpenseOS scheduler failed: " + s.getDisplayName();
             String html = "<p><b>Scheduler:</b> " + s.getDisplayName() + " (" + s.getName() + ")</p>"
                     + "<p><b>Failed at:</b> " + LocalDateTime.now() + "</p>"
                     + "<p><b>Error:</b> " + (failure.getMessage() != null ? failure.getMessage() : failure.toString()) + "</p>";
+
+            log.info("📧 Sending failure alert email via GmailSender...");
             com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, null);
-            log.info("Failure alert emailed to " + alertEmail + " for " + s.getDisplayName());
+            log.success("✔ Failure alert successfully emailed to " + alertEmail + " for " + s.getDisplayName());
+
         } catch (Exception mailEx) {
-            log.error("Failed to send scheduler failure alert: " + mailEx.getMessage());
+            log.error("✘ Failed to send scheduler failure alert to " + alertEmail + "!");
+            log.error("✘ Exception Reason: " + (mailEx.getMessage() != null ? mailEx.getMessage() : mailEx.toString()));
+
+            // Console UI-இல் முழு Stack Trace தெரிய
+            java.io.StringWriter sw = new java.io.StringWriter();
+            mailEx.printStackTrace(new java.io.PrintWriter(sw));
+            log.error("✘ Details: " + sw);
         }
     }
 

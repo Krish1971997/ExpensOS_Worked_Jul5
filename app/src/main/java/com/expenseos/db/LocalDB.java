@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 36; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 37; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -248,7 +248,8 @@ public class LocalDB extends SQLiteOpenHelper {
                 "amount           TEXT NOT NULL," +
                 "sender           TEXT," +
                 "raw_body         TEXT," +
-                "remark           TEXT," +          // <-- new
+                "remark           TEXT," +
+                "payment_type     TEXT," +          // <-- new: parsed from SMS body (UPI/NEFT/etc.)
                 "timestamp_millis INTEGER NOT NULL," +
                 "copied           INTEGER DEFAULT 0)");
 
@@ -788,6 +789,12 @@ public class LocalDB extends SQLiteOpenHelper {
             }
         }
 
+        if (oldV < 37) {
+            try {
+                db.execSQL("ALTER TABLE passbook_entries ADD COLUMN payment_type TEXT");
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @Override

@@ -33,12 +33,39 @@ public class IntegrationsActivity extends AppCompatActivity {
     private RecyclerView rv;
     private int subTab = 0; // 0 = Events, 1 = Reminders
 
+    private androidx.activity.result.ActivityResultLauncher<android.content.Intent> signInLauncher;
+
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_integrations);
         eventDao = new EventDao(this);
         reminderDao = new ReminderDao(this);
+
+        signInLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
+                    com.google.android.gms.tasks.Task<com.google.android.gms.auth.api.signin.GoogleSignInAccount> task =
+                            com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.getData());
+                    try {
+                        task.getResult(com.google.android.gms.common.api.ApiException.class);
+                        Toast.makeText(this, "Connected to Google Calendar", Toast.LENGTH_SHORT).show();
+                        updateGoogleButtonLabel();
+                    } catch (com.google.android.gms.common.api.ApiException e) {
+                        Toast.makeText(this, "Google sign-in failed: " + e.getStatusCode(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+        findViewById(R.id.btnGoogleConnect).setOnClickListener(v -> {
+            if (com.expenseos.sync.GoogleCalendarSyncManager.isSignedIn(this)) {
+                com.expenseos.sync.GoogleCalendarSyncManager.signOut(this, () -> {
+                    Toast.makeText(this, "Disconnected", Toast.LENGTH_SHORT).show();
+                    updateGoogleButtonLabel();
+                });
+            } else {
+                signInLauncher.launch(com.expenseos.sync.GoogleCalendarSyncManager.getSignInClient(this).getSignInIntent());
+            }
+        });
+        updateGoogleButtonLabel();
 
         rv = findViewById(R.id.rvEvents);
         rv.setLayoutManager(new LinearLayoutManager(this));
@@ -213,5 +240,11 @@ public class IntegrationsActivity extends AppCompatActivity {
             tvSummary = v.findViewById(R.id.tvEventSummary);
             btnMenu = v.findViewById(R.id.btnEventMenu);
         }
+    }
+
+    private void updateGoogleButtonLabel() {
+        android.widget.Button b = findViewById(R.id.btnGoogleConnect);
+        boolean signedIn = com.expenseos.sync.GoogleCalendarSyncManager.isSignedIn(this);
+        b.setText(signedIn ? "✔ Google Connected" : "Connect Google Calendar");
     }
 }

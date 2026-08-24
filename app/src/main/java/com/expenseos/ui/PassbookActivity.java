@@ -77,7 +77,7 @@ public class PassbookActivity extends AppCompatActivity {
         entries.clear();
         SQLiteDatabase db = LocalDB.getInstance(this).getReadableDatabase();
         try (Cursor c = db.rawQuery(
-                "SELECT sms_id, type, amount, sender, raw_body, remark, timestamp_millis, copied " +
+                "SELECT sms_id, type, amount, sender, raw_body, remark, timestamp_millis, copied, payment_type " +
                         "FROM passbook_entries WHERE copied=0 ORDER BY timestamp_millis DESC", null)) {
             while (c.moveToNext()) {
                 PassbookEntry e = new PassbookEntry();
@@ -89,6 +89,7 @@ public class PassbookActivity extends AppCompatActivity {
                 e.setRemark(c.isNull(5) ? null : c.getString(5));
                 e.setTimestampMillis(c.getLong(6));
                 e.setCopied(c.getInt(7) == 1);
+                e.setPaymentType(c.isNull(8) ? null : c.getString(8));
                 entries.add(e);
             }
         }
@@ -172,6 +173,8 @@ public class PassbookActivity extends AppCompatActivity {
                 }
             }
 
+//payment type was never being carried over before; every copied
+// transaction silently landed with no payment type at all.
             Transaction t = new Transaction();
             t.setType(type);
             t.setDateTime(LocalDateTime.ofInstant(
@@ -181,6 +184,7 @@ public class PassbookActivity extends AppCompatActivity {
             t.setSubCategoryId(0);
             t.setNote(e.getRemark() != null ? e.getRemark() : e.getRawBody());
             t.setBookId(target.getId());
+            t.setPaymentType(e.getPaymentType() != null ? e.getPaymentType() : "Other");
             txnDao.insert(t);
 
             android.content.ContentValues cv = new android.content.ContentValues();

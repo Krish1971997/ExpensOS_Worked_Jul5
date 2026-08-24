@@ -76,8 +76,16 @@ public class PassbookAdapter extends RecyclerView.Adapter<PassbookAdapter.VH> {
             android.widget.Toast.makeText(ctx, "SMS ID: " + e.getSmsId(), android.widget.Toast.LENGTH_SHORT).show();
             return true;
         });
+
         h.tvSender.setText(e.getSender());
-        
+
+        if (e.getPaymentType() != null && !e.getPaymentType().isEmpty()) {
+            h.tvPaymentType.setText(e.getPaymentType());
+            h.tvPaymentType.setVisibility(View.VISIBLE);
+        } else {
+            h.tvPaymentType.setVisibility(View.GONE);
+        }
+
         h.tvDate.setText(DATE_FMT.format(new java.util.Date(e.getTimestampMillis())));
 
         // Avoid firing the listener while we programmatically set state
@@ -100,7 +108,7 @@ public class PassbookAdapter extends RecyclerView.Adapter<PassbookAdapter.VH> {
 
     static class VH extends RecyclerView.ViewHolder {
         CheckBox cb;
-        TextView tvType, tvAmount, tvRemark, tvSender, tvDate;
+        TextView tvType, tvAmount, tvRemark, tvSender, tvDate, tvPaymentType;
 
         VH(@NonNull View v) {
             super(v);
@@ -110,6 +118,7 @@ public class PassbookAdapter extends RecyclerView.Adapter<PassbookAdapter.VH> {
             tvRemark = v.findViewById(R.id.tvPassbookRemark);
             tvSender = v.findViewById(R.id.tvPassbookSender);
             tvDate = v.findViewById(R.id.tvPassbookDate);
+            tvPaymentType = v.findViewById(R.id.tvPassbookPaymentType);
         }
     }
 }

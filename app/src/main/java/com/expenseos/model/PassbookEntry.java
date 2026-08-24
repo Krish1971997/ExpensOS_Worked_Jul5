@@ -11,6 +11,7 @@ public class PassbookEntry {
     private long timestampMillis;
     private boolean copied;     // already copied to a cashbook?
     private String remark;
+    private String paymentType; // parsed from SMS body — UPI/NEFT/IMPS/Card/etc., null if not detected
 
     // getters/setters
     public long getSmsId() {
@@ -75,5 +76,14 @@ public class PassbookEntry {
 
     public void setRemark(String v) {
         remark = v;
+    }
+
+    // getter/setter block-க்கு கீழே சேருங்க
+    public String getPaymentType() {
+        return paymentType;
+    }
+
+    public void setPaymentType(String v) {
+        paymentType = v;
     }
 }

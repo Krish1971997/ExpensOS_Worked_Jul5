@@ -63,7 +63,7 @@ public class ReceiptDao {
         String sql = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at "
                 + "FROM transaction_receipts WHERE transaction_id = ? ORDER BY uploaded_at DESC";
         List<Receipt> list = new ArrayList<>();
-        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(txnId)})) {
+        try (Cursor c = rawQueryBigBlobWindow(sql, new String[]{String.valueOf(txnId)})) {
             while (c.moveToNext())
                 list.add(mapRow(c));
         }
@@ -97,13 +97,31 @@ public class ReceiptDao {
     public Receipt findById(int id) {
         String sql = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at "
                 + "FROM transaction_receipts WHERE id = ?";
-        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(id)})) {
+        try (Cursor c = rawQueryBigBlobWindow(sql, new String[]{String.valueOf(id)})) {
             return c.moveToFirst() ? mapRow(c) : null;
         }
     }
 
+    /**
+     * Regular Cursor.rawQuery() uses a default ~2MB CursorWindow per row —
+     * a single large receipt (photo/PDF stored as BLOB) can exceed that and
+     * throw SQLiteBlobTooBigException. Installing a bigger CursorWindow
+     * BEFORE the cursor's first access (getCount/moveToFirst) makes it use
+     * our window instead of the default one. Only needed for queries that
+     * select file_data — metadata-only queries never hit this.
+     */
+    private Cursor rawQueryBigBlobWindow(String sql, String[] args) {
+        Cursor c = db.rawQuery(sql, args);
+        if (c instanceof android.database.AbstractWindowedCursor) {
+            ((android.database.AbstractWindowedCursor) c).setWindow(
+                    new android.database.CursorWindow("receipt_blob_window", 50L * 1024 * 1024)); // 50MB
+        }
+        return c;
+    }
+
     public void delete(int id, String fileName) {
-        try (Cursor c = db.rawQuery(
+        // 🟢 மாற்றப்பட்டது: db.rawQuery()-க்கு பதிலாக rawQueryBigBlobWindow() பயன்படுத்தப்பட்டுள்ளது
+        try (Cursor c = rawQueryBigBlobWindow(
                 "SELECT r.transaction_id, r.file_name, r.file_type, r.file_data, r.file_size, t.book_id " +
                         "FROM transaction_receipts r JOIN transactions t ON t.id = r.transaction_id WHERE r.id=?",
                 new String[]{String.valueOf(id)})) {

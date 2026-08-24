@@ -3,6 +3,8 @@ package com.expenseos.util;
 import com.expenseos.model.PassbookEntry;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,8 +61,17 @@ public class SmsParser {
         else if (CREDIT_PATTERN.matcher(body).find()) type = "CREDIT";
         else return null; // has an amount but no clear direction — skip
 
+// NEW — timestampMillis here is still passed straight through as the
+// "SMS received" anchor (used as the fallback / to pair with a date-only
+// match); the transaction's actual date/time now comes from the message
+// body itself wherever the bank prints one, since that can trail the SMS
+// arrival by anywhere from minutes to hours.
         String payee = extractPayee(body);
         String remark = payee != null ? (type.equals("DEBIT") ? "Paid to " : "From ") + payee : null;
+
+        LocalDateTime txnDateTime = SmsDateTimeParser.extractDateTime(body, timestampMillis);
+        long txnMillis = txnDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        String paymentType = SmsDateTimeParser.extractPaymentType(body);
 
         PassbookEntry e = new PassbookEntry();
         e.setSmsId(smsId);
@@ -69,7 +80,8 @@ public class SmsParser {
         e.setSender(sender);
         e.setRawBody(body);       // keep the full original SMS text
         e.setRemark(remark);      // short "Paid to X" / "From X" summary for the UI, may be null
-        e.setTimestampMillis(timestampMillis);
+        e.setTimestampMillis(txnMillis); // from the SMS body's own date/time when present, else SMS-received time
+        e.setPaymentType(paymentType);
         e.setCopied(false);
         return e;
     }

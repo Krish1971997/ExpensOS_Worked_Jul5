@@ -542,8 +542,20 @@ public class SyncManager {
     }
 
     private int pushTransactionReceipts(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
-        String sel = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at, "
-                + "created_at, updated_at FROM transaction_receipts" + (fromStr != null ? " WHERE updated_at>=?" : "");
+        // 1. முதலில் ID-களை மட்டும் எடுக்கிறோம்
+        String idSel = "SELECT id FROM transaction_receipts" + (fromStr != null ? " WHERE updated_at>=?" : "");
+        java.util.List<Long> receiptIds = new java.util.ArrayList<>();
+
+        try (Cursor c = rawQuery(local, idSel, fromStr)) {
+            while (c.moveToNext()) {
+                receiptIds.add(c.getLong(0));
+            }
+        }
+
+        if (receiptIds.isEmpty()) {
+            log.info("transaction_receipts: pushed 0");
+            return 0;
+        }
 
         String sql = "INSERT INTO transaction_receipts (id, transaction_id, file_name, file_type, file_data, "
                 + "file_size, uploaded_at, created_at, updated_at) "
@@ -553,47 +565,55 @@ public class SyncManager {
                 + "file_type=EXCLUDED.file_type, file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, "
                 + "uploaded_at=EXCLUDED.uploaded_at, created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
 
+        String singleSel = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at, created_at, updated_at "
+                + "FROM transaction_receipts WHERE id = ?";
+
         boolean originalAutoCommit = remote.getAutoCommit();
         remote.setAutoCommit(false);
 
-        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
-            int n = 0;
-            int batchSize = 0;
+        int n = 0;
+        try (PreparedStatement ps = remote.prepareStatement(sql)) {
+            for (Long id : receiptIds) {
 
-            while (c.moveToNext()) {
-                ps.setLong(1, c.getLong(0));
-                ps.setLong(2, c.getLong(1));
-                ps.setString(3, c.getString(2));
-                ps.setString(4, c.getString(3));
+                Cursor c = null;
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        // 💡 சரிசெய்யப்பட்ட இடம்: (db, cursorDriver, editTable, query)
+                        // driver-க்கு பதிலாக cursorDriver என மாற்றி அதை SQLiteCursor-க்கு வழங்கியுள்ளோம்
+                        c = local.rawQueryWithFactory((db, cursorDriver, editTable, query) -> {
+                            android.database.sqlite.SQLiteCursor cursor = new android.database.sqlite.SQLiteCursor(cursorDriver, editTable, query);
+                            cursor.setWindow(new android.database.CursorWindow("ReceiptWindow", 15 * 1024 * 1024)); // 15 MB
+                            return cursor;
+                        }, singleSel, new String[]{String.valueOf(id)}, null);
+                    } else {
+                        c = local.rawQuery(singleSel, new String[]{String.valueOf(id)});
+                    }
 
-                byte[] blob = c.getBlob(4);
-                if (blob == null) ps.setNull(5, Types.BINARY);
-                else ps.setBytes(5, blob);
+                    if (c.moveToFirst()) {
+                        ps.setLong(1, c.getLong(0));
+                        ps.setLong(2, c.getLong(1));
+                        ps.setString(3, c.getString(2));
+                        ps.setString(4, c.getString(3));
 
-                if (c.isNull(5)) ps.setNull(6, Types.INTEGER);
-                else ps.setLong(6, c.getLong(5));
+                        byte[] blob = c.getBlob(4);
+                        if (blob == null) ps.setNull(5, Types.BINARY);
+                        else ps.setBytes(5, blob);
 
-                ps.setString(7, c.getString(6)); // uploaded_at -> ?::timestamp
-                ps.setString(8, c.getString(7)); // created_at -> ?::timestamp
-                ps.setString(9, c.getString(8)); // updated_at -> ?::timestamp
+                        if (c.isNull(5)) ps.setNull(6, Types.INTEGER);
+                        else ps.setLong(6, c.getLong(5));
 
-                ps.addBatch();
-                n++;
-                batchSize++;
+                        ps.setString(7, c.getString(6));
+                        ps.setString(8, c.getString(7));
+                        ps.setString(9, c.getString(8));
 
-                // Image/File Bytes இருப்பதால் 50 Records-க்கு ஒருமுறை Push செய்கிறோம்
-                if (batchSize % 50 == 0) {
-                    ps.executeBatch();
-                    remote.commit();
-                    batchSize = 0;
+                        ps.executeUpdate();
+                        n++;
+                    }
+                } finally {
+                    if (c != null) c.close();
                 }
             }
-
-            if (batchSize > 0) {
-                ps.executeBatch();
-                remote.commit();
-            }
-
+            remote.commit();
             log.info("transaction_receipts: pushed " + n);
             return n;
         } catch (Exception e) {

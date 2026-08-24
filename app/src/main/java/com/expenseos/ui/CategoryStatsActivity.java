@@ -270,6 +270,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
             paddedTrend.put(label, value);
         }
 
+
         LineChart chart = findViewById(R.id.lineCategoryTrend);
         if (chart == null) return;
 

@@ -250,6 +250,21 @@ public class SqlConsoleActivity extends AppCompatActivity {
         llSuggestions.removeAllViews();
     }
 
+    // A handful of keywords are almost always typed with a fixed next word
+    // right after them — SELECT is nearly always "SELECT * FROM ", INSERT
+    // is nearly always "INSERT INTO ". Expanding to the common phrase (and
+    // leaving the cursor right after it) saves the obvious follow-up keystrokes.
+    private static final java.util.Map<String, String> KEYWORD_EXPANSIONS = new java.util.HashMap<>();
+
+    static {
+        KEYWORD_EXPANSIONS.put("SELECT", "SELECT * FROM ");
+        KEYWORD_EXPANSIONS.put("INSERT", "INSERT INTO ");
+        KEYWORD_EXPANSIONS.put("DELETE", "DELETE FROM ");
+        KEYWORD_EXPANSIONS.put("UPDATE", "UPDATE ");
+        KEYWORD_EXPANSIONS.put("ORDER", "ORDER BY ");
+        KEYWORD_EXPANSIONS.put("GROUP", "GROUP BY ");
+    }
+
     private TextView suggestionChip(String word, int wordStart, int wordEnd) {
         TextView chip = new TextView(this);
         chip.setText(word);
@@ -257,14 +272,16 @@ public class SqlConsoleActivity extends AppCompatActivity {
         chip.setTextColor(getColor(R.color.primary));
         chip.setBackgroundResource(R.drawable.bg_chip_suggestion);
         chip.setPadding(dp(10), dp(6), dp(10), dp(6));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.setMarginEnd(dp(6));
         chip.setLayoutParams(lp);
         chip.setGravity(Gravity.CENTER);
 
         chip.setOnClickListener(v -> {
             String text = etSql.getText().toString();
-            String replacement = word + " ";
+            String expansion = KEYWORD_EXPANSIONS.get(word.toUpperCase(Locale.ROOT));
+            String replacement = expansion != null ? expansion : word + " ";
             String newText = text.substring(0, wordStart) + replacement + text.substring(wordEnd);
             etSql.setText(newText);
             etSql.setSelection(wordStart + replacement.length());

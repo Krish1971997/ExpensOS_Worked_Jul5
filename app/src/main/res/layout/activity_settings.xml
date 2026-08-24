@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -38,8 +37,7 @@
             android:layout_height="1dp" />
     </LinearLayout>
 
-    <!-- Mode banner: shows whether this is Global (common-only) or
-         Cashbook-scoped settings. Text/visibility set in SettingsActivity. -->
+    <!-- Mode Banner -->
     <TextView
         android:id="@+id/tvSettingsMode"
         android:layout_width="match_parent"
@@ -51,57 +49,7 @@
         android:textColor="@color/primary"
         android:textSize="11sp" />
 
-    <!--    &lt;!&ndash; Tab buttons &ndash;&gt;-->
-    <!--    <LinearLayout-->
-    <!--        android:layout_width="match_parent"-->
-    <!--        android:layout_height="44dp"-->
-    <!--        android:background="@color/nav_bg"-->
-    <!--        android:orientation="horizontal"-->
-    <!--        android:paddingHorizontal="10dp">-->
-
-    <!--        <Button-->
-    <!--            android:id="@+id/btnTabCat"-->
-    <!--            style="@style/Widget.MaterialComponents.Button.TextButton"-->
-    <!--            android:layout_width="0dp"-->
-    <!--            android:layout_height="match_parent"-->
-    <!--            android:layout_weight="1"-->
-    <!--            android:paddingHorizontal="2dp"-->
-    <!--            android:text="Categories"-->
-    <!--            android:textColor="@color/primary"-->
-    <!--            android:textSize="11sp" />-->
-
-    <!--        <Button-->
-    <!--            android:id="@+id/btnTabSub"-->
-    <!--            style="@style/Widget.MaterialComponents.Button.TextButton"-->
-    <!--            android:layout_width="0dp"-->
-    <!--            android:layout_height="match_parent"-->
-    <!--            android:layout_weight="1"-->
-    <!--            android:text="Sub-Cat"-->
-    <!--            android:textColor="@color/text_muted"-->
-    <!--            android:textSize="12sp" />-->
-
-    <!--        <Button-->
-    <!--            android:id="@+id/btnTabColumns"-->
-    <!--            style="@style/Widget.MaterialComponents.Button.TextButton"-->
-    <!--            android:layout_width="0dp"-->
-    <!--            android:layout_height="match_parent"-->
-    <!--            android:layout_weight="1"-->
-    <!--            android:text="Columns"-->
-    <!--            android:textColor="@color/text_muted"-->
-    <!--            android:textSize="12sp" />-->
-
-    <!--        <Button-->
-    <!--            android:id="@+id/btnTabPaymentTypes"-->
-    <!--            style="@style/Widget.MaterialComponents.Button.TextButton"-->
-    <!--            android:layout_width="0dp"-->
-    <!--            android:layout_height="wrap_content"-->
-    <!--            android:layout_weight="1"-->
-    <!--            android:text="Payment Types"-->
-    <!--            android:textColor="@color/text_muted"-->
-    <!--            android:textSize="12sp" />-->
-    <!--    </LinearLayout>-->
-
-    <!-- NEW: HorizontalScrollView so a 5th tab fits without squeezing the rest -->
+    <!-- 5 Top Tabs Header -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="44dp"
@@ -171,184 +119,166 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <ScrollView
+    <!-- Main Content Container (ScrollView நீக்கப்பட்டு Frame/LinearLayout ஆக மாற்றப்பட்டுள்ளது) -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="14dp">
 
+        <!-- 1. CATEGORIES PANEL -->
         <LinearLayout
+            android:id="@+id/panelCategories"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="14dp">
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-            <!-- ══ CATEGORIES PANEL ══ -->
             <LinearLayout
-                android:id="@+id/panelCategories"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tabCatIncome"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:paddingVertical="10dp"
+                    android:text="Income"
+                    android:textColor="@color/green"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tabCatExpense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:paddingVertical="10dp"
+                    android:text="Expense"
+                    android:textColor="@color/text_muted"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etCatSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Search income category"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnCatAdd"
+                    style="@style/BtnSuccess"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:paddingHorizontal="16dp"
+                    android:text="+ ADD"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvCategoryList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <!-- 2. SUB-CATEGORIES PANEL -->
+        <LinearLayout
+            android:id="@+id/panelSubCategories"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tabSubIncome"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:paddingVertical="10dp"
+                    android:text="Income"
+                    android:textColor="@color/green"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tabSubExpense"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:paddingVertical="10dp"
+                    android:text="Expense"
+                    android:textColor="@color/text_muted"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etSubCatSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Search sub category"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnSubCatAdd"
+                    style="@style/BtnPrimary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:paddingHorizontal="16dp"
+                    android:text="+ ADD"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvSubCategoryList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <!-- 3. CUSTOM COLUMNS PANEL -->
+        <ScrollView
+            android:id="@+id/panelColumns"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-
-                <!-- Income / Expense sub-tabs -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tabCatIncome"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:paddingVertical="10dp"
-                        android:text="Income"
-                        android:textColor="@color/green"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tabCatExpense"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:paddingVertical="10dp"
-                        android:text="Expense"
-                        android:textColor="@color/text_muted"
-                        android:textSize="14sp" />
-                </LinearLayout>
-
-                <!-- Search + Add -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <EditText
-                        android:id="@+id/etCatSearch"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:layout_weight="1"
-                        android:hint="Search income category"
-                        android:textSize="13sp" />
-
-                    <Button
-                        android:id="@+id/btnCatAdd"
-                        style="@style/BtnSuccess"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:paddingHorizontal="16dp"
-                        android:text="+ ADD"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvCategoryList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:padding="6dp" />
-                </androidx.cardview.widget.CardView>
-            </LinearLayout>
-
-            <!-- ══ SUB-CATEGORIES PANEL ══ -->
-            <LinearLayout
-                android:id="@+id/panelSubCategories"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <!-- Income / Expense sub-tabs -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tabSubIncome"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:paddingVertical="10dp"
-                        android:text="Income"
-                        android:textColor="@color/green"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tabSubExpense"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:gravity="center"
-                        android:paddingVertical="10dp"
-                        android:text="Expense"
-                        android:textColor="@color/text_muted"
-                        android:textSize="14sp" />
-                </LinearLayout>
-
-                <!-- Search + Add -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <EditText
-                        android:id="@+id/etSubCatSearch"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:layout_weight="1"
-                        android:hint="Search sub category"
-                        android:textSize="13sp" />
-
-                    <Button
-                        android:id="@+id/btnSubCatAdd"
-                        style="@style/BtnPrimary"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:paddingHorizontal="16dp"
-                        android:text="+ ADD"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvSubCategoryList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:padding="6dp" />
-                </androidx.cardview.widget.CardView>
-            </LinearLayout>
-
-            <!-- ══ CUSTOM COLUMNS PANEL (global-only — see note in SettingsActivity) ══ -->
-            <LinearLayout
-                android:id="@+id/panelColumns"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -356,17 +286,14 @@
                     android:layout_marginBottom="10dp"
                     android:background="#FEF9C3"
                     android:padding="8dp"
-                    android:text="ℹ Custom columns are shared across all cashbooks (no per-book scoping yet)."
+                    android:text="ℹ Custom columns are shared across all cashbooks."
                     android:textColor="@color/amber"
                     android:textSize="11sp" />
 
-                <!-- Income Columns -->
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                <androidx.cardview.widget.CardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
+                    android:layout_marginBottom="12dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -378,9 +305,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="10dp"
-                            android:letterSpacing="0.08"
                             android:text="INCOME CUSTOM COLUMNS"
-                            android:textAllCaps="true"
                             android:textColor="@color/green"
                             android:textSize="10sp"
                             android:textStyle="bold" />
@@ -388,15 +313,12 @@
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
+                            android:layout_marginBottom="8dp">
 
                             <EditText
                                 android:id="@+id/etNewIncomeCol"
                                 android:layout_width="0dp"
                                 android:layout_height="44dp"
-                                android:layout_marginEnd="6dp"
                                 android:layout_weight="1"
                                 android:hint="New column, e.g. Payment Mode"
                                 android:textSize="13sp" />
@@ -406,7 +328,6 @@
                                 style="@style/BtnSuccess"
                                 android:layout_width="wrap_content"
                                 android:layout_height="44dp"
-                                android:paddingHorizontal="10dp"
                                 android:text="+ Add"
                                 android:textSize="12sp" />
                         </LinearLayout>
@@ -419,12 +340,9 @@
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
 
-                <!-- Expense Columns -->
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+                <androidx.cardview.widget.CardView
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
+                    android:layout_height="wrap_content">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -436,9 +354,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="10dp"
-                            android:letterSpacing="0.08"
                             android:text="EXPENSE CUSTOM COLUMNS"
-                            android:textAllCaps="true"
                             android:textColor="@color/red"
                             android:textSize="10sp"
                             android:textStyle="bold" />
@@ -446,15 +362,12 @@
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal">
+                            android:layout_marginBottom="8dp">
 
                             <EditText
                                 android:id="@+id/etNewExpenseCol"
                                 android:layout_width="0dp"
                                 android:layout_height="44dp"
-                                android:layout_marginEnd="6dp"
                                 android:layout_weight="1"
                                 android:hint="New column, e.g. Payment Mode"
                                 android:textSize="13sp" />
@@ -464,7 +377,6 @@
                                 style="@style/BtnDanger"
                                 android:layout_width="wrap_content"
                                 android:layout_height="44dp"
-                                android:paddingHorizontal="10dp"
                                 android:text="+ Add"
                                 android:textSize="12sp" />
                         </LinearLayout>
@@ -477,117 +389,99 @@
                     </LinearLayout>
                 </androidx.cardview.widget.CardView>
             </LinearLayout>
+        </ScrollView>
 
-            <!-- PAYMENT TYPES PANEL -->
+        <!-- 4. PAYMENT TYPES PANEL -->
+        <LinearLayout
+            android:id="@+id/panelPaymentTypes"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
             <LinearLayout
-                android:id="@+id/panelPaymentTypes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <!-- Search + Add -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                <EditText
+                    android:id="@+id/etPaySearch"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Search payment type"
+                    android:textSize="13sp" />
 
-                    <EditText
-                        android:id="@+id/etPaySearch"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:layout_weight="1"
-                        android:hint="Search payment type"
-                        android:textSize="13sp" />
-
-                    <Button
-                        android:id="@+id/btnAddPaymentType"
-                        style="@style/BtnSuccess"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:paddingHorizontal="16dp"
-                        android:text="+ ADD"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvPaymentTypes"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:padding="6dp" />
-                    <!-- NEW: add the Keywords panel before the file's closing tags -->
-                </androidx.cardview.widget.CardView>
+                <Button
+                    android:id="@+id/btnAddPaymentType"
+                    style="@style/BtnSuccess"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:paddingHorizontal="16dp"
+                    android:text="+ ADD"
+                    android:textSize="12sp" />
             </LinearLayout>
 
-            <!-- ══ KEYWORDS PANEL (auto-suggest category/sub-category from description) ══ -->
-            <LinearLayout
-                android:id="@+id/panelKeywords"
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvPaymentTypes"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:background="#EFF6FF"
-                    android:padding="8dp"
-                    android:text="💡 When a keyword is found in the Remark/Note while adding a transaction, its category (and sub-category, if set) is picked automatically."
-                    android:textColor="@color/primary"
-                    android:textSize="11sp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <EditText
-                        android:id="@+id/etKwSearch"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:layout_weight="1"
-                        android:hint="Search keyword"
-                        android:textSize="13sp" />
-
-                    <Button
-                        android:id="@+id/btnKwAdd"
-                        style="@style/BtnPrimary"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:paddingHorizontal="16dp"
-                        android:text="+ ADD"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
-                    app:cardElevation="2dp">
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvKeywordList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:padding="6dp" />
-                </androidx.cardview.widget.CardView>
-            </LinearLayout>
-
+                android:layout_height="0dp"
+                android:layout_weight="1" />
         </LinearLayout>
-    </ScrollView>
+
+        <!-- 5. KEYWORDS PANEL -->
+        <LinearLayout
+            android:id="@+id/panelKeywords"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:background="#EFF6FF"
+                android:padding="8dp"
+                android:text="💡 When a keyword is found in the Remark/Note while adding a transaction, its category (and sub-category, if set) is picked automatically."
+                android:textColor="@color/primary"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/etKwSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Search keyword"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnKwAdd"
+                    style="@style/BtnPrimary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:paddingHorizontal="16dp"
+                    android:text="+ ADD"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvKeywordList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+    </LinearLayout>
 </LinearLayout>

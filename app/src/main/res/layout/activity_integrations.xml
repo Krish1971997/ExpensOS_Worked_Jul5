@@ -29,6 +29,14 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/btnGoogleConnect"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:textSize="12sp" />
+
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tabConfigType"
             android:layout_width="match_parent"

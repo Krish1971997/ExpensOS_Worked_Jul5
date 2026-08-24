@@ -66,6 +66,28 @@ public class CategoryDao {
         insert(name, type, null);
     }
 
+    // insert() method-க்கு கீழே சேருங்க
+
+    /**
+     * Existing categories with the same name (case-insensitive), same
+     * type, in overlapping scope — used to block/flag duplicates before
+     * they're created. Same reasoning as KeywordMappingDao.findByKeyword().
+     */
+    public List<Category> findByName(String name, String type, Integer bookId, Integer excludeId) {
+        String sql = "SELECT id, name, type, book_id FROM categories " +
+                "WHERE LOWER(name)=LOWER(?) AND type=? " +
+                "AND (book_id IS NULL" + (bookId != null ? " OR book_id=" + bookId : "") + ")" +
+                (excludeId != null ? " AND id<>" + excludeId : "");
+        List<Category> list = new ArrayList<>();
+        try (Cursor c = db.rawQuery(sql, new String[]{name.trim(), type})) {
+            while (c.moveToNext()) {
+                Integer bId = c.isNull(3) ? null : c.getInt(3);
+                list.add(new Category(c.getInt(0), c.getString(1), c.getString(2), bId));
+            }
+        }
+        return list;
+    }
+
     public void update(int id, String newName) {
         ContentValues cv = new ContentValues();
         cv.put("name", newName.trim());
