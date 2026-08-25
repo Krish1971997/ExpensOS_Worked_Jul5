@@ -394,7 +394,9 @@ public class TransactionEntryActivity extends AppCompatActivity {
     }
 
     private void showKeywordSuggestion(String note) {
-        if (note == null || note.trim().length() < 3 || spCategory.getSelectedItemPosition() != 0) {
+        // spCategory.getSelectedItemPosition() != 0 செக்-ஐ நீக்கிவிட்டோம்.
+        // இப்போது Category தேர்ந்தெடுத்து இருந்தாலும் Auto Suggestion ஷோ ஆகும்.
+        if (note == null || note.trim().length() < 3) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;

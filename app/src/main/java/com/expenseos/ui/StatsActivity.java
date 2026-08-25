@@ -135,8 +135,7 @@ public class StatsActivity extends AppCompatActivity {
     }
 
     private void setupSeriesFilter() {
-        ArrayAdapter<String> adp = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, SERIES_OPTIONS);
+        ArrayAdapter<String> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, SERIES_OPTIONS);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spSeriesFilter.setAdapter(adp);
         spSeriesFilter.setSelection(1, false); // "Default" — matches the old hardcoded behavior
@@ -147,8 +146,7 @@ public class StatsActivity extends AppCompatActivity {
                 if (suppressBookFilterCallback) return;
                 Object tag = spBookFilter.getTag();
                 if (tag instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<CashBook> shown = (List<CashBook>) tag;
+                    @SuppressWarnings("unchecked") List<CashBook> shown = (List<CashBook>) tag;
                     if (pos >= 0 && pos < shown.size()) selectBookFromDropdown(shown.get(pos));
                 }
             }
@@ -211,8 +209,7 @@ public class StatsActivity extends AppCompatActivity {
         for (CashBook b : shown) names.add(b.getName());
         if (names.isEmpty()) names.add("No cash books");
 
-        ArrayAdapter<String> adp = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, names);
+        ArrayAdapter<String> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
         suppressBookFilterCallback = true;
@@ -265,8 +262,7 @@ public class StatsActivity extends AppCompatActivity {
     private void syncBookDropdownSelection(CashBook book) {
         Object tag = spBookFilter.getTag();
         if (!(tag instanceof List)) return;
-        @SuppressWarnings("unchecked")
-        List<CashBook> shown = (List<CashBook>) tag;
+        @SuppressWarnings("unchecked") List<CashBook> shown = (List<CashBook>) tag;
         for (int i = 0; i < shown.size(); i++) {
             if (shown.get(i).getId() == book.getId()) {
                 if (spBookFilter.getSelectedItemPosition() != i) {
@@ -292,9 +288,7 @@ public class StatsActivity extends AppCompatActivity {
             book = directBook;
             tvMonth.setText(book.getName());
         } else {
-            tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)
-                    + " " + currentMonth.getYear()
-                    + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
+            tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + currentMonth.getYear() + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
             book = MonthBookResolver.findBookForMonth(this, currentMonth, seriesSuffix);
         }
 
@@ -310,9 +304,7 @@ public class StatsActivity extends AppCompatActivity {
         if (isHomeEntry) syncBookDropdownSelection(book);
 
         TransactionDao dao = new TransactionDao(this);
-        List<Map<String, Object>> rows = showExpense
-                ? dao.categoryBreakdownWithId("EXPENSE", book.getId())
-                : dao.categoryBreakdownWithId("INCOME", book.getId());
+        List<Map<String, Object>> rows = showExpense ? dao.categoryBreakdownWithId("EXPENSE", book.getId()) : dao.categoryBreakdownWithId("INCOME", book.getId());
 
         // Sort descending by amount — screenshot shows highest first
         rows.sort((a, b) -> ((BigDecimal) b.get("total")).compareTo((BigDecimal) a.get("total")));
@@ -360,6 +352,7 @@ public class StatsActivity extends AppCompatActivity {
             i.putExtra("isExpense", showExpense);
             i.putExtra("year", currentMonth.getYear());
             i.putExtra("month", currentMonth.getMonthValue());
+            i.putExtra("seriesSuffix", directBook != null ? "" : seriesSuffix);
             startActivity(i);
         }));
     }

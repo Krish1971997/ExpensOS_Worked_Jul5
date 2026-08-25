@@ -31,6 +31,7 @@ import com.expenseos.R;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
+import com.expenseos.dao.KeywordMappingDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.ReceiptDao;
 import com.expenseos.dao.SubCategoryDao;
@@ -38,6 +39,7 @@ import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.CashBook;
 import com.expenseos.model.Category;
 import com.expenseos.model.ColumnDefinition;
+import com.expenseos.model.KeywordMapping;
 import com.expenseos.model.PaymentType;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
@@ -57,18 +59,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Transaction Detail — the dedicated EDIT screen (reached via
- * EntryDetailActivity's "EDIT ENTRY"). Deliberately mirrors every field and
- * validation in TransactionEntryActivity's add/edit form (amount, date/time,
- * payment type, category -> sub-category cascade, dynamic custom fields,
- * attachments) so editing here is never missing something the Add screen
- * has — plus this screen's own Prev/Next/Duplicate/Move/Delete actions.
- * <p>
- * Only used for editing an existing transaction (txnId is always > 0 here).
- * New-transaction creation continues to go through TransactionEntryActivity
- * unchanged.
- */
 public class TransactionDetailActivity extends AppCompatActivity {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -77,7 +67,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private static final int REQ_ATTACH = 2001;
     private static final int REQ_CAMERA = 2002;
 
-    private int bookId; // active book — scopes Prev/Next cycling, same as before
+    private int bookId;
     private int txnId;
     private Transaction current;
     private LocalDate selectedDate;
@@ -97,14 +87,17 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private final List<PendingAttachment> pendingAttachments = new ArrayList<>();
     private Uri pendingCameraUri;
 
-    // Edit fields
     private TextView tvDetailTitle, tvDetailType, tvDetailDate, tvDetailTime;
     private LinearLayout boxDetailDate, boxDetailTime, customFieldsContainer, attachmentList, btnDetailAttach;
     private EditText etAmount, etNote;
     private Spinner spCategory, spSubCategory, spPaymentType, spMoveBook;
     private TextView tvSubCategoryLabel;
     private Button btnPrev, btnNext;
-    private boolean isDirty = false; // true once the user touches any field after load
+    private boolean isDirty = false;
+    private TextView tvKwSuggestion;
+    private KeywordMapping pendingSuggestion;
+    private Integer pendingSubCategoryId;
+    private KeywordMappingDao kwDao;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -126,8 +119,10 @@ public class TransactionDetailActivity extends AppCompatActivity {
         colDefDao = new ColumnDefinitionDao(this);
         receiptDao = new ReceiptDao(this);
         payDao = new PaymentTypeDao(this);
+        kwDao = new KeywordMappingDao(this);
 
         bindViews();
+        wireDescriptionAutoSuggest();
         setupButtons();
         loadTransaction();
     }
@@ -151,12 +146,12 @@ public class TransactionDetailActivity extends AppCompatActivity {
         spMoveBook = findViewById(R.id.spMoveBook);
         btnPrev = findViewById(R.id.btnDetailPrev);
         btnNext = findViewById(R.id.btnDetailNext);
+        tvKwSuggestion = findViewById(R.id.tvKwSuggestion);
     }
 
-    // NEW
     private void setupButtons() {
         findViewById(R.id.btnDetailBack).setOnClickListener(v -> finish());
-        findViewById(R.id.btnDetailCancel).setOnClickListener(v -> finish()); // discard — nothing is written until Save
+        findViewById(R.id.btnDetailCancel).setOnClickListener(v -> finish());
         findViewById(R.id.btnDetailSave).setOnClickListener(v -> saveTransaction(true, true));
         findViewById(R.id.btnDetailDuplicate).setOnClickListener(v -> showDuplicateDialog());
         findViewById(R.id.btnDetailMove).setOnClickListener(v -> moveTransaction());
@@ -172,10 +167,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
                         .setNegativeButton("Cancel", null)
                         .show());
 
-        // Prev/Next used to silently discard unsaved edits (loadTransaction()
-        // just overwrites the form). Now: if the form's dirty, save first —
-        // only navigate once that save succeeds, so a failed validation
-        // keeps you on the current entry instead of losing the edit.
         btnPrev.setOnClickListener(v -> {
             if (!isDirty || saveTransaction(true, false)) {
                 navigateTo(txnDao.findPrevId(txnId, bookId));
@@ -201,8 +192,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         markDirtyOn(etNote);
     }
 
-    // Flags the form dirty on the first genuine user edit. Attach to any
-    // widget whose change should trigger auto-save on Prev/Next.
     private void markDirtyOn(EditText field) {
         field.addTextChangedListener(new android.text.TextWatcher() {
             @Override
@@ -220,7 +209,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         });
     }
 
-    // ── Date / Time pickers — same UX as the Add/Edit screen ──────────
     private void showDatePicker() {
         new DatePickerDialog(this, (view, y, m, d) -> {
             selectedDate = LocalDate.of(y, m + 1, d);
@@ -242,7 +230,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         tvDetailTime.setText(selectedTime.format(TIME_FMT));
     }
 
-    // ── Load transaction into form ─────────────────────────
     private void loadTransaction() {
         current = txnDao.findById(txnId);
         if (current == null) {
@@ -250,8 +237,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
             return;
         }
 
-        // Clear anything left over from a previously-loaded transaction
-        // (Prev/Next reuses this same screen instance).
         customFieldsContainer.removeAllViews();
         customFieldInputs.clear();
         attachmentList.removeAllViews();
@@ -263,7 +248,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         int typeColor = isIncome ? getColor(R.color.green) : getColor(R.color.red);
         tvDetailType.setTextColor(typeColor);
 
-        // Fields
         etAmount.setText(current.getAmount().toPlainString());
         etAmount.setTextColor(typeColor);
         etNote.setText(current.getNote() != null ? current.getNote() : "");
@@ -273,19 +257,15 @@ public class TransactionDetailActivity extends AppCompatActivity {
         selectedTime = dt != null ? dt.toLocalTime() : LocalTime.now();
         updateDateTimeText();
 
-        // Payment type — old transactions predating this column default to
-        // whatever PaymentTypeDao marks as default (loadPaymentTypes handles
-        // the null case).
         loadPaymentTypes(current.getPaymentType());
 
-        // Category spinner — scoped to the transaction's OWN book, not
-        // necessarily the currently-active book (it may differ).
         String catType = current.getType().name();
         currentCategories = catDao.findByType(catType, current.getBookId());
         ArrayAdapter<Category> catAdp = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, currentCategories);
         catAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spCategory.setAdapter(catAdp);
+
         int catPos = 0;
         for (int i = 0; i < currentCategories.size(); i++) {
             if (currentCategories.get(i).getId() == current.getCategoryId()) {
@@ -294,21 +274,15 @@ public class TransactionDetailActivity extends AppCompatActivity {
             }
         }
         spCategory.setSelection(catPos, false);
+
         if (!currentCategories.isEmpty()) {
             loadSubCategoriesFor(currentCategories.get(catPos).getId());
         }
 
-        // Sub-category cascade — attach listener AFTER initial selection so
-        // it only fires on a genuine user change, not the programmatic one above.
+        // ISSUE 2 FIX: Immediate Subcategory Refresh Listener
         spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            private boolean isInitial = true;
-
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (isInitial) {
-                    isInitial = false;
-                    return;
-                }
                 isDirty = true;
                 if (pos >= 0 && pos < currentCategories.size()) {
                     loadSubCategoriesFor(currentCategories.get(pos).getId());
@@ -320,15 +294,11 @@ public class TransactionDetailActivity extends AppCompatActivity {
             }
         });
 
-        // Custom fields — every field defined for this type, pre-filled
-        // where the transaction already has a saved value.
         loadCustomFieldsForType(current.getCustomValues());
 
-        // Attachments — existing (saved) receipts, each removable.
         for (Receipt r : receiptDao.findMetaByTransactionId(txnId))
             addExistingReceiptRow(r);
 
-        // Move-to-book spinner
         List<CashBook> books = bookDao.findAll();
         List<String> bookNames = new ArrayList<>();
         int selBook = 0;
@@ -336,7 +306,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
             bookNames.add(books.get(i).getName());
             if (books.get(i).getId() == current.getBookId()) selBook = i;
         }
-// NEW
+
         ArrayAdapter<String> bAdp = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, bookNames);
         bAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -344,12 +314,9 @@ public class TransactionDetailActivity extends AppCompatActivity {
         spMoveBook.setSelection(selBook);
         spMoveBook.setTag(books);
 
-        // A fresh load (initial open, or after Prev/Next) is a clean slate —
-        // reset dirty tracking, and attach the item-selected listeners AFTER
-        // the programmatic setSelection() calls above so loading the record
-        // doesn't itself mark the form dirty.
         isDirty = false;
-        spCategory.post(() -> spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+
+        spSubCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 isDirty = true;
@@ -358,8 +325,9 @@ public class TransactionDetailActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(AdapterView<?> p) {
             }
-        }));
-        spSubCategory.post(() -> spSubCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        });
+
+        spPaymentType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 isDirty = true;
@@ -368,8 +336,9 @@ public class TransactionDetailActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(AdapterView<?> p) {
             }
-        }));
-        spPaymentType.post(() -> spPaymentType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        });
+
+        spMoveBook.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 isDirty = true;
@@ -378,21 +347,8 @@ public class TransactionDetailActivity extends AppCompatActivity {
             @Override
             public void onNothingSelected(AdapterView<?> p) {
             }
-        }));
-        spMoveBook.post(() -> spMoveBook.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                isDirty = true;
-            }
+        });
 
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {
-            }
-        }));
-
-        // Prev / Next availability — findPrevId/findNextId return boxed
-        // Integer and are null when there's no adjacent transaction, so
-        // don't auto-unbox directly (that NPEs).
         Integer prevId = txnDao.findPrevId(txnId, bookId);
         Integer nextId = txnDao.findNextId(txnId, bookId);
         boolean hasPrev = prevId != null && prevId != 0;
@@ -413,20 +369,35 @@ public class TransactionDetailActivity extends AppCompatActivity {
         spSubCategory.setVisibility(View.VISIBLE);
         tvSubCategoryLabel.setVisibility(View.VISIBLE);
 
-        List<SubCategory> withNone = new ArrayList<>();
-        withNone.add(new SubCategory(0, "Select Sub Category", catId));
-        withNone.addAll(currentSubCategories);
+        List<SubCategory> listWithPlaceholder = new ArrayList<>();
+        if (currentSubCategories.size() > 1) {
+            listWithPlaceholder.add(new SubCategory(0, "Select Sub Category", catId));
+        }
+        listWithPlaceholder.addAll(currentSubCategories);
+
         ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, withNone);
+                android.R.layout.simple_spinner_item, listWithPlaceholder);
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spSubCategory.setAdapter(adp);
 
-        for (int i = 0; i < withNone.size(); i++) {
-            if (withNone.get(i).getId() == current.getSubCategoryId()) {
-                spSubCategory.setSelection(i);
+        // Suggestion-ல் இருந்து வந்த subcategory ID உள்ளதா என்று சரிபார்க்கவும்
+        int targetSubId = (pendingSubCategoryId != null && pendingSubCategoryId > 0)
+                ? pendingSubCategoryId
+                : current.getSubCategoryId();
+
+        // Selection அமைக்கும் வரை pendingSubCategoryId-ஐ வைத்திருக்கவும்
+
+        int selectedIndex = 0;
+        for (int i = 0; i < listWithPlaceholder.size(); i++) {
+            if (listWithPlaceholder.get(i).getId() == targetSubId) {
+                selectedIndex = i;
                 break;
             }
         }
+        spSubCategory.setSelection(selectedIndex, false);
+
+        // Selection முடிந்த பிறகு reset செய்யவும்
+        pendingSubCategoryId = null;
     }
 
     private void loadPaymentTypes(@Nullable String preselect) {
@@ -454,7 +425,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         spPaymentType.setSelection(pos);
     }
 
-    // ── Custom fields — identical behavior to TransactionEntryActivity ──
     private void loadCustomFieldsForType(@Nullable Map<String, String> existingValues) {
         List<ColumnDefinition> defs = colDefDao.findByType(current.getType().name());
         for (ColumnDefinition cd : defs) {
@@ -493,7 +463,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         customFieldInputs.put(cd.getColKey(), input);
     }
 
-    // ── Attach Image or PDF — same 3-option sheet as the Add/Edit screen ──
     private void pickAttachment() {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
         LinearLayout container = new LinearLayout(this);
@@ -633,8 +602,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         attachmentList.addView(row);
     }
 
-    // Existing (already-saved) receipts — remove deletes them from the DB
-    // immediately, not just from this in-memory list.
     private void addExistingReceiptRow(Receipt r) {
         LinearLayout row = buildAttachmentRow("📎 " + r.getFileName() + " (" + r.getFileSizeDisplay() + ")", null);
         View removeBtn = row.getChildAt(1);
@@ -685,10 +652,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         return (int) (v * getResources().getDisplayMetrics().density);
     }
 
-    // ── Save (update) — same validations as TransactionEntryActivity ──
-// NEW — now returns whether the save actually happened, and takes flags
-// for whether to toast/reload (Prev/Next calls this with reload=false
-// since navigateTo() is about to load a different transaction anyway).
     private boolean saveTransaction(boolean showToast, boolean reload) {
         String amtStr = etAmount.getText().toString().trim();
         if (amtStr.isEmpty()) {
@@ -710,6 +673,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
         }
         Category selCat = (Category) spCategory.getSelectedItem();
 
+        // ISSUE 3 FIX: Subcategory Validation Check
         SubCategory selSub = null;
         if (spSubCategory.getVisibility() == View.VISIBLE) {
             selSub = (SubCategory) spSubCategory.getSelectedItem();
@@ -724,7 +688,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
             return false;
         }
 
-        // Resolve selected book (move)
         @SuppressWarnings("unchecked")
         List<CashBook> books = (List<CashBook>) spMoveBook.getTag();
         int newBookId = books != null && spMoveBook.getSelectedItemPosition() >= 0
@@ -752,7 +715,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
         saveAttachments(txnId);
         isDirty = false;
         if (showToast) Toast.makeText(this, "✓ Saved!", Toast.LENGTH_SHORT).show();
-        if (reload) loadTransaction(); // refresh display (also re-renders newly-saved attachments)
+        if (reload) loadTransaction();
         return true;
     }
 
@@ -769,7 +732,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         pendingAttachments.clear();
     }
 
-    // ── Duplicate ─────────────────────────────────────────
     private void showDuplicateDialog() {
         String[] opts = {"Copy with today's date", "Copy with original date"};
         new AlertDialog.Builder(this)
@@ -799,8 +761,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
                 .show();
     }
 
-    //test
-    // ── Move to another book ──────────────────────────────
     private void moveTransaction() {
         @SuppressWarnings("unchecked")
         List<CashBook> books = (List<CashBook>) spMoveBook.getTag();
@@ -836,7 +796,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ── Prev / Next navigation ────────────────────────────
     private void navigateTo(Integer id) {
         if (id == null || id == 0) return;
         txnId = id;
@@ -844,5 +803,69 @@ public class TransactionDetailActivity extends AppCompatActivity {
     }
 
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {
+    }
+
+    private void showKeywordSuggestion(String note) {
+        // Note-ஐ trim செய்து, நடுவில் உள்ள multiple spaces-ஐ single space-ஆக மாற்றவும்
+        String cleanedNote = (note != null) ? note.trim().replaceAll("\\s+", " ") : "";
+
+        if (cleanedNote.length() < 3 || current == null) {
+            pendingSuggestion = null;
+            tvKwSuggestion.setVisibility(View.GONE);
+            return;
+        }
+
+        // Clean செய்யப்பட்ட note-ஐ வைத்து Database-ல் search செய்யவும்
+        KeywordMapping match = kwDao.suggest(cleanedNote, current.getType().name(), bookId);
+
+        if (match == null) {
+            pendingSuggestion = null;
+            tvKwSuggestion.setVisibility(View.GONE);
+            return;
+        }
+
+        pendingSuggestion = match;
+        tvKwSuggestion.setText("💡 " + match.getCategoryName() +
+                (match.getSubCategoryName() != null ? " ▸ " + match.getSubCategoryName() : "") +
+                " — tap to apply");
+        tvKwSuggestion.setVisibility(View.VISIBLE);
+    }
+
+    private void wireDescriptionAutoSuggest() {
+        if (etNote == null || tvKwSuggestion == null) return;
+
+        etNote.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                showKeywordSuggestion(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+            }
+        });
+
+        tvKwSuggestion.setOnClickListener(v -> {
+            if (pendingSuggestion == null) return;
+
+            // 1. SubCategory ID-ஐ முதலில் சேமிக்கவும்
+            pendingSubCategoryId = pendingSuggestion.getSubCategoryId();
+
+            for (int i = 0; i < currentCategories.size(); i++) {
+                if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
+                    // 2. Category selection அமைக்கவும்
+                    spCategory.setSelection(i, false);
+
+                    // 3. SubCategory பட்டியலை லோட் செய்து Subcategory-ஐத் தேர்ந்தெடுக்கவும்
+                    loadSubCategoriesFor(pendingSuggestion.getCategoryId());
+                    break;
+                }
+            }
+            tvKwSuggestion.setVisibility(View.GONE);
+        });
     }
 }

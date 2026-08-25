@@ -20,9 +20,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.expenseos.R;
 import com.expenseos.adapter.SubCategorySplitAdapter;
 import com.expenseos.adapter.TransactionAdapter;
+import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.TransactionDao;
+import com.expenseos.model.CashBook;
+import com.expenseos.model.Category;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
+import com.expenseos.util.MonthBookResolver;
 import com.github.mikephil.charting.charts.LineChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.Entry;
@@ -32,10 +36,8 @@ import com.github.mikephil.charting.formatter.ValueFormatter;
 
 import java.math.BigDecimal;
 import java.text.DateFormatSymbols;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
 
     private int bookId, categoryId;
     private String categoryName;
+    private String seriesSuffix; // "" = plain month books; "Credit Card" etc — which series Prev/Next stays within
     private boolean isExpense;
     private Calendar currentCal;
     private TransactionDao dao;
@@ -56,6 +59,8 @@ public class CategoryStatsActivity extends AppCompatActivity {
         bookId = getIntent().getIntExtra("bookId", 0);
         categoryId = getIntent().getIntExtra("categoryId", 0);
         categoryName = getIntent().getStringExtra("categoryName");
+        seriesSuffix = getIntent().getStringExtra("seriesSuffix");
+        if (seriesSuffix == null) seriesSuffix = "";
         isExpense = getIntent().getBooleanExtra("isExpense", true);
 
         int year = getIntent().getIntExtra("year", 2026);
@@ -82,6 +87,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
         if (btnPrevMonth != null) {
             btnPrevMonth.setOnClickListener(v -> {
                 currentCal.add(Calendar.MONTH, -1);
+                resolveBookAndCategoryForCurrentMonth();
                 loadAllDataForSelectedMonth();
             });
         }
@@ -90,6 +96,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
         if (btnNextMonth != null) {
             btnNextMonth.setOnClickListener(v -> {
                 currentCal.add(Calendar.MONTH, 1);
+                resolveBookAndCategoryForCurrentMonth();
                 loadAllDataForSelectedMonth();
             });
         }
@@ -137,6 +144,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
             Calendar now = Calendar.getInstance();
             currentCal.set(Calendar.YEAR, now.get(Calendar.YEAR));
             currentCal.set(Calendar.MONTH, now.get(Calendar.MONTH));
+            resolveBookAndCategoryForCurrentMonth();
             loadAllDataForSelectedMonth();
             dialog.dismiss();
         });
@@ -170,9 +178,11 @@ public class CategoryStatsActivity extends AppCompatActivity {
             tvMonth.setOnClickListener(v -> {
                 currentCal.set(Calendar.YEAR, selectedYear[0]);
                 currentCal.set(Calendar.MONTH, monthIndex);
+                resolveBookAndCategoryForCurrentMonth();
                 loadAllDataForSelectedMonth();
                 dialog.dismiss();
             });
+
 
             GridLayout.LayoutParams params = new GridLayout.LayoutParams();
             params.width = 0;
@@ -186,6 +196,31 @@ public class CategoryStatsActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    // Prev/Next changes the calendar month, but bookId points at one
+    // specific cashbook (e.g. "September 2026 Credit Card") — re-resolve
+    // which book that new month/series actually maps to, and re-find this
+    // category's row within THAT book (categories are per-book, so the
+    // numeric id can differ book to book even for the same name).
+    private void resolveBookAndCategoryForCurrentMonth() {
+        java.time.YearMonth ym = java.time.YearMonth.of(currentCal.get(Calendar.YEAR), currentCal.get(Calendar.MONTH) + 1);
+        CashBook book = MonthBookResolver.findBookForMonth(this, ym, seriesSuffix);
+        if (book == null) {
+            bookId = 0;
+            categoryId = 0;
+            return;
+        }
+        bookId = book.getId();
+
+        String type = isExpense ? "EXPENSE" : "INCOME";
+        categoryId = 0;
+        for (Category cat : new CategoryDao(this).findByType(type, bookId)) {
+            if (categoryName != null && categoryName.equalsIgnoreCase(cat.getName())) {
+                categoryId = cat.getId();
+                break;
+            }
+        }
+    }
+
     private void loadAllDataForSelectedMonth() {
         int year = currentCal.get(Calendar.YEAR);
         int month = currentCal.get(Calendar.MONTH) + 1;
@@ -193,22 +228,36 @@ public class CategoryStatsActivity extends AppCompatActivity {
         TextView tvMonthHeader = findViewById(R.id.tvMonthYearHeader);
         if (tvMonthHeader != null) {
             String monthName = new DateFormatSymbols().getMonths()[month - 1];
-            tvMonthHeader.setText(monthName.substring(0, 3) + " " + year);
+            tvMonthHeader.setText(monthName.substring(0, 3) + " " + year
+                    + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
         }
 
         String type = isExpense ? "EXPENSE" : "INCOME";
 
-        loadSubcategorySplit(type, year, month);
+        if (bookId <= 0 || categoryId <= 0) {
+            TextView tvTotalBalance = findViewById(R.id.tvTotalBalance);
+            if (tvTotalBalance != null) tvTotalBalance.setText("₹ 0.00");
+            TextView tvAllAmount = findViewById(R.id.tvAllAmount);
+            if (tvAllAmount != null) tvAllAmount.setText("₹ 0.00");
+            View subSection = findViewById(R.id.llSubcategorySection);
+            if (subSection != null) subSection.setVisibility(View.GONE);
+            RecyclerView rv = findViewById(R.id.rvCategoryTxns);
+            if (rv != null)
+                rv.setAdapter(new TransactionAdapter(this, new ArrayList<>(), null, null));
+            return;
+        }
+
+        loadSubcategorySplit(type);
         loadTrendChartWithZeroPadding(year, month);
-        loadTransactionList(type, year, month);
+        loadTransactionList(type);
     }
 
-    private void loadSubcategorySplit(String type, int year, int month) {
-        // Scoped to THIS cashbook only — categories with the same name can
-        // exist in other books, so bookId=0 (global) was silently summing
-        // those in too.
-        List<Map<String, Object>> allSub = dao.subCategoryBreakdownByMonth(type, year, month, bookId);
-
+    private void loadSubcategorySplit(String type) {
+        // Scoped to THIS cashbook only (bookId) — NOT additionally filtered
+        // by calendar date. Book = period here (e.g. a credit-card
+        // statement book can hold both Aug- and Sep-dated entries); the old
+        // date filter was silently dropping those and undercounting.
+        List<Map<String, Object>> allSub = dao.subCategoryBreakdownByBook(type, bookId);
         List<Map<String, Object>> mine = new ArrayList<>();
         BigDecimal overallCategoryTotal = BigDecimal.ZERO;
 
@@ -247,29 +296,38 @@ public class CategoryStatsActivity extends AppCompatActivity {
     }
 
     private void loadTrendChartWithZeroPadding(int activeYear, int activeMonth) {
-        List<Map<String, Object>> dbTrend = dao.categoryMonthlyTrend(categoryId, 8);
-
-        Map<String, BigDecimal> dbMap = new HashMap<>();
-        if (dbTrend != null) {
-            for (Map<String, Object> row : dbTrend) {
-                String m = (String) row.get("month");
-                BigDecimal t = (BigDecimal) row.get("total");
-                if (m != null && t != null) dbMap.put(m, t);
-            }
-        }
-
+        // Book-by-book, same "book = period" rule as everywhere else in
+        // Stats — NOT a real calendar-date range. For each of the last 8
+        // months in this SAME series, resolve which cashbook that was, find
+        // this category's row within THAT book, and sum its total — a book
+        // with no matching category shows 0.
         Map<String, BigDecimal> paddedTrend = new LinkedHashMap<>();
         Calendar cal = (Calendar) currentCal.clone();
         String[] monthShortNames = new DateFormatSymbols().getShortMonths();
+        String type = isExpense ? "EXPENSE" : "INCOME";
+        CategoryDao catDao = new CategoryDao(this);
 
         for (int i = 7; i >= 0; i--) {
             Calendar tempCal = (Calendar) cal.clone();
             tempCal.add(Calendar.MONTH, -i);
             String label = monthShortNames[tempCal.get(Calendar.MONTH)];
-            BigDecimal value = dbMap.getOrDefault(label, BigDecimal.ZERO);
+
+            java.time.YearMonth ym = java.time.YearMonth.of(tempCal.get(Calendar.YEAR), tempCal.get(Calendar.MONTH) + 1);
+            CashBook book = MonthBookResolver.findBookForMonth(this, ym, seriesSuffix);
+            BigDecimal value = BigDecimal.ZERO;
+            if (book != null) {
+                int catIdForBook = 0;
+                for (Category cat : catDao.findByType(type, book.getId())) {
+                    if (categoryName != null && categoryName.equalsIgnoreCase(cat.getName())) {
+                        catIdForBook = cat.getId();
+                        break;
+                    }
+                }
+                if (catIdForBook > 0)
+                    value = dao.categoryTotalForBook(type, book.getId(), catIdForBook);
+            }
             paddedTrend.put(label, value);
         }
-
 
         LineChart chart = findViewById(R.id.lineCategoryTrend);
         if (chart == null) return;
@@ -348,7 +406,9 @@ public class CategoryStatsActivity extends AppCompatActivity {
         chart.invalidate();
     }
 
-    private void loadTransactionList(String type, int activeYear, int activeMonth) {
+    private void loadTransactionList(String type) {
+        // bookId + categoryId already uniquely scope this — no extra
+        // calendar-date filter (see loadSubcategorySplit()'s note above).
         TransactionFilter f = new TransactionFilter();
         f.setBookId(bookId);
         f.setType(type);
@@ -361,28 +421,16 @@ public class CategoryStatsActivity extends AppCompatActivity {
         f.setSortDir("desc");
 
         List<Transaction> txns = dao.findByFilter(f);
-        List<Transaction> monthlyTxns = new ArrayList<>();
-
-        if (txns != null) {
-            for (Transaction t : txns) {
-                LocalDateTime dt = t.getDateTime();
-                if (dt == null) dt = t.getCreatedAt();
-                if (dt != null) {
-                    if (dt.getYear() == activeYear && dt.getMonthValue() == activeMonth) {
-                        monthlyTxns.add(t);
-                    }
-                }
-            }
-        }
 
         RecyclerView rv = findViewById(R.id.rvCategoryTxns);
         if (rv != null) {
             rv.setLayoutManager(new LinearLayoutManager(this));
-            rv.setAdapter(new TransactionAdapter(this, monthlyTxns, null, t -> {
+            rv.setAdapter(new TransactionAdapter(this, txns != null ? txns : new ArrayList<>(), null, t -> {
                 Intent i = new Intent(this, EntryDetailActivity.class);
                 i.putExtra("txnId", t.getId());
                 startActivity(i);
             }));
         }
     }
+
 }

@@ -552,6 +552,49 @@ public class TransactionDao {
         }
     }
 
+    // bookId-only variant — NO calendar-date filter. Book = period here
+    // (e.g. a credit-card statement book can hold both Aug- and
+    // Sep-dated entries) — filtering by book_id alone is the correct
+    // scope, matching categoryBreakdownWithId()'s own filtering.
+    public List<Map<String, Object>> subCategoryBreakdownByBook(String type, Integer bookId) {
+        List<String> params = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT c.name AS category, COALESCE(sc.name, 'Uncategorized') AS subcategory, "
+                        + "COALESCE(SUM(t.amount), 0) AS total, COUNT(*) AS txn_count "
+                        + "FROM transactions t "
+                        + "JOIN categories c ON t.category_id = c.id "
+                        + "LEFT JOIN sub_categories sc ON t.sub_categories_id = sc.id "
+                        + "WHERE t.type = ? ");
+        params.add(type);
+        if (bookId != null && bookId > 0) {
+            sql.append(" AND t.book_id = ? ");
+            params.add(String.valueOf(bookId));
+        }
+        sql.append("GROUP BY c.name, sc.name ORDER BY total DESC");
+        try (Cursor c = db.rawQuery(sql.toString(), params.toArray(new String[0]))) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (c.moveToNext()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("category", c.getString(c.getColumnIndexOrThrow("category")));
+                m.put("subcategory", c.getString(c.getColumnIndexOrThrow("subcategory")));
+                m.put("total", toBigDecimal(c, "total"));
+                m.put("txnCount", c.getInt(c.getColumnIndexOrThrow("txn_count")));
+                rows.add(m);
+            }
+            return rows;
+        }
+    }
+
+    // One book's total for one category — used to build the trend chart
+    // book-by-book instead of by real calendar date.
+    public BigDecimal categoryTotalForBook(String type, int bookId, int categoryId) {
+        String sql = "SELECT COALESCE(SUM(amount),0) AS total FROM transactions WHERE type=? AND book_id=? AND category_id=?";
+        try (Cursor c = db.rawQuery(sql, new String[]{type, String.valueOf(bookId), String.valueOf(categoryId)})) {
+            if (c.moveToFirst()) return toBigDecimal(c, "total");
+        }
+        return BigDecimal.ZERO;
+    }
+
     // ── Day-of-week spending pattern ─────────────────
     public List<Map<String, Object>> dayOfWeekPattern(int year, int month, Integer bookId) {
         List<String> params = new ArrayList<>();
