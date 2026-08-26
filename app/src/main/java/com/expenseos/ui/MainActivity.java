@@ -78,6 +78,13 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.navIntegrations).setOnClickListener(v ->
                 startActivity(new Intent(this, IntegrationsActivity.class)));
 
+        // ── ADDED: AI Assistant Navigation Click Listener ──
+        View navAi = findViewById(R.id.navAiAssistant);
+        if (navAi != null) {
+            navAi.setOnClickListener(v ->
+                    startActivity(new Intent(this, ChatActivity.class)));
+        }
+
         // Restore from Cloud
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
@@ -174,10 +181,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void openBook(int id, String name) {
         CashBook b = dao.findById(id);
-//        if (b != null && !b.isActive()) {
-//            Toast.makeText(this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
-//            return;
-//        }
         AppConfig.get(this).setActiveBook(id, name);
         startActivity(new Intent(this, HomeActivity.class));
     }
@@ -223,39 +226,19 @@ public class MainActivity extends AppCompatActivity {
             h.tvNet.setText((negative ? "-₹" : "₹") + String.format("%,.2f", net.abs()));
             h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
 
-            // Sets right-side status bar color based on active/inactive status
             if (h.vStatusBar != null) {
                 int statusColor = Color.parseColor(b.isActive() ? "#4CAF50" : "#DC2626");
                 h.vStatusBar.setBackgroundColor(statusColor);
             }
 
-            // Row tap = open (only if active)
-//            h.row.setOnClickListener(v -> {
-//                if (b.isActive()) {
-//                    openBook(b.getId(), b.getName());
-//                } else {
-//                    Toast.makeText(MainActivity.this,
-//                            "This book is inactive. Edit it to activate.",
-//                            Toast.LENGTH_SHORT).show();
-//                }
-//            });
-
             h.row.setOnClickListener(v -> openBook(b.getId(), b.getName()));
 
-            // Menu button = Open / Edit / Delete
             h.btnMenu.setOnClickListener(v -> {
                 PopupMenu popup = new PopupMenu(MainActivity.this, v);
                 popup.getMenu().add(0, 1, 0, "Open");
                 popup.getMenu().add(0, 2, 1, "Edit");
                 popup.getMenu().add(0, 3, 2, "Delete");
                 popup.setOnMenuItemClickListener(item -> {
-//                    if (item.getItemId() == 1) {
-//                        if (b.isActive()) openBook(b.getId(), b.getName());
-//                        else
-//                            Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
-//                        return true;
-//                    }
-
                     if (item.getItemId() == 1) {
                         openBook(b.getId(), b.getName());
                         return true;

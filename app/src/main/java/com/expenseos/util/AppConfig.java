@@ -3,49 +3,33 @@ package com.expenseos.util;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/**
- * Equivalent of web.xml context-params — stored in SharedPreferences.
- * All keys mirror the web.xml param-names exactly.
- */
 public class AppConfig {
 
     private static final String PREF_NAME = "expenseos_config";
 
-    // ── DB keys (mirrors web.xml) ──────────────────────────
     public static final String KEY_DB_URL = "DB_URL";
     public static final String KEY_DB_USER = "DB_USER";
     public static final String KEY_DB_PASSWORD = "DB_PASSWORD";
-
-    // ── Gmail keys ──────────────────────────────────────────
     public static final String KEY_GMAIL_FROM = "GMAIL_FROM";
     public static final String KEY_GMAIL_APP_PASS = "GMAIL_APP_PASS";
-
-    // ── Scheduler failure alert ──────────────────────────────
     public static final String KEY_SCHEDULER_ALERT_EMAIL = "scheduler.alert.email";
 
-    // ── OpenAI (chat/stats assistant) ──────────────────────────
+    // ── AI Assistant keys ──────────────────────────────────────
     public static final String KEY_OPENAI_API_KEY = "openai.api.key";
     public static final String KEY_OPENAI_MODEL = "openai.model";
+    public static final String KEY_AI_PROVIDER = "ai.provider"; // New Provider Key
 
-    // ── Zoho WorkDrive keys ─────────────────────────────────
     public static final String KEY_ZOHO_CLIENT_ID = "zoho.client.id";
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
     public static final String KEY_ZOHO_REFRESH_TOKEN = "zoho.refresh.token";
     public static final String KEY_WORKDRIVE_FOLDER_ID = "workdrive.main.folder.id";
-
-    // ── Backup schedule ─────────────────────────────────────
     public static final String KEY_BACKUP_HOUR = "backup.schedule.hour";
     public static final String KEY_BACKUP_MINUTE = "backup.schedule.minute";
-
-    // ── Session ─────────────────────────────────────────────
     public static final String KEY_SESSION_TIMEOUT = "session.timeout";
-
-    // ── App state ───────────────────────────────────────────
     public static final String KEY_ACTIVE_BOOK_ID = "active_book_id";
     public static final String KEY_ACTIVE_BOOK_NAME = "active_book_name";
 
     private final SharedPreferences prefs;
-
     private static AppConfig instance;
 
     private AppConfig(Context ctx) {
@@ -88,8 +72,12 @@ public class AppConfig {
     }
 
     public String getOpenAiModel() {
-        return prefs.getString(KEY_OPENAI_MODEL, "gpt-4o-mini");
+        return prefs.getString(KEY_OPENAI_MODEL, "gemini-1.5-flash");
     }
+
+    public String getAiProvider() {
+        return prefs.getString(KEY_AI_PROVIDER, "gemini");
+    } // Default to Gemini
 
     public String getZohoClientId() {
         return prefs.getString(KEY_ZOHO_CLIENT_ID, "");
@@ -129,28 +117,23 @@ public class AppConfig {
 
     // ── Setters ──────────────────────────────────────────────
     public void setDb(String url, String user, String pass) {
-        prefs.edit()
-                .putString(KEY_DB_URL, url)
-                .putString(KEY_DB_USER, user)
-                .putString(KEY_DB_PASSWORD, pass)
-                .apply();
+        prefs.edit().putString(KEY_DB_URL, url).putString(KEY_DB_USER, user).putString(KEY_DB_PASSWORD, pass).apply();
     }
 
     public void setGmail(String from, String appPass) {
-        prefs.edit()
-                .putString(KEY_GMAIL_FROM, from)
-                .putString(KEY_GMAIL_APP_PASS, appPass)
-                .apply();
+        prefs.edit().putString(KEY_GMAIL_FROM, from).putString(KEY_GMAIL_APP_PASS, appPass).apply();
     }
 
     public void setSchedulerAlertEmail(String email) {
         prefs.edit().putString(KEY_SCHEDULER_ALERT_EMAIL, email).apply();
     }
 
-    public void setOpenAi(String apiKey, String model) {
+    // Updated AI Config setter with Provider parameter
+    public void setAiConfig(String apiKey, String model, String provider) {
         prefs.edit()
                 .putString(KEY_OPENAI_API_KEY, apiKey)
-                .putString(KEY_OPENAI_MODEL, model == null || model.isBlank() ? "gpt-4o-mini" : model)
+                .putString(KEY_OPENAI_MODEL, model == null || model.isBlank() ? "gemini-1.5-flash" : model)
+                .putString(KEY_AI_PROVIDER, provider == null ? "gemini" : provider)
                 .apply();
     }
 
@@ -164,10 +147,7 @@ public class AppConfig {
     }
 
     public void setBackupSchedule(int hour, int minute) {
-        prefs.edit()
-                .putInt(KEY_BACKUP_HOUR, hour)
-                .putInt(KEY_BACKUP_MINUTE, minute)
-                .apply();
+        prefs.edit().putInt(KEY_BACKUP_HOUR, hour).putInt(KEY_BACKUP_MINUTE, minute).apply();
     }
 
     public void setSessionTimeout(int minutes) {
@@ -175,10 +155,7 @@ public class AppConfig {
     }
 
     public void setActiveBook(int id, String name) {
-        prefs.edit()
-                .putInt(KEY_ACTIVE_BOOK_ID, id)
-                .putString(KEY_ACTIVE_BOOK_NAME, name)
-                .apply();
+        prefs.edit().putInt(KEY_ACTIVE_BOOK_ID, id).putString(KEY_ACTIVE_BOOK_NAME, name).apply();
     }
 
     public boolean isConfigured() {

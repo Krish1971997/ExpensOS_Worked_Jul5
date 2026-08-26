@@ -7,8 +7,10 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,6 +19,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
+import com.expenseos.util.AppConfig;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -38,9 +41,10 @@ public class ConfigFragment extends Fragment {
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
     private EditText etOpenAiKey, etOpenAiModel;
 
-    // Status views — keep references to avoid findViewById on wrong view
+    // Status & AI Spinner views
     private Button btnTestConnection, btnSyncConfigToDb;
     private TextView tvConnectionResult, tvSyncConfigStatus;
+    private Spinner spAiProvider;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inf, ViewGroup pg, Bundle s) {
@@ -54,6 +58,7 @@ public class ConfigFragment extends Fragment {
                 "expenseos_prefs", android.content.Context.MODE_PRIVATE);
 
         bindViews(v);
+        setupSpinner();
         loadSavedValues();
         setupButtons();
     }
@@ -73,12 +78,19 @@ public class ConfigFragment extends Fragment {
         etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
         etOpenAiKey = v.findViewById(R.id.etCfgOpenAiKey);
         etOpenAiModel = v.findViewById(R.id.etCfgOpenAiModel);
+        spAiProvider = v.findViewById(R.id.spCfgAiProvider);
 
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
-
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
+    }
+
+    private void setupSpinner() {
+        String[] providers = {"gemini", "openai"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
+                android.R.layout.simple_spinner_dropdown_item, providers);
+        spAiProvider.setAdapter(adapter);
     }
 
     private void loadSavedValues() {
@@ -87,38 +99,37 @@ public class ConfigFragment extends Fragment {
         etDbPass.setText(prefs.getString("db_pass", ""));
         etGmailFrom.setText(prefs.getString("gmail_from", ""));
         etGmailPass.setText(prefs.getString("gmail_pass", ""));
-        etAlertEmail.setText(com.expenseos.util.AppConfig.get(requireContext()).getSchedulerAlertEmail());
+        etAlertEmail.setText(AppConfig.get(requireContext()).getSchedulerAlertEmail());
 
-        // Zoho fields are saved via AppConfig.setZoho() (see btnSaveCfgZoho
-        // handler below), never to `prefs` — so they must be loaded from
-        // AppConfig too, or this always reads back empty after leaving and
-        // returning to this screen even though the save itself succeeded.
-        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(requireContext());
+        AppConfig cfg = AppConfig.get(requireContext());
         etZohoClientId.setText(cfg.getZohoClientId());
         etZohoClientSecret.setText(cfg.getZohoClientSecret());
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
+
         etOpenAiKey.setText(cfg.getOpenAiApiKey());
         etOpenAiModel.setText(cfg.getOpenAiModel());
+
+        if ("openai".equalsIgnoreCase(cfg.getAiProvider())) {
+            spAiProvider.setSelection(1);
+        } else {
+            spAiProvider.setSelection(0);
+        }
     }
 
     private void setupButtons() {
-        // ── Save DB Config ──────────────────────────────────
-        requireView().findViewById(R.id.btnSaveCfgDb)
-                .setOnClickListener(v -> {
-                    saveDbPrefs();
-                    toast("✓ DB Config saved!");
-                });
+        requireView().findViewById(R.id.btnSaveCfgDb).setOnClickListener(v -> {
+            saveDbPrefs();
+            toast("✓ DB Config saved!");
+        });
 
-        // ── Save Gmail Config ───────────────────────────────
-        requireView().findViewById(R.id.btnSaveCfgGmail)
-                .setOnClickListener(v -> {
-                    saveGmailPrefs();
-                    toast("✓ Gmail Config saved!");
-                });
+        requireView().findViewById(R.id.btnSaveCfgGmail).setOnClickListener(v -> {
+            saveGmailPrefs();
+            toast("✓ Gmail Config saved!");
+        });
 
         requireView().findViewById(R.id.btnSaveCfgZoho).setOnClickListener(v -> {
-            com.expenseos.util.AppConfig.get(requireContext()).setZoho(
+            AppConfig.get(requireContext()).setZoho(
                     etZohoClientId.getText().toString().trim(),
                     etZohoClientSecret.getText().toString().trim(),
                     etZohoRefreshToken.getText().toString().trim(),
@@ -127,20 +138,18 @@ public class ConfigFragment extends Fragment {
         });
 
         requireView().findViewById(R.id.btnSaveCfgOpenAi).setOnClickListener(v -> {
-            com.expenseos.util.AppConfig.get(requireContext()).setOpenAi(
+            String selectedProvider = spAiProvider.getSelectedItem().toString();
+            AppConfig.get(requireContext()).setAiConfig(
                     etOpenAiKey.getText().toString().trim(),
-                    etOpenAiModel.getText().toString().trim());
+                    etOpenAiModel.getText().toString().trim(),
+                    selectedProvider);
             toast("✓ AI Config saved!");
         });
 
-        // ── Test DB Connection ──────────────────────────────
         btnTestConnection.setOnClickListener(v -> testConnection());
-
-        // ── Sync Config to DB ───────────────────────────────
         btnSyncConfigToDb.setOnClickListener(v -> syncConfigToDb());
     }
 
-    // ── Test Connection ───────────────────────────────────
     private void testConnection() {
         String url = etDbUrl.getText().toString().trim();
         String user = etDbUser.getText().toString().trim();
@@ -151,13 +160,10 @@ public class ConfigFragment extends Fragment {
             return;
         }
 
-        // Save current values first
         saveDbPrefs();
-
         setButtonState(btnTestConnection, false, "Testing…");
         showResult(tvConnectionResult, "⏳ Connecting to Neon DB…", null);
 
-        // ── Background thread — JDBC call ──────────────────
         exec.execute(() -> {
             String result;
             boolean ok;
@@ -179,11 +185,9 @@ public class ConfigFragment extends Fragment {
                 ok = false;
             }
 
-            // ── Back to UI thread ───────────────────────────
             final String finalResult = result;
             final boolean finalOk = ok;
             mainHandler.post(() -> {
-                // Fragment still attached? Guard required
                 if (!isAdded() || getView() == null) return;
                 setButtonState(btnTestConnection, true, "🔗 Test Connection");
                 showResult(tvConnectionResult, finalResult, finalOk);
@@ -191,12 +195,9 @@ public class ConfigFragment extends Fragment {
         });
     }
 
-    // ── Sync all config to Neon app_config table ──────────
     private void syncConfigToDb() {
-        // Save all locally first
         saveDbPrefs();
         saveGmailPrefs();
-//        saveAppPrefs();
 
         String url = prefs.getString("db_url", "");
         String user = prefs.getString("db_user", "");
@@ -217,7 +218,6 @@ public class ConfigFragment extends Fragment {
                 Class.forName("org.postgresql.Driver");
                 Connection conn = DriverManager.getConnection(url, user, pass);
 
-                // Create table if not exists
                 conn.createStatement().execute(
                         "CREATE TABLE IF NOT EXISTS app_config (" +
                                 "  key         VARCHAR(100) PRIMARY KEY," +
@@ -226,7 +226,6 @@ public class ConfigFragment extends Fragment {
                                 ")"
                 );
 
-                // Upsert config (passwords NOT synced for security)
                 String[][] configs = {
                         {"backup.schedule.hour", prefs.getString("backup_hour", "0")},
                         {"backup.schedule.minute", prefs.getString("backup_minute", "0")},
@@ -266,15 +265,12 @@ public class ConfigFragment extends Fragment {
         });
     }
 
-    // ── SharedPreferences helpers ─────────────────────────
     private void saveDbPrefs() {
         String url = etDbUrl.getText().toString().trim();
         String user = etDbUser.getText().toString().trim();
         String pass = etDbPass.getText().toString().trim();
 
-        // Save to BOTH — AppConfig (used by SyncManager/Restore dialog) is the
-        // source of truth; keep the old prefs write too so nothing else silently breaks.
-        com.expenseos.util.AppConfig.get(requireContext()).setDb(url, user, pass);
+        AppConfig.get(requireContext()).setDb(url, user, pass);
         prefs.edit()
                 .putString("db_url", url)
                 .putString("db_user", user)
@@ -287,40 +283,28 @@ public class ConfigFragment extends Fragment {
         String pass = etGmailPass.getText().toString().trim();
         String alertEmail = etAlertEmail.getText().toString().trim();
 
-        // Save to BOTH — AppConfig (used by GmailSender for the Monthly
-        // Category Report) is the source of truth; keep the old prefs write
-        // too so nothing else silently breaks.
-        com.expenseos.util.AppConfig.get(requireContext()).setGmail(from, pass);
-        com.expenseos.util.AppConfig.get(requireContext()).setSchedulerAlertEmail(alertEmail);
+        AppConfig.get(requireContext()).setGmail(from, pass);
+        AppConfig.get(requireContext()).setSchedulerAlertEmail(alertEmail);
         prefs.edit()
                 .putString("gmail_from", from)
                 .putString("gmail_pass", pass)
                 .apply();
     }
 
-    // ── UI helpers ────────────────────────────────────────
     private void setButtonState(Button btn, boolean enabled, String text) {
         btn.setEnabled(enabled);
         btn.setText(text);
     }
 
-    /**
-     * ok = true  → green
-     * ok = false → red
-     * ok = null  → amber (loading)
-     */
     private void showResult(TextView tv, String msg, Boolean ok) {
         tv.setVisibility(View.VISIBLE);
         tv.setText(msg);
         if (ok == null) {
-            tv.setTextColor(requireContext().getResources()
-                    .getColor(R.color.amber, null));
+            tv.setTextColor(requireContext().getResources().getColor(R.color.amber, null));
         } else if (ok) {
-            tv.setTextColor(requireContext().getResources()
-                    .getColor(R.color.green, null));
+            tv.setTextColor(requireContext().getResources().getColor(R.color.green, null));
         } else {
-            tv.setTextColor(requireContext().getResources()
-                    .getColor(R.color.red, null));
+            tv.setTextColor(requireContext().getResources().getColor(R.color.red, null));
         }
     }
 

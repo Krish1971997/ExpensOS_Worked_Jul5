@@ -1,7 +1,7 @@
 package com.expenseos.ui;
 
 import android.os.Bundle;
-import android.view.View;
+import android.view.View; // Added missing import
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
@@ -11,24 +11,23 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.expenseos.R;
+import com.expenseos.util.AppConfig;
+import com.expenseos.util.GeminiClient;
 import com.expenseos.util.OpenAiClient;
 
 import org.json.JSONArray;
 
 public class ChatActivity extends AppCompatActivity {
-
     private LinearLayout messagesContainer;
     private ScrollView scrollView;
     private EditText etInput;
-    private OpenAiClient aiClient;
-    private final JSONArray conversation = new JSONArray(); // running message history
+    private final JSONArray conversation = new JSONArray();
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_chat);
 
-        aiClient = new OpenAiClient(this);
         messagesContainer = findViewById(R.id.chatMessagesContainer);
         scrollView = findViewById(R.id.chatScrollView);
         etInput = findViewById(R.id.etChatInput);
@@ -49,25 +48,45 @@ public class ChatActivity extends AppCompatActivity {
         btnSend.setEnabled(false);
         View typingIndicator = addBotBubble("…thinking");
 
-        new Thread(() -> aiClient.ask(text, conversation, new OpenAiClient.Callback() {
-            @Override
-            public void onResult(String answer) {
-                runOnUiThread(() -> {
-                    messagesContainer.removeView(typingIndicator);
-                    addBotBubble(answer);
-                    btnSend.setEnabled(true);
-                });
-            }
+        String provider = AppConfig.get(this).getAiProvider();
 
-            @Override
-            public void onError(String message) {
-                runOnUiThread(() -> {
-                    messagesContainer.removeView(typingIndicator);
-                    addBotBubble("⚠ " + message);
-                    btnSend.setEnabled(true);
+        new Thread(() -> {
+            if ("openai".equalsIgnoreCase(provider)) {
+                // Run OpenAI Client
+                new OpenAiClient(this).ask(text, conversation, new OpenAiClient.Callback() {
+                    @Override
+                    public void onResult(String answer) {
+                        handleResponse(typingIndicator, answer, btnSend);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        handleResponse(typingIndicator, "⚠ " + message, btnSend);
+                    }
+                });
+            } else {
+                // Run Gemini Client (Default)
+                new GeminiClient(this).ask(text, conversation, new GeminiClient.Callback() {
+                    @Override
+                    public void onResult(String answer) {
+                        handleResponse(typingIndicator, answer, btnSend);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        handleResponse(typingIndicator, "⚠ " + message, btnSend);
+                    }
                 });
             }
-        })).start();
+        }).start();
+    }
+
+    private void handleResponse(View typingIndicator, String message, ImageButton btnSend) {
+        runOnUiThread(() -> {
+            messagesContainer.removeView(typingIndicator);
+            addBotBubble(message);
+            btnSend.setEnabled(true);
+        });
     }
 
     private View addUserBubble(String text) {
@@ -85,7 +104,6 @@ public class ChatActivity extends AppCompatActivity {
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         tv.setBackgroundResource(isUser ? R.drawable.bg_chat_bubble_user : R.drawable.bg_chat_bubble_bot);
         tv.setTextColor(getColor(isUser ? android.R.color.white : R.color.text));
-
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.gravity = isUser ? android.view.Gravity.END : android.view.Gravity.START;
@@ -93,7 +111,6 @@ public class ChatActivity extends AppCompatActivity {
         lp.leftMargin = dp(8);
         lp.rightMargin = dp(8);
         tv.setLayoutParams(lp);
-
         messagesContainer.addView(tv);
         scrollView.post(() -> scrollView.fullScroll(android.view.View.FOCUS_DOWN));
         return tv;

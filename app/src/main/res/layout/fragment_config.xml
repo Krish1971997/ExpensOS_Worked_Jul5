@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@color/bg">
 
     <LinearLayout
@@ -30,7 +30,7 @@
             android:layout_marginBottom="14dp" />
 
         <!-- ── DB CONFIG ── -->
-        <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
@@ -101,7 +101,6 @@
                     android:hint="••••••••"
                     android:layout_marginBottom="12dp" />
 
-                <!-- Test Connection -->
                 <Button
                     android:id="@+id/btnTestConnection"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -130,7 +129,7 @@
         </androidx.cardview.widget.CardView>
 
         <!-- ── GMAIL CONFIG ── -->
-        <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
@@ -212,6 +211,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- ── ZOHO CONFIG ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -274,9 +274,10 @@
         </androidx.cardview.widget.CardView>
 
         <!-- ── SYNC CONFIG TO DB ── -->
-        <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
             app:cardCornerRadius="10dp"
             app:cardElevation="2dp"
             app:cardBackgroundColor="#EFF6FF">
@@ -323,6 +324,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- ── AI ASSISTANT CONFIG ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -339,17 +341,32 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="AI ASSISTANT (OPENAI)"
+                    android:text="AI ASSISTANT CONFIG"
                     android:textSize="12sp"
                     android:textColor="@color/text_muted"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AI Provider"
+                    android:textSize="10sp"
+                    android:textColor="@color/text_muted"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp" />
+
+                <Spinner
+                    android:id="@+id/spCfgAiProvider"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="4dp" />
 
                 <EditText
                     android:id="@+id/etCfgOpenAiKey"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:layout_marginTop="8dp"
-                    android:hint="OpenAI API Key (sk-...)"
+                    android:hint="API Key (Gemini or OpenAI)"
                     android:inputType="textPassword" />
 
                 <EditText
@@ -357,7 +374,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:layout_marginTop="8dp"
-                    android:hint="Model (default: gpt-4o-mini)" />
+                    android:hint="Model (e.g. gemini-1.5-flash or gpt-4o-mini)" />
 
                 <Button
                     android:id="@+id/btnSaveCfgOpenAi"

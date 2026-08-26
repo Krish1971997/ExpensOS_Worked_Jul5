@@ -5,7 +5,7 @@
     android:background="@color/bg"
     android:orientation="vertical">
 
-    <!-- Navbar — Settings removed from here, moved to bottom nav -->
+    <!-- Navbar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
@@ -42,7 +42,7 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Middle content: header, search, book list — takes remaining space -->
+    <!-- Middle content: header, search, book list -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -129,8 +129,7 @@
             android:padding="6dp" />
     </LinearLayout>
 
-    <!-- Bottom nav — Cashbooks / PassBook / Settings -->
-    <!-- Bottom nav — Cashbooks / Stats / PassBook / Settings -->
+    <!-- Bottom nav — Cashbooks / Stats / PassBook / AI Assistant / Settings / Integrations -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="60dp"
@@ -161,11 +160,10 @@
                 android:layout_height="wrap_content"
                 android:text="Cashbooks"
                 android:textColor="@color/primary"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- NEW: Stats tab -->
         <LinearLayout
             android:id="@+id/navStats"
             android:layout_width="0dp"
@@ -189,7 +187,7 @@
                 android:layout_height="wrap_content"
                 android:text="Stats"
                 android:textColor="@color/text_muted"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -215,7 +213,34 @@
                 android:layout_height="wrap_content"
                 android:text="PassBook"
                 android:textColor="@color/text_muted"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- ── NEW: AI Assistant Tab ── -->
+        <LinearLayout
+            android:id="@+id/navAiAssistant"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🤖"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/navAiAssistantLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI Bot"
+                android:textColor="@color/text_muted"
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -241,7 +266,7 @@
                 android:layout_height="wrap_content"
                 android:text="Settings"
                 android:textColor="@color/text_muted"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -267,7 +292,7 @@
                 android:layout_height="wrap_content"
                 android:text="Integrations"
                 android:textColor="@color/text_muted"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
