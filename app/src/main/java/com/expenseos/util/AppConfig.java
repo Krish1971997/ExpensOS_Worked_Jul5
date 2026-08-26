@@ -23,6 +23,10 @@ public class AppConfig {
     // ── Scheduler failure alert ──────────────────────────────
     public static final String KEY_SCHEDULER_ALERT_EMAIL = "scheduler.alert.email";
 
+    // ── OpenAI (chat/stats assistant) ──────────────────────────
+    public static final String KEY_OPENAI_API_KEY = "openai.api.key";
+    public static final String KEY_OPENAI_MODEL = "openai.model";
+
     // ── Zoho WorkDrive keys ─────────────────────────────────
     public static final String KEY_ZOHO_CLIENT_ID = "zoho.client.id";
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
@@ -79,6 +83,14 @@ public class AppConfig {
         return prefs.getString(KEY_SCHEDULER_ALERT_EMAIL, "");
     }
 
+    public String getOpenAiApiKey() {
+        return prefs.getString(KEY_OPENAI_API_KEY, "");
+    }
+
+    public String getOpenAiModel() {
+        return prefs.getString(KEY_OPENAI_MODEL, "gpt-4o-mini");
+    }
+
     public String getZohoClientId() {
         return prefs.getString(KEY_ZOHO_CLIENT_ID, "");
     }
@@ -133,6 +145,13 @@ public class AppConfig {
 
     public void setSchedulerAlertEmail(String email) {
         prefs.edit().putString(KEY_SCHEDULER_ALERT_EMAIL, email).apply();
+    }
+
+    public void setOpenAi(String apiKey, String model) {
+        prefs.edit()
+                .putString(KEY_OPENAI_API_KEY, apiKey)
+                .putString(KEY_OPENAI_MODEL, model == null || model.isBlank() ? "gpt-4o-mini" : model)
+                .apply();
     }
 
     public void setZoho(String clientId, String secret, String refreshToken, String folderId) {

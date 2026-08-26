@@ -65,6 +65,9 @@ public class TransactionFilterDialog extends Dialog {
     private List<SubCategory> allSubCategories = new ArrayList<>();
     private List<PaymentType> allPaymentTypes = new ArrayList<>();
 
+    // NEW — "Select All" checkboxes for multi-select panels
+    private CheckBox cbSelectAllCategory, cbSelectAllSubCategory, cbSelectAllPaymentType;
+
     private Spinner spAmountOp1, spAmountOp2;
     private EditText etAmount1, etAmount2;
 
@@ -184,6 +187,10 @@ public class TransactionFilterDialog extends Dialog {
         spAmountOp2 = findViewById(R.id.spAmountOp2);
         etAmount1 = findViewById(R.id.etAmount1);
         etAmount2 = findViewById(R.id.etAmount2);
+
+        cbSelectAllCategory = findViewById(R.id.cbSelectAllCategory);
+        cbSelectAllSubCategory = findViewById(R.id.cbSelectAllSubCategory);
+        cbSelectAllPaymentType = findViewById(R.id.cbSelectAllPaymentType);
     }
 
     // NEW — Cash Book only makes sense when this dialog is filtering across
@@ -361,6 +368,7 @@ public class TransactionFilterDialog extends Dialog {
             empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
             categoryContainer.addView(empty);
         }
+        setupSelectAll(cbSelectAllCategory, categoryChecks);
     }
 
     private void buildSubCategoryCheckboxes() {
@@ -382,6 +390,7 @@ public class TransactionFilterDialog extends Dialog {
             empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
             subCategoryContainer.addView(empty);
         }
+        setupSelectAll(cbSelectAllSubCategory, subCategoryChecks);
     }
 
     private void buildPaymentTypeCheckboxes() {
@@ -403,6 +412,44 @@ public class TransactionFilterDialog extends Dialog {
             empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
             paymentTypeContainer.addView(empty);
         }
+        setupSelectAll(cbSelectAllPaymentType, paymentTypeChecks);
+    }
+
+    // NEW — wires a "Select All" checkbox to a list of item checkboxes:
+    // tapping it checks/unchecks every item, and toggling any single item
+    // keeps the "Select All" state (checked/unchecked) in sync.
+    private void setupSelectAll(CheckBox selectAllCb, List<CheckBox> itemChecks) {
+        if (selectAllCb == null) return;
+
+        if (itemChecks.isEmpty()) {
+            selectAllCb.setVisibility(View.GONE);
+            return;
+        }
+        selectAllCb.setVisibility(View.VISIBLE);
+
+        selectAllCb.setOnClickListener(v -> {
+            boolean checked = selectAllCb.isChecked();
+            for (CheckBox cb : itemChecks) cb.setChecked(checked);
+        });
+
+        for (CheckBox cb : itemChecks) {
+            cb.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    updateSelectAllState(selectAllCb, itemChecks));
+        }
+
+        updateSelectAllState(selectAllCb, itemChecks);
+    }
+
+    private void updateSelectAllState(CheckBox selectAllCb, List<CheckBox> itemChecks) {
+        if (selectAllCb == null) return;
+        boolean allChecked = true;
+        for (CheckBox cb : itemChecks) {
+            if (!cb.isChecked()) {
+                allChecked = false;
+                break;
+            }
+        }
+        selectAllCb.setChecked(allChecked);
     }
 
     private void applyCashBookSelection() {

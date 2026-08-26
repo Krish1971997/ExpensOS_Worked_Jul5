@@ -295,7 +295,8 @@ public class SchedulerWorker extends Worker {
             com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
                     "monthly_category_report.pdf", pdfBytes.toByteArray(), "application/pdf");
 
-            com.expenseos.util.GmailSender.send(ctx, null, subject, html, attachment);
+            String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
+            com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, attachment);
             outcome.ok = true;
             outcome.message = "Report emailed (" + result.rows.size() + " categories)";
         } catch (Exception e) {

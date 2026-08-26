@@ -393,10 +393,21 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvKwSuggestion.setOnClickListener(v -> applyPendingSuggestion());
     }
 
+    // NEW — restored: don't suggest once the fields the suggestion would fill
+// are already filled. "Filled" means a real category (not the "Select
+// Category" placeholder), and if a sub-category picker is showing, a real
+// sub-category too (not its own placeholder).
+    private boolean categoryAlreadyFilled() {
+        if (spCategory.getSelectedItemPosition() == 0) return false;
+        if (spSubCategory.getVisibility() == View.VISIBLE) {
+            Object sel = spSubCategory.getSelectedItem();
+            return !(sel instanceof SubCategory) || ((SubCategory) sel).getId() != 0;
+        }
+        return true;
+    }
+
     private void showKeywordSuggestion(String note) {
-        // spCategory.getSelectedItemPosition() != 0 செக்-ஐ நீக்கிவிட்டோம்.
-        // இப்போது Category தேர்ந்தெடுத்து இருந்தாலும் Auto Suggestion ஷோ ஆகும்.
-        if (note == null || note.trim().length() < 3) {
+        if (note == null || note.trim().length() < 3 || categoryAlreadyFilled()) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;

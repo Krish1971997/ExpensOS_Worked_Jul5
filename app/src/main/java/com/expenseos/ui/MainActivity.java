@@ -174,10 +174,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void openBook(int id, String name) {
         CashBook b = dao.findById(id);
-        if (b != null && !b.isActive()) {
-            Toast.makeText(this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
-            return;
-        }
+//        if (b != null && !b.isActive()) {
+//            Toast.makeText(this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
+//            return;
+//        }
         AppConfig.get(this).setActiveBook(id, name);
         startActivity(new Intent(this, HomeActivity.class));
     }
@@ -230,15 +230,17 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // Row tap = open (only if active)
-            h.row.setOnClickListener(v -> {
-                if (b.isActive()) {
-                    openBook(b.getId(), b.getName());
-                } else {
-                    Toast.makeText(MainActivity.this,
-                            "This book is inactive. Edit it to activate.",
-                            Toast.LENGTH_SHORT).show();
-                }
-            });
+//            h.row.setOnClickListener(v -> {
+//                if (b.isActive()) {
+//                    openBook(b.getId(), b.getName());
+//                } else {
+//                    Toast.makeText(MainActivity.this,
+//                            "This book is inactive. Edit it to activate.",
+//                            Toast.LENGTH_SHORT).show();
+//                }
+//            });
+
+            h.row.setOnClickListener(v -> openBook(b.getId(), b.getName()));
 
             // Menu button = Open / Edit / Delete
             h.btnMenu.setOnClickListener(v -> {
@@ -247,10 +249,15 @@ public class MainActivity extends AppCompatActivity {
                 popup.getMenu().add(0, 2, 1, "Edit");
                 popup.getMenu().add(0, 3, 2, "Delete");
                 popup.setOnMenuItemClickListener(item -> {
+//                    if (item.getItemId() == 1) {
+//                        if (b.isActive()) openBook(b.getId(), b.getName());
+//                        else
+//                            Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
+//                        return true;
+//                    }
+
                     if (item.getItemId() == 1) {
-                        if (b.isActive()) openBook(b.getId(), b.getName());
-                        else
-                            Toast.makeText(MainActivity.this, "This book is inactive. Edit it to activate.", Toast.LENGTH_SHORT).show();
+                        openBook(b.getId(), b.getName());
                         return true;
                     } else if (item.getItemId() == 2) {
                         showEditDialog(b);

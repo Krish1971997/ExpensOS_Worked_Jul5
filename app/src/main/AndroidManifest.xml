@@ -93,6 +93,11 @@
         <activity android:name=".ui.SequenceActivity" />
         <activity android:name=".ui.BudgetConfigActivity" />
         <activity android:name=".ui.SqlConsoleActivity" />
+        <activity android:name=".ui.ReportPdfPreviewActivity" />
+        <activity
+            android:name=".ui.ChatActivity"
+            android:label="AI Assistant"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ui.RecycleBinActivity"
             android:exported="false" />

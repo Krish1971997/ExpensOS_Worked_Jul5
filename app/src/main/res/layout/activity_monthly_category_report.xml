@@ -99,63 +99,39 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
-            <!-- Table header -->
-            <LinearLayout
-                android:id="@+id/rowMcrHeader"
+            <!-- Header + rows ஒரே HorizontalScrollView-ku ulla — months count
+                 romba adhigama irundha table screen width vida wide aagum,
+                 appo header-um rows-um automatic-ah sync-ah horizontal-ah scroll aagum. -->
+            <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
-                android:orientation="horizontal"
-                android:paddingHorizontal="10dp"
-                android:paddingVertical="8dp"
-                android:visibility="gone">
+                android:scrollbars="horizontal">
 
-                <TextView
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="2"
-                    android:text="Category"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="end"
-                    android:text="Last"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
+                    <!-- Table header — Category / month labels / % Chg cells ellam
+                         MonthlyCategoryReportActivity.buildHeaderRow() runtime-la add pannudhu. -->
+                    <LinearLayout
+                        android:id="@+id/rowMcrHeader"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@android:color/white"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="8dp"
+                        android:visibility="gone" />
 
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="end"
-                    android:text="Prev"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="end"
-                    android:text="% Chg"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvComparison"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@android:color/white"
-                android:nestedScrollingEnabled="false" />
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rvComparison"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@android:color/white"
+                        android:nestedScrollingEnabled="false" />
+                </LinearLayout>
+            </HorizontalScrollView>
 
             <TextView
                 android:id="@+id/tvMcrEmpty"

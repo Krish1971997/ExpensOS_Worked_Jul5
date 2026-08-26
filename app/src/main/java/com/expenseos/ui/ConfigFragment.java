@@ -36,6 +36,7 @@ public class ConfigFragment extends Fragment {
     // Gmail Config
     private EditText etGmailFrom, etGmailPass, etAlertEmail;
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
+    private EditText etOpenAiKey, etOpenAiModel;
 
     // Status views — keep references to avoid findViewById on wrong view
     private Button btnTestConnection, btnSyncConfigToDb;
@@ -68,9 +69,13 @@ public class ConfigFragment extends Fragment {
         etZohoClientId = v.findViewById(R.id.etCfgZohoClientId);
         etZohoClientSecret = v.findViewById(R.id.etCfgZohoClientSecret);
         etZohoRefreshToken = v.findViewById(R.id.etCfgZohoRefreshToken);
+
         etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
+        etOpenAiKey = v.findViewById(R.id.etCfgOpenAiKey);
+        etOpenAiModel = v.findViewById(R.id.etCfgOpenAiModel);
 
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
+
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
@@ -93,6 +98,8 @@ public class ConfigFragment extends Fragment {
         etZohoClientSecret.setText(cfg.getZohoClientSecret());
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
+        etOpenAiKey.setText(cfg.getOpenAiApiKey());
+        etOpenAiModel.setText(cfg.getOpenAiModel());
     }
 
     private void setupButtons() {
@@ -117,6 +124,13 @@ public class ConfigFragment extends Fragment {
                     etZohoRefreshToken.getText().toString().trim(),
                     etWorkdriveFolderId.getText().toString().trim());
             toast("✓ Zoho Config saved!");
+        });
+
+        requireView().findViewById(R.id.btnSaveCfgOpenAi).setOnClickListener(v -> {
+            com.expenseos.util.AppConfig.get(requireContext()).setOpenAi(
+                    etOpenAiKey.getText().toString().trim(),
+                    etOpenAiModel.getText().toString().trim());
+            toast("✓ AI Config saved!");
         });
 
         // ── Test DB Connection ──────────────────────────────

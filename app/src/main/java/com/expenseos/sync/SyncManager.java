@@ -174,9 +174,12 @@ public class SyncManager {
 
                 com.expenseos.db.LocalDB.getInstance(ctx).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
-                        "transactions", "transaction_custom_values", "transaction_audit_log",
-                        "transaction_receipts", "backup_history", "budgets", "budget_categories",
-                        "schedulers", "scheduler_log");
+                        "transactions", "transaction_custom_values", "deleted_records",
+                        "transaction_audit_log", "transaction_receipts", "schedulers",
+                        "scheduler_log", "budgets", "budget_categories", "payment_types",
+                        "keyword_mappings", "events", "reminders", "event_reminders", "tasks",
+                        "task_events", "task_alarms", "recycle_bin", "budget_allocation_template"
+                );
 
                 String summary = "Pulled " + totalRows + " rows across all tables";
                 log.success("═══ PULL DONE — " + summary + " ═══");

@@ -103,6 +103,36 @@ public class CashBookDao {
         }
     }
 
+    /**
+     * True if the book exists and is currently active. The real enforcement
+     * for "no writes inside an inactive book" lives in LocalDB's guard
+     * triggers (they fire regardless of which DAO/screen performs the
+     * write) — call this from the UI layer beforehand so a blocked write
+     * shows a friendly message instead of a raw SQLiteConstraintException.
+     */
+    public boolean isBookActive(int bookId) {
+        try (Cursor c = db.rawQuery("SELECT is_active FROM cash_books WHERE id=?",
+                new String[]{String.valueOf(bookId)})) {
+            return c.moveToFirst() && c.getInt(0) == 1;
+        }
+    }
+
+    /**
+     * Temporarily lifts the inactive-book write guard (see
+     * LocalDB#installBookGuardTriggers) by flipping the 'book_guard_bypass'
+     * flag in app_config. Needed only for operations that must still be
+     * able to write into an inactive book's own data — right now, just
+     * deleteCascade() below, which has to clean up an inactive book's
+     * children in order to delete the book itself. Always pair a
+     * setGuardBypass(true) with a setGuardBypass(false) in a finally block.
+     */
+    private void setGuardBypass(boolean bypass) {
+        ContentValues cv = new ContentValues();
+        cv.put("key", "book_guard_bypass");
+        cv.put("value", bypass ? "1" : "0");
+        db.insertWithOnConflict("app_config", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
     public long insert(String name, String description) {
         long id = helper.getNextId("cash_books");
         ContentValues cv = new ContentValues();
@@ -353,6 +383,11 @@ public class CashBookDao {
             }
         }
 
+        // NEW — lift the inactive-book write guard for the duration of this
+        // cascade: an inactive book's own transactions/categories/etc. must
+        // still be deletable when the book itself is being removed. See
+        // setGuardBypass() and LocalDB#installBookGuardTriggers().
+        setGuardBypass(true);
         db.beginTransaction();
 
         try {
@@ -375,6 +410,7 @@ public class CashBookDao {
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
+            setGuardBypass(false);
         }
     }
 }

@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
+import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.KeywordMappingDao;
@@ -80,6 +81,7 @@ public class SettingsActivity extends AppCompatActivity {
     private ColumnDefinitionDao colDao;
     private PaymentTypeDao payDao;
     private KeywordMappingDao kwDao;
+    private CashBookDao cashBookDao; // NEW — used to check is_active before book-scoped writes
 
     // ── Categories tab state ──
     private int catSubTab = 0; // 0=INCOME, 1=EXPENSE
@@ -110,6 +112,7 @@ public class SettingsActivity extends AppCompatActivity {
         colDao = new ColumnDefinitionDao(this);
         payDao = new PaymentTypeDao(this);
         kwDao = new KeywordMappingDao(this);
+        cashBookDao = new CashBookDao(this);
 
         bookScoped = getIntent().getBooleanExtra("bookScoped", false);
 
@@ -284,6 +287,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle("Add " + (catSubTab == 0 ? "Income" : "Expense") + " Category")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
+                    if (!ensureBookWritable()) return;
                     String name = etName.getText().toString().trim();
                     if (name.isEmpty()) return;
                     boolean thisBookOnly = finalSpScope != null && finalSpScope.getSelectedItemPosition() == 1;
@@ -300,6 +304,30 @@ public class SettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /**
+     * When this screen is scoped to a specific cashbook (bookId > 0) and
+     * that book has been marked inactive, block any create/update/delete of
+     * data belonging to it — categories, sub-categories, keyword mappings,
+     * budgets. "Common" (book_id == null) items aren't scoped to any one
+     * book, but for simplicity this screen treats the whole session as
+     * read-only once its book is inactive; open Global Settings instead to
+     * manage Common items. LocalDB's guard triggers enforce this at the DB
+     * level regardless, so this is purely for a friendly message instead of
+     * a raw SQLiteConstraintException.
+     * <p>
+     * Call at the very top of every add/edit/delete handler and bail out
+     * (return) if this returns false.
+     */
+    private boolean ensureBookWritable() {
+        if (bookScoped && bookId > 0 && !cashBookDao.isBookActive(bookId)) {
+            Toast.makeText(this,
+                    "This cash book is inactive — read-only. Reactivate it from Edit to make changes.",
+                    Toast.LENGTH_LONG).show();
+            return false;
+        }
+        return true;
     }
 
     // Long-press on any list row's name shows its raw DB id via a Toast.
@@ -368,6 +396,7 @@ public class SettingsActivity extends AppCompatActivity {
                             .setTitle("Delete Category")
                             .setMessage("Delete \"" + c.getName() + "\"? Transactions using it will show as uncategorized.")
                             .setPositiveButton("Delete", (d, w) -> {
+                                if (!ensureBookWritable()) return;
                                 catDao.delete(c.getId());
                                 int idx = list.indexOf(c);
                                 if (idx >= 0) {
@@ -613,6 +642,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle(existing == null ? "Add Keyword Mapping" : "Edit Keyword Mapping")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
+                    if (!ensureBookWritable()) return;
                     String keyword = etKeyword.getText().toString().trim();
                     if (keyword.isEmpty() || spCat.getSelectedItemPosition() == 0) {
                         Toast.makeText(this, "Pick a keyword and a category", Toast.LENGTH_SHORT).show();
@@ -740,6 +770,7 @@ public class SettingsActivity extends AppCompatActivity {
                             .setTitle("Delete Keyword")
                             .setMessage("Delete \"" + k.getKeyword() + "\"? Already-saved transactions won't be affected.")
                             .setPositiveButton("Delete", (d, w) -> {
+                                if (!ensureBookWritable()) return;
                                 kwDao.delete(k.getId());
                                 int idx = list.indexOf(k);
                                 if (idx >= 0) {
@@ -873,6 +904,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle("Edit Sub-Category")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
+                    if (!ensureBookWritable()) return;
                     String newName = etName.getText().toString().trim();
                     if (newName.isEmpty() || spParent.getSelectedItem() == null) return;
                     scDao.update(sc.getId(), newName);
@@ -934,6 +966,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle("Add Sub-Category")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
+                    if (!ensureBookWritable()) return;
                     String name = etName.getText().toString().trim();
                     if (name.isEmpty() || spParent.getSelectedItem() == null) return;
                     int catId = ((Category) spParent.getSelectedItem()).getId();
@@ -989,6 +1022,7 @@ public class SettingsActivity extends AppCompatActivity {
                             .setTitle("Delete Sub-Category")
                             .setMessage("Delete \"" + sc.getName() + "\"?")
                             .setPositiveButton("Delete", (d, w) -> {
+                                if (!ensureBookWritable()) return;
                                 scDao.delete(sc.getId());
                                 int idx = list.indexOf(sc);
                                 if (idx >= 0) {
@@ -1130,6 +1164,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle("Edit Category")
                 .setView(form)
                 .setPositiveButton("Save", (d, w) -> {
+                    if (!ensureBookWritable()) return;
                     String newName = etName.getText().toString().trim();
                     if (newName.isEmpty()) return;
 

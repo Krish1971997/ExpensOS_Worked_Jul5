@@ -93,6 +93,12 @@ public class BackupManager {
                 backup.put("task_events", tableToJson(db, "task_events"));
                 backup.put("task_alarms", tableToJson(db, "task_alarms"));
 
+                // ── NEW: Added Tables from LocalDB ──
+                backup.put("passbook_entries", tableToJson(db, "passbook_entries"));
+                backup.put("budget_allocation_template", tableToJson(db, "budget_allocation_template"));
+                backup.put("recycle_bin", tableToJson(db, "recycle_bin"));
+                backup.put("app_config", tableToJson(db, "app_config"));
+
                 String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 String fileName = "backup_" + ts + ".zip";
                 File tempZip = new File(ctx.getCacheDir(), fileName);
@@ -229,6 +235,12 @@ public class BackupManager {
             restoreTable(db, "schedulers", backup.optJSONArray("schedulers"));
             restoreTable(db, "scheduler_log", backup.optJSONArray("scheduler_log"));
             restoreTable(db, "deleted_records", backup.optJSONArray("deleted_records"));
+
+            restoreTable(db, "passbook_entries", backup.optJSONArray("passbook_entries"));
+            restoreTable(db, "budget_allocation_template", backup.optJSONArray("budget_allocation_template"));
+            restoreTable(db, "recycle_bin", backup.optJSONArray("recycle_bin"));
+            restoreTable(db, "app_config", backup.optJSONArray("app_config"));
+            
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();

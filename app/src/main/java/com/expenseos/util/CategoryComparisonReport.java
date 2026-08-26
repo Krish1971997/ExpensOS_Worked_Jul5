@@ -34,9 +34,11 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class CategoryComparisonReport {
 
@@ -75,9 +77,23 @@ public class CategoryComparisonReport {
 
         TransactionDao dao = new TransactionDao(ctx);
 
+
+        // Percentage eppovume last COMPLETED month vs adharku munnadi month
+        // (e.g. now=Aug -> Jul vs Jun) — "include current month" checkbox
+        // ivvalavuku affect pannakoodadhu, current month data incomplete.
+        YearMonth lastMonth = YearMonth.from(LocalDate.now().minusMonths(1));
+        YearMonth prevMonth = lastMonth.minusMonths(1);
+
+        // Displayed months + the fixed comparison months (lastMonth/prevMonth
+        // may fall outside the displayed range, e.g. a 2-month "include
+        // current" filter would otherwise never fetch prevMonth's data).
+        Set<YearMonth> monthsToQuery = new LinkedHashSet<>(months);
+        monthsToQuery.add(lastMonth);
+        monthsToQuery.add(prevMonth);
+
         // category -> (month -> total)
         Map<String, Map<YearMonth, BigDecimal>> byCategory = new LinkedHashMap<>();
-        for (YearMonth ym : months) {
+        for (YearMonth ym : monthsToQuery) {
             List<Map<String, Object>> rows = dao.categoryBreakdownByMonth("EXPENSE", ym.getYear(), ym.getMonthValue(), bookId);
             for (Map<String, Object> r : rows) {
                 String cat = (String) r.get("category");
@@ -87,10 +103,8 @@ public class CategoryComparisonReport {
             }
         }
 
-        YearMonth lastMonth = months.get(months.size() - 1);
-        YearMonth prevMonth = months.get(months.size() - 2);
-
         List<RowData> rows = new ArrayList<>();
+
         for (Map.Entry<String, Map<YearMonth, BigDecimal>> e : byCategory.entrySet()) {
             Map<YearMonth, BigDecimal> perMonth = e.getValue();
             RowData row = new RowData();

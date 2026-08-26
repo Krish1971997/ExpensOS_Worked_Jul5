@@ -83,6 +83,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
     // Last-rendered result, kept in parallel to the on-screen table so
     // "Copy All" doesn't have to re-query — header row first, then data rows.
     private final List<List<String>> lastResultRows = new ArrayList<>();
+    private String lastErrorMessage; // set on error, so Copy can grab it too
 
     // ── Autocomplete ─────────────────────────────────────
     private static final String[] SQL_KEYWORDS = {"SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "AND", "OR", "NOT", "NULL", "IN", "LIKE", "LIMIT", "OFFSET", "ORDER", "BY", "GROUP", "ASC", "DESC", "AS", "JOIN", "LEFT", "INNER", "ON", "DISTINCT", "COUNT", "SUM", "AVG", "MAX", "MIN"};
@@ -132,7 +133,11 @@ public class SqlConsoleActivity extends AppCompatActivity {
         btnCommit.setOnClickListener(v -> commitTxn());
         btnRollback.setOnClickListener(v -> rollbackTxn(false));
         btnClear.setOnClickListener(v -> clearResults());
-        btnCopyAll.setOnClickListener(v -> copyAllToClipboard());
+        btnCopyAll.setOnClickListener(v -> {
+            if (!lastResultRows.isEmpty()) copyAllToClipboard();
+            else if (lastErrorMessage != null)
+                copyToClipboard(lastErrorMessage, "Error message copied");
+        });
 
         loadSchema();
         wireAutocomplete();
@@ -419,7 +424,9 @@ public class SqlConsoleActivity extends AppCompatActivity {
             lastResultRows.add(rowValues);
         }
 
+        lastErrorMessage = null;
         btnClear.setVisibility(View.VISIBLE);
+        btnCopyAll.setText("📋 Copy All");
         btnCopyAll.setVisibility(lastResultRows.size() > 1 ? View.VISIBLE : View.GONE);
     }
 
@@ -530,14 +537,20 @@ public class SqlConsoleActivity extends AppCompatActivity {
         btnRollback.setVisibility(pending ? View.VISIBLE : View.GONE);
     }
 
+    // Clear and Copy stay usable on an error too, not just on success.
     private void showError(String msg) {
         resultTable.removeAllViews();
         resultScroll.setVisibility(View.GONE);
         paginationRow.setVisibility(View.GONE);
         lastResultRows.clear();
-        btnCopyAll.setVisibility(View.GONE);
-        tvStatus.setText("✕ " + (msg != null ? msg : "Error"));
+
+        lastErrorMessage = "✕ " + (msg != null ? msg : "Error");
+        tvStatus.setText(lastErrorMessage);
         tvStatus.setTextColor(getColor(R.color.red));
+
+        btnClear.setVisibility(View.VISIBLE);
+        btnCopyAll.setText("📋 Copy Error");
+        btnCopyAll.setVisibility(View.VISIBLE);
     }
 
     // ── Clear / Copy All ──────────────────────────────────
@@ -549,6 +562,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
         resultScroll.setVisibility(View.GONE);
         paginationRow.setVisibility(View.GONE);
         lastResultRows.clear();
+        lastErrorMessage = null;
         etSql.setText("");
         tvStatus.setText("");
         btnClear.setVisibility(View.GONE);

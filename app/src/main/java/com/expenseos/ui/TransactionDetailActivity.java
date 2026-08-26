@@ -673,9 +673,14 @@ public class TransactionDetailActivity extends AppCompatActivity {
         }
         Category selCat = (Category) spCategory.getSelectedItem();
 
-        // ISSUE 3 FIX: Subcategory Validation Check
+        // NEW — validate against the actual data (currentSubCategories), not the
+// View's rendered visibility state. A View can be GONE for reasons other
+// than "this category has zero sub-categories" (e.g. a stale/duplicate
+// category id silently returning no rows) — checking the list itself is
+// the more reliable source of truth and fails loud instead of silently
+// skipping the requirement.
         SubCategory selSub = null;
-        if (spSubCategory.getVisibility() == View.VISIBLE) {
+        if (!currentSubCategories.isEmpty()) {
             selSub = (SubCategory) spSubCategory.getSelectedItem();
             if (selSub == null || selSub.getId() == 0) {
                 Toast.makeText(this, "Please select a subcategory", Toast.LENGTH_SHORT).show();
@@ -805,11 +810,25 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {
     }
 
+    // NEW — Edit Entry has no "placeholder" category (it's always pre-filled
+// from the loaded transaction), so "already filled" here means: a real
+// category is selected AND, if the sub-category picker is showing, a real
+// sub-category is too (not its own "Select Sub Category" placeholder).
+    private boolean categoryAlreadyFilled() {
+        Category selCat = (Category) spCategory.getSelectedItem();
+        if (selCat == null) return false;
+        if (spSubCategory.getVisibility() == View.VISIBLE) {
+            SubCategory selSub = (SubCategory) spSubCategory.getSelectedItem();
+            return selSub != null && selSub.getId() != 0;
+        }
+        return true;
+    }
+
     private void showKeywordSuggestion(String note) {
         // Note-ஐ trim செய்து, நடுவில் உள்ள multiple spaces-ஐ single space-ஆக மாற்றவும்
         String cleanedNote = (note != null) ? note.trim().replaceAll("\\s+", " ") : "";
 
-        if (cleanedNote.length() < 3 || current == null) {
+        if (cleanedNote.length() < 3 || current == null || categoryAlreadyFilled()) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;

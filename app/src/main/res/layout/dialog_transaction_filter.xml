@@ -262,11 +262,36 @@
                 android:visibility="gone">
 
                 <LinearLayout
-                    android:id="@+id/categoryContainer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp" />
+                    android:orientation="vertical">
+
+                    <CheckBox
+                        android:id="@+id/cbSelectAllCategory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="12dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="Select All"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginHorizontal="12dp"
+                        android:layout_marginBottom="4dp"
+                        android:background="#E5E7EB" />
+
+                    <LinearLayout
+                        android:id="@+id/categoryContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="12dp" />
+                </LinearLayout>
             </ScrollView>
 
             <!-- ── SUB CATEGORY panel ───────────────────── -->
@@ -277,11 +302,36 @@
                 android:visibility="gone">
 
                 <LinearLayout
-                    android:id="@+id/subCategoryContainer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp" />
+                    android:orientation="vertical">
+
+                    <CheckBox
+                        android:id="@+id/cbSelectAllSubCategory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="12dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="Select All"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginHorizontal="12dp"
+                        android:layout_marginBottom="4dp"
+                        android:background="#E5E7EB" />
+
+                    <LinearLayout
+                        android:id="@+id/subCategoryContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="12dp" />
+                </LinearLayout>
             </ScrollView>
 
             <!-- ── PAYMENT TYPE panel ───────────────────── -->
@@ -292,11 +342,36 @@
                 android:visibility="gone">
 
                 <LinearLayout
-                    android:id="@+id/paymentTypeContainer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp" />
+                    android:orientation="vertical">
+
+                    <CheckBox
+                        android:id="@+id/cbSelectAllPaymentType"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="12dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="Select All"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginHorizontal="12dp"
+                        android:layout_marginBottom="4dp"
+                        android:background="#E5E7EB" />
+
+                    <LinearLayout
+                        android:id="@+id/paymentTypeContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="12dp"
+                        android:paddingBottom="12dp" />
+                </LinearLayout>
             </ScrollView>
 
             <!-- ── AMOUNT panel ─────────────────────────── -->

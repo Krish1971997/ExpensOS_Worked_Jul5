@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 37; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 39; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -364,6 +364,12 @@ public class LocalDB extends SQLiteOpenHelper {
         // collide with anything already present.
 
         initSequences(db);
+
+        // NEW — inactive-cashbook write guard (see installBookGuardTriggers
+        // for details). Installed here for fresh installs; repairSchema()
+        // re-installs it on every onOpen() so existing installs get it too
+        // without needing a version bump.
+        installBookGuardTriggers(db);
 
     }
 
@@ -795,6 +801,19 @@ public class LocalDB extends SQLiteOpenHelper {
             } catch (Exception ignored) {
             }
         }
+
+        if (oldV < 39) {
+            // NEW — (re)install the inactive-cashbook write guard triggers on
+            // every launch too, same defensive reasoning as the column repairs
+            // above: a device could be stuck on an old onUpgrade() version gate
+            // that never ran installBookGuardTriggers(). DROP+CREATE inside the
+            // method makes this safe to call repeatedly.
+            try {
+                installBookGuardTriggers(db);
+            } catch (Exception e) {
+                log.error("installBookGuardTriggers failed: " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -843,6 +862,17 @@ public class LocalDB extends SQLiteOpenHelper {
                     log.error("repairSchema failed for " + tableName + "." + columnName + ": " + e.getMessage());
                 }
             }
+        }
+
+        // NEW — (re)install the inactive-cashbook write guard triggers on
+        // every launch too, same defensive reasoning as the column repairs
+        // above: a device could be stuck on an old onUpgrade() version gate
+        // that never ran installBookGuardTriggers(). DROP+CREATE inside the
+        // method makes this safe to call repeatedly.
+        try {
+            installBookGuardTriggers(db);
+        } catch (Exception e) {
+            log.error("installBookGuardTriggers failed: " + e.getMessage());
         }
 
         // Ensure payment_types table + seed rows exist even on devices whose
@@ -984,6 +1014,171 @@ public class LocalDB extends SQLiteOpenHelper {
             if (!tableExists(wdb, table)) continue;
             wdb.execSQL(nextIdSql(wdb, table));
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // Inactive-cashbook write guard
+    // ════════════════════════════════════════════════════════════════
+    // Requirement: once a cash_books row has is_active=0, nothing scoped to
+    // that book may be created, updated, or deleted — transactions,
+    // categories, sub_categories, budgets, budget_categories, keyword_mappings
+    // (everything that carries a book_id, directly or via a parent row).
+    // Reads/reports are untouched.
+    //
+    // This is enforced with SQLite BEFORE triggers instead of per-DAO Java
+    // checks, so it applies no matter which DAO/screen performs the write
+    // (including ones this guard's author may not have touched), and can't
+    // be bypassed by a code path that forgets to check.
+    //
+    // "Common"/global rows (categories, keyword_mappings with book_id IS
+    // NULL) are never blocked — they don't belong to any one book.
+    //
+    // BYPASS: a handful of legitimate operations must still be able to
+    // write into an inactive book's own data — right now, only
+    // CashBookDao#deleteCascade() (deleting the book itself has to be able
+    // to clean up its inactive children). That flips app_config's
+    // 'book_guard_bypass' key to '1' for the duration of the operation via
+    // CashBookDao#setGuardBypass(). Every trigger below checks that flag
+    // first.
+    private void installBookGuardTriggers(SQLiteDatabase db) {
+        String bypass = "IFNULL((SELECT value FROM app_config WHERE key='book_guard_bypass'),'0') <> '1'";
+
+        String[] names = {
+                "trg_guard_transactions_insert", "trg_guard_transactions_update", "trg_guard_transactions_delete",
+                "trg_guard_categories_insert", "trg_guard_categories_update", "trg_guard_categories_delete",
+                "trg_guard_subcategories_insert", "trg_guard_subcategories_update", "trg_guard_subcategories_delete",
+                "trg_guard_budgets_insert", "trg_guard_budgets_update", "trg_guard_budgets_delete",
+                "trg_guard_budgetcats_insert", "trg_guard_budgetcats_update", "trg_guard_budgetcats_delete",
+                "trg_guard_keywordmap_insert", "trg_guard_keywordmap_update", "trg_guard_keywordmap_delete",
+                "trg_guard_budgettemplate_insert", "trg_guard_budgettemplate_update", "trg_guard_budgettemplate_delete",
+                "trg_guard_recyclebin_insert", "trg_guard_recyclebin_update", "trg_guard_recyclebin_delete"
+        };
+
+        for (String n : names) db.execSQL("DROP TRIGGER IF EXISTS " + n);
+
+        // ── transactions (book_id direct, NOT NULL in practice) ──────
+        db.execSQL("CREATE TRIGGER trg_guard_transactions_insert " +
+                "BEFORE INSERT ON transactions WHEN NEW.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a transaction'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_transactions_update " +
+                "BEFORE UPDATE ON transactions WHEN " + bypass + " AND (" +
+                " (NEW.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0)" +
+                " OR (OLD.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0)) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this transaction'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_transactions_delete " +
+                "BEFORE DELETE ON transactions WHEN OLD.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this transaction'); END;");
+
+        // ── categories (book_id nullable — NULL = common, never blocked) ──
+        db.execSQL("CREATE TRIGGER trg_guard_categories_insert " +
+                "BEFORE INSERT ON categories WHEN NEW.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a category'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_categories_update " +
+                "BEFORE UPDATE ON categories WHEN " + bypass + " AND (" +
+                " (NEW.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0)" +
+                " OR (OLD.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0)) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this category'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_categories_delete " +
+                "BEFORE DELETE ON categories WHEN OLD.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this category'); END;");
+
+        // ── sub_categories (no book_id column — resolved via parent category) ──
+        db.execSQL("CREATE TRIGGER trg_guard_subcategories_insert " +
+                "BEFORE INSERT ON sub_categories WHEN " + bypass +
+                " AND (SELECT book_id FROM categories WHERE id=NEW.category_id) IS NOT NULL" +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM categories WHERE id=NEW.category_id)),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a sub-category'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_subcategories_update " +
+                "BEFORE UPDATE ON sub_categories WHEN " + bypass + " AND (" +
+                " ((SELECT book_id FROM categories WHERE id=NEW.category_id) IS NOT NULL" +
+                "   AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM categories WHERE id=NEW.category_id)),1)=0)" +
+                " OR ((SELECT book_id FROM categories WHERE id=OLD.category_id) IS NOT NULL" +
+                "   AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM categories WHERE id=OLD.category_id)),1)=0)) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this sub-category'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_subcategories_delete " +
+                "BEFORE DELETE ON sub_categories WHEN " + bypass +
+                " AND (SELECT book_id FROM categories WHERE id=OLD.category_id) IS NOT NULL" +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM categories WHERE id=OLD.category_id)),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this sub-category'); END;");
+
+        // ── budgets (book_id direct, NOT NULL) ──
+        db.execSQL("CREATE TRIGGER trg_guard_budgets_insert " +
+                "BEFORE INSERT ON budgets WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a budget'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgets_update " +
+                "BEFORE UPDATE ON budgets WHEN " + bypass + " AND (" +
+                " IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0" +
+                " OR IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this budget'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgets_delete " +
+                "BEFORE DELETE ON budgets WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this budget'); END;");
+
+        // ── budget_categories (no book_id column — resolved via parent budget) ──
+        db.execSQL("CREATE TRIGGER trg_guard_budgetcats_insert " +
+                "BEFORE INSERT ON budget_categories WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM budgets WHERE id=NEW.budget_id)),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a budget category limit'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgetcats_update " +
+                "BEFORE UPDATE ON budget_categories WHEN " + bypass + " AND (" +
+                " IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM budgets WHERE id=NEW.budget_id)),1)=0" +
+                " OR IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM budgets WHERE id=OLD.budget_id)),1)=0) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this budget category limit'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgetcats_delete " +
+                "BEFORE DELETE ON budget_categories WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=(SELECT book_id FROM budgets WHERE id=OLD.budget_id)),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this budget category limit'); END;");
+
+        // ── keyword_mappings (book_id nullable — NULL = common, never blocked) ──
+        db.execSQL("CREATE TRIGGER trg_guard_keywordmap_insert " +
+                "BEFORE INSERT ON keyword_mappings WHEN NEW.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a keyword mapping'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_keywordmap_update " +
+                "BEFORE UPDATE ON keyword_mappings WHEN " + bypass + " AND (" +
+                " (NEW.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0)" +
+                " OR (OLD.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0)) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this keyword mapping'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_keywordmap_delete " +
+                "BEFORE DELETE ON keyword_mappings WHEN OLD.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this keyword mapping'); END;");
+
+        // ── budget_allocation_template (book_id direct, NOT NULL) ──
+        db.execSQL("CREATE TRIGGER trg_guard_budgettemplate_insert " +
+                "BEFORE INSERT ON budget_allocation_template WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add a budget allocation template'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgettemplate_update " +
+                "BEFORE UPDATE ON budget_allocation_template WHEN " + bypass + " AND (" +
+                " IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0" +
+                " OR IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this budget allocation template'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_budgettemplate_delete " +
+                "BEFORE DELETE ON budget_allocation_template WHEN " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this budget allocation template'); END;");
+
+        // ── recycle_bin (book_id nullable — NULL = not book-scoped, never blocked) ──
+        db.execSQL("CREATE TRIGGER trg_guard_recyclebin_insert " +
+                "BEFORE INSERT ON recycle_bin WHEN NEW.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot add to recycle bin'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_recyclebin_update " +
+                "BEFORE UPDATE ON recycle_bin WHEN " + bypass + " AND (" +
+                " (NEW.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=NEW.book_id),1)=0)" +
+                " OR (OLD.book_id IS NOT NULL AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0)) " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot edit this recycle bin entry'); END;");
+        db.execSQL("CREATE TRIGGER trg_guard_recyclebin_delete " +
+                "BEFORE DELETE ON recycle_bin WHEN OLD.book_id IS NOT NULL AND " + bypass +
+                " AND IFNULL((SELECT is_active FROM cash_books WHERE id=OLD.book_id),1)=0 " +
+                "BEGIN SELECT RAISE(ABORT,'Cash book is inactive: cannot delete this recycle bin entry'); END;");
     }
 
     private void seedDefaultPaymentTypes(SQLiteDatabase db) {
