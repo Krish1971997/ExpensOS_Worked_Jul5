@@ -555,33 +555,6 @@
                         android:textSize="14sp" />
                 </LinearLayout>
 
-                <!-- AI Assistant -->
-                <LinearLayout
-                    android:id="@+id/drawerAiAssistant"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="18dp">
-
-                    <TextView
-                        android:layout_width="28dp"
-                        android:layout_height="wrap_content"
-                        android:text="🤖"
-                        android:textSize="18sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:text="AI Assistant"
-                        android:textColor="@color/text"
-                        android:textSize="14sp" />
-                </LinearLayout>
-
             </LinearLayout>
         </ScrollView>
 

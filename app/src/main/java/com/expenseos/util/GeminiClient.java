@@ -11,40 +11,44 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-public class GeminiClient {
-    private static final String GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+public class GeminiClient implements AiProvider {
+    private static final String GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String SYSTEM_PROMPT =
             "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
                     "You can ONLY answer questions about this app's own data (transactions, categories, " +
                     "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
                     "You must NEVER attempt to modify data — you only have read tools available. " +
                     "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
-                    "Keep answers concise and grounded only in query results.";
+                    "If the user asks to visualize or chart something, call render_chart with the labels/values " +
+                    "AFTER you've queried the data. Keep answers concise and grounded only in query results.";
 
-    private final SafeQueryTools tools;
+    private final ToolDispatcher dispatcher;
     private final String apiKey;
+    private final String model;
 
     public GeminiClient(Context ctx) {
         AppConfig cfg = AppConfig.get(ctx);
-        this.apiKey = cfg.getOpenAiApiKey(); // Reuse the stored key field for Gemini API key
-        this.tools = new SafeQueryTools(ctx);
+        this.apiKey = cfg.getAiKey(AppConfig.PROVIDER_GEMINI);
+        this.model = cfg.getAiModel(AppConfig.PROVIDER_GEMINI);
+        this.dispatcher = new ToolDispatcher(ctx);
     }
 
-    public interface Callback {
-        void onResult(String answer);
-
-        void onError(String message);
+    @Override
+    public String getLastChartPath() {
+        return dispatcher.getLastChartPath();
     }
 
-    public void ask(String userMessage, JSONArray conversationHistory, Callback cb) {
+    @Override
+    public void ask(String userMessage, String imagePath, JSONArray conversationHistory, Callback cb) {
+        dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
             cb.onError("Gemini API key is not configured in Config.");
             return;
         }
 
         try {
-            JSONArray contents = new JSONArray();
-            contents.put(createContent("user", userMessage));
+            JSONArray contents = conversationHistory != null ? conversationHistory : new JSONArray();
+            contents.put(imagePath != null ? createContentWithImage(userMessage, imagePath) : createContent("user", userMessage));
 
             for (int round = 0; round < 6; round++) {
                 JSONObject response = callGeminiApi(contents);
@@ -63,12 +67,7 @@ public class GeminiClient {
                     JSONObject args = fnCall.optJSONObject("args");
                     if (args == null) args = new JSONObject();
 
-                    String toolResult = switch (fnName) {
-                        case "list_tables" -> tools.listTables();
-                        case "describe_table" -> tools.describeTable(args.optString("table_name"));
-                        case "run_query" -> tools.runQuery(args.optString("sql"));
-                        default -> "{\"error\":\"unknown tool\"}";
-                    };
+                    String toolResult = dispatcher.dispatch(fnName, args);
 
                     // Send Tool response back to Gemini
                     JSONObject responsePart = new JSONObject();
@@ -105,6 +104,24 @@ public class GeminiClient {
         return content;
     }
 
+    // Gemini vision format: an inline_data part alongside the text part.
+    private JSONObject createContentWithImage(String text, String imagePath) throws Exception {
+        byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(imagePath));
+        String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
+        String mime = imagePath.toLowerCase(java.util.Locale.ROOT).endsWith(".png") ? "image/png" : "image/jpeg";
+
+        JSONObject content = new JSONObject();
+        content.put("role", "user");
+        JSONArray parts = new JSONArray();
+        parts.put(new JSONObject().put("text", text));
+        JSONObject inlineData = new JSONObject();
+        inlineData.put("mime_type", mime);
+        inlineData.put("data", b64);
+        parts.put(new JSONObject().put("inline_data", inlineData));
+        content.put("parts", parts);
+        return content;
+    }
+
     private JSONObject callGeminiApi(JSONArray contents) throws Exception {
         JSONObject body = new JSONObject();
 
@@ -126,11 +143,18 @@ public class GeminiClient {
         queryProps.put("sql", new JSONObject().put("type", "STRING"));
         functionDeclarations.put(createToolDeclaration("run_query", "Execute SELECT query", queryProps));
 
+        JSONObject chartProps = new JSONObject();
+        chartProps.put("title", new JSONObject().put("type", "STRING"));
+        chartProps.put("labels", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "STRING")));
+        chartProps.put("values", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "NUMBER")));
+        functionDeclarations.put(createToolDeclaration("render_chart", "Render a bar chart from labels and values, shown to the user as an image", chartProps));
+
         JSONArray toolsArray = new JSONArray();
+
         toolsArray.put(new JSONObject().put("functionDeclarations", functionDeclarations));
         body.put("tools", toolsArray);
 
-        URL url = new URL(GEMINI_ENDPOINT + apiKey);
+        URL url = new URL(GEMINI_ENDPOINT_BASE + model + ":generateContent?key=" + apiKey);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/json");

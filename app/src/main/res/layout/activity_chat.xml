@@ -51,6 +51,39 @@
             android:orientation="vertical" />
     </ScrollView>
 
+    <!-- Attachment preview strip — hidden until a file is picked -->
+    <LinearLayout
+        android:id="@+id/chatAttachPreviewRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/nav_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvChatAttachName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="middle"
+            android:singleLine="true"
+            android:text="filename.png"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+
+        <ImageButton
+            android:id="@+id/btnChatAttachRemove"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Remove attachment"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="@color/text_muted" />
+    </LinearLayout>
+
     <!-- Bottom Input Bar -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -61,11 +94,21 @@
         android:orientation="horizontal"
         android:padding="8dp">
 
+        <ImageButton
+            android:id="@+id/btnChatAttach"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Attach"
+            android:src="@android:drawable/ic_menu_add"
+            android:tint="@color/text_muted" />
+
         <EditText
             android:id="@+id/etChatInput"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginStart="4dp"
             android:background="@color/bg"
             android:hint="Ask about your expenses, stats..."
             android:inputType="textMultiLine"

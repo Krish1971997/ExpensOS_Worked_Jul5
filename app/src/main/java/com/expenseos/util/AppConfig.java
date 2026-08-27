@@ -14,10 +14,16 @@ public class AppConfig {
     public static final String KEY_GMAIL_APP_PASS = "GMAIL_APP_PASS";
     public static final String KEY_SCHEDULER_ALERT_EMAIL = "scheduler.alert.email";
 
-    // ── AI Assistant keys ──────────────────────────────────────
-    public static final String KEY_OPENAI_API_KEY = "openai.api.key";
-    public static final String KEY_OPENAI_MODEL = "openai.model";
-    public static final String KEY_AI_PROVIDER = "ai.provider"; // New Provider Key
+    // ── AI Assistant keys — one key/model PER provider so switching
+    // providers never overwrites another provider's saved credentials ──
+    public static final String KEY_AI_PROVIDER = "ai.provider";
+    private static final String KEY_AI_KEY_PREFIX = "ai.key.";
+    private static final String KEY_AI_MODEL_PREFIX = "ai.model.";
+
+    public static final String PROVIDER_OPENAI = "openai";
+    public static final String PROVIDER_GEMINI = "gemini";
+    public static final String PROVIDER_GROK = "grok";
+    public static final String PROVIDER_CLAUDE = "claude";
 
     public static final String KEY_ZOHO_CLIENT_ID = "zoho.client.id";
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
@@ -67,17 +73,36 @@ public class AppConfig {
         return prefs.getString(KEY_SCHEDULER_ALERT_EMAIL, "");
     }
 
-    public String getOpenAiApiKey() {
-        return prefs.getString(KEY_OPENAI_API_KEY, "");
+    public String getAiKey(String provider) {
+        return prefs.getString(KEY_AI_KEY_PREFIX + provider, "");
     }
 
-    public String getOpenAiModel() {
-        return prefs.getString(KEY_OPENAI_MODEL, "gemini-1.5-flash");
+    public String getAiModel(String provider) {
+        return prefs.getString(KEY_AI_MODEL_PREFIX + provider, defaultModelFor(provider));
     }
 
     public String getAiProvider() {
-        return prefs.getString(KEY_AI_PROVIDER, "gemini");
-    } // Default to Gemini
+        return prefs.getString(KEY_AI_PROVIDER, PROVIDER_GEMINI);
+    }
+
+    private String defaultModelFor(String provider) {
+        return switch (provider) {
+            case PROVIDER_OPENAI -> "gpt-4o-mini";
+            case PROVIDER_GROK -> "grok-2-latest";
+            case PROVIDER_CLAUDE -> "claude-3-5-sonnet-20241022";
+            default -> "gemini-1.5-flash";
+        };
+    }
+
+    // Kept for source compat with any older callers — routes to the
+    // currently selected provider's key/model.
+    public String getOpenAiApiKey() {
+        return getAiKey(getAiProvider());
+    }
+
+    public String getOpenAiModel() {
+        return getAiModel(getAiProvider());
+    }
 
     public String getZohoClientId() {
         return prefs.getString(KEY_ZOHO_CLIENT_ID, "");
@@ -128,12 +153,15 @@ public class AppConfig {
         prefs.edit().putString(KEY_SCHEDULER_ALERT_EMAIL, email).apply();
     }
 
-    // Updated AI Config setter with Provider parameter
+    // Saves this key/model under the given provider's own slot, and makes
+    // that provider the active one — switching providers later never
+    // clobbers another provider's saved credentials.
     public void setAiConfig(String apiKey, String model, String provider) {
+        String p = provider == null || provider.isBlank() ? PROVIDER_GEMINI : provider;
         prefs.edit()
-                .putString(KEY_OPENAI_API_KEY, apiKey)
-                .putString(KEY_OPENAI_MODEL, model == null || model.isBlank() ? "gemini-1.5-flash" : model)
-                .putString(KEY_AI_PROVIDER, provider == null ? "gemini" : provider)
+                .putString(KEY_AI_KEY_PREFIX + p, apiKey)
+                .putString(KEY_AI_MODEL_PREFIX + p, model == null || model.isBlank() ? defaultModelFor(p) : model)
+                .putString(KEY_AI_PROVIDER, p)
                 .apply();
     }
 

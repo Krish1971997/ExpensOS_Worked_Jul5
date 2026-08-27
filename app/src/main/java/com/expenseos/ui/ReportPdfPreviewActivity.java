@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -72,8 +71,26 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         findViewById(R.id.btnPdfPreviewBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnPdfPreviewSave).setOnClickListener(v -> saveToDownloads());
         findViewById(R.id.btnPdfPreviewShare).setOnClickListener(v -> shareReport());
+        findViewById(R.id.btnZoomIn).setOnClickListener(v -> zoomCurrentPage(true));
+        findViewById(R.id.btnZoomOut).setOnClickListener(v -> zoomCurrentPage(false));
 
         renderAllPages();
+    }
+
+    // Currently visible page-oda ZoomableImageView-ah kandupidichu, andha
+    // page mattum +/− button click-ku zoom in/out pannudhu.
+    private void zoomCurrentPage(boolean in) {
+        RecyclerView rv = findViewById(R.id.rvPdfPreviewPages);
+        LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
+        if (lm == null) return;
+        int pos = lm.findFirstVisibleItemPosition();
+        if (pos < 0) return;
+        RecyclerView.ViewHolder vh = rv.findViewHolderForAdapterPosition(pos);
+        if (vh instanceof PdfPageAdapter.VH) {
+            ZoomableImageView iv = ((PdfPageAdapter.VH) vh).iv;
+            if (in) iv.zoomIn();
+            else iv.zoomOut();
+        }
     }
 
     @Override
@@ -112,8 +129,10 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
                     rv.setAdapter(new PdfPageAdapter(pages));
                     rv.setVisibility(View.VISIBLE);
                     placeholder.setVisibility(View.GONE);
+                    findViewById(R.id.zoomControls).setVisibility(View.VISIBLE);
 
                     pageIndicator.setVisibility(totalPages > 1 ? View.VISIBLE : View.GONE);
+                    
                     pageIndicator.setText("Page 1 / " + totalPages);
                     rv.addOnScrollListener(new RecyclerView.OnScrollListener() {
                         @Override
@@ -135,6 +154,8 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         }).start();
     }
 
+    // One full-width page per row. ZoomableImageView adds pinch-zoom/pan —
+    // at 1x, vertical drag still passes through so page-to-page scroll works.
     private static class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.VH> {
         private final List<Bitmap> pages;
 
@@ -143,9 +164,9 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         }
 
         static class VH extends RecyclerView.ViewHolder {
-            ImageView iv;
+            ZoomableImageView iv;
 
-            VH(ImageView v) {
+            VH(ZoomableImageView v) {
                 super(v);
                 iv = v;
             }
@@ -154,11 +175,10 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            ImageView iv = new ImageView(parent.getContext());
+            ZoomableImageView iv = new ZoomableImageView(parent.getContext());
             iv.setLayoutParams(new RecyclerView.LayoutParams(
                     RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
             iv.setAdjustViewBounds(true);
-            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             int pad = (int) (4 * parent.getResources().getDisplayMetrics().density);
             iv.setPadding(0, pad, 0, pad);
             return new VH(iv);

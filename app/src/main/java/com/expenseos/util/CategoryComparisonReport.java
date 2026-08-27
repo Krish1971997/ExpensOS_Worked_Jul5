@@ -34,11 +34,9 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 public class CategoryComparisonReport {
 
@@ -62,6 +60,7 @@ public class CategoryComparisonReport {
         public int bookId;
         public List<YearMonth> months; // oldest -> newest
         public List<RowData> rows;     // sorted by pctChange DESC
+        public List<BigDecimal> monthlyTotals; // column sum per month, same order as months — for the "Total" row
     }
 
     /**
@@ -69,34 +68,55 @@ public class CategoryComparisonReport {
      * @param includeCurrent true = last N months ending THIS month; false = last N months ending LAST month
      */
     public static Result build(Context ctx, int bookId, int monthsCount, boolean includeCurrent) {
+        // "bookId" indha app-oda active book — adhoda name-la irukkura
+        // series suffix (e.g. "Credit Card") eduthu, andha SERIES-oda
+        // report-ah build pannurom (ovvoru month-um thani cashbook-nu).
+        com.expenseos.model.CashBook activeBook = new com.expenseos.dao.CashBookDao(ctx).findById(bookId);
+        String suffix = activeBook != null ? MonthBookResolver.extractSuffix(activeBook.getName()) : "";
+        return buildForSuffix(ctx, suffix, monthsCount, includeCurrent);
+    }
+
+    /**
+     * Same as build(), aana bookId-la irundhu suffix eduthukkardhukku pathila
+     * suffix-ah nேrடி kudukkalam (scheduler ella 3 series-ayum (plain /
+     * Expense / Credit Card) individual-ah process pannanumnu இதை use pannudhu).
+     *
+     * @param suffix "" for plain "<Month> <Year>" books, "Expense" / "Credit Card" etc for that series.
+     */
+    public static Result buildForSuffix(Context ctx, String suffix, int monthsCount, boolean includeCurrent) {
         monthsCount = Math.max(2, Math.min(12, monthsCount));
 
         YearMonth anchor = YearMonth.from(includeCurrent ? LocalDate.now() : LocalDate.now().minusMonths(1));
         List<YearMonth> months = new ArrayList<>();
         for (int i = monthsCount - 1; i >= 0; i--) months.add(anchor.minusMonths(i));
 
+        // Diff/% Change eppovume DISPLAYED list-oda LAST 2 months-ah base
+        // pannirukanum — e.g. Jun/Jul/Aug select pannirundha, Jul vs Aug
+        // thaan compare pannanum (current month data partial-ah irundhaalum,
+        // andha actual entered amount-a vechu thaan).
+        YearMonth lastMonth = months.get(months.size() - 1);
+        YearMonth prevMonth = months.get(months.size() - 2);
+
         TransactionDao dao = new TransactionDao(ctx);
-
-
-        // Percentage eppovume last COMPLETED month vs adharku munnadi month
-        // (e.g. now=Aug -> Jul vs Jun) — "include current month" checkbox
-        // ivvalavuku affect pannakoodadhu, current month data incomplete.
-        YearMonth lastMonth = YearMonth.from(LocalDate.now().minusMonths(1));
-        YearMonth prevMonth = lastMonth.minusMonths(1);
-
-        // Displayed months + the fixed comparison months (lastMonth/prevMonth
-        // may fall outside the displayed range, e.g. a 2-month "include
-        // current" filter would otherwise never fetch prevMonth's data).
-        Set<YearMonth> monthsToQuery = new LinkedHashSet<>(months);
-        monthsToQuery.add(lastMonth);
-        monthsToQuery.add(prevMonth);
+        int resolvedBookId = 0;
 
         // category -> (month -> total)
         Map<String, Map<YearMonth, BigDecimal>> byCategory = new LinkedHashMap<>();
-        for (YearMonth ym : monthsToQuery) {
-            List<Map<String, Object>> rows = dao.categoryBreakdownByMonth("EXPENSE", ym.getYear(), ym.getMonthValue(), bookId);
-            for (Map<String, Object> r : rows) {
-                String cat = (String) r.get("category");
+        for (YearMonth ym : months) {
+            // Ovvoru "virtual month" oda cashbook-ah PEYARU vachu resolve
+            // pannurom (e.g. "July 2026", "September 2026 Credit Card").
+            // Book create aagalainaa andha month-ah zero-ah skip pannunga.
+            // Resolve pannina appuram andha book-oda WHOLE total eduthukkanum
+            // — transaction date-a vachu VERA filter podakoodadhu (Credit
+            // Card book-la entries mostly munnadi month(s)-oda dates-oda
+            // irukkum, book NAME-ye andha "month"-ah represent pannudhu).
+            com.expenseos.model.CashBook monthBook = MonthBookResolver.findBookForMonth(ctx, ym, suffix);
+            if (monthBook == null) continue;
+            if (ym.equals(lastMonth)) resolvedBookId = monthBook.getId();
+
+            List<Map<String, Object>> rowsForMonth = dao.expenseByCategory(monthBook.getId());
+            for (Map<String, Object> r : rowsForMonth) {
+                String cat = (String) r.get("name");
                 BigDecimal total = (BigDecimal) r.get("total");
                 if (total == null) total = BigDecimal.ZERO;
                 byCategory.computeIfAbsent(cat, k -> new LinkedHashMap<>()).put(ym, total);
@@ -104,7 +124,6 @@ public class CategoryComparisonReport {
         }
 
         List<RowData> rows = new ArrayList<>();
-
         for (Map.Entry<String, Map<YearMonth, BigDecimal>> e : byCategory.entrySet()) {
             Map<YearMonth, BigDecimal> perMonth = e.getValue();
             RowData row = new RowData();
@@ -136,10 +155,19 @@ public class CategoryComparisonReport {
 
         rows.sort((a, b) -> Double.compare(b.pctChange, a.pctChange));
 
+        // Column sums per month — Total row-ku (PDF/Excel/email/UI ellame).
+        List<BigDecimal> monthlyTotals = new ArrayList<>();
+        for (int i = 0; i < months.size(); i++) {
+            BigDecimal sum = BigDecimal.ZERO;
+            for (RowData r : rows) sum = sum.add(r.monthlyAmounts.get(i));
+            monthlyTotals.add(sum);
+        }
+
         Result result = new Result();
-        result.bookId = bookId;
+        result.bookId = resolvedBookId;
         result.months = months;
         result.rows = rows;
+        result.monthlyTotals = monthlyTotals;
         return result;
     }
 
@@ -217,6 +245,17 @@ public class CategoryComparisonReport {
             addCell(table, (row.diff.signum() >= 0 ? "+" : "") + row.diff.toPlainString(), trendFont, trendColor);
             addCell(table, String.format(Locale.US, "%+.1f%%", row.pctChange), trendFont, trendColor);
         }
+
+        // Total row — Category + month columns mattum; Diff/% Change per-
+        // category-ku thaan porul, total-ku "—".
+        Font totalFont = new Font(Font.FontFamily.HELVETICA, 9, Font.BOLD);
+        BaseColor totalBg = new BaseColor(226, 232, 240);
+        addCell(table, "Total", totalFont, totalBg);
+        for (BigDecimal amt : result.monthlyTotals)
+            addCell(table, amt.toPlainString(), totalFont, totalBg);
+        addCell(table, "—", totalFont, totalBg);
+        addCell(table, "—", totalFont, totalBg);
+
         doc.add(table);
         doc.close();
     }
@@ -362,6 +401,31 @@ public class CategoryComparisonReport {
                 pctCell.setCellStyle(style);
             }
 
+            // Total row — Category + month columns mattum; Diff/% Change "—".
+            CellStyle totalStyle = wb.createCellStyle();
+            org.apache.poi.ss.usermodel.Font totalFont = wb.createFont();
+            totalFont.setBold(true);
+            totalStyle.setFont(totalFont);
+            totalStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            totalStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+            Row totalRow = sheet.createRow(r);
+            int tc = 0;
+            Cell totalLabel = totalRow.createCell(tc++);
+            totalLabel.setCellValue("Total");
+            totalLabel.setCellStyle(totalStyle);
+            for (BigDecimal amt : result.monthlyTotals) {
+                Cell cell = totalRow.createCell(tc++);
+                cell.setCellValue(amt.doubleValue());
+                cell.setCellStyle(totalStyle);
+            }
+            Cell diffDash = totalRow.createCell(tc++);
+            diffDash.setCellValue("—");
+            diffDash.setCellStyle(totalStyle);
+            Cell pctDash = totalRow.createCell(tc);
+            pctDash.setCellValue("—");
+            pctDash.setCellStyle(totalStyle);
+
             for (int i = 0; i <= result.months.size() + 2; i++) sheet.autoSizeColumn(i);
             wb.write(out);
         }
@@ -421,6 +485,16 @@ public class CategoryComparisonReport {
             sb.append("<td style='padding:6px;text-align:right;border-bottom:1px solid #eee;color:#fff;background:").append(hex).append(";'>").append(String.format(Locale.US, "%+.1f%%", row.pctChange)).append("</td>");
             sb.append("</tr>");
         }
+
+        // Total row — Category + month columns mattum; Diff/% Change "—".
+        sb.append("<tr style='background:#E2E8F0;font-weight:bold;'>");
+        sb.append("<td style='padding:6px;'>Total</td>");
+        for (BigDecimal amt : result.monthlyTotals)
+            sb.append("<td style='padding:6px;text-align:right;'>₹").append(amt.toPlainString()).append("</td>");
+        sb.append("<td style='padding:6px;text-align:right;'>—</td>");
+        sb.append("<td style='padding:6px;text-align:right;'>—</td>");
+        sb.append("</tr>");
+
         sb.append("</table></body></html>");
         return sb.toString();
     }

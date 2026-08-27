@@ -267,41 +267,55 @@ public class SchedulerWorker extends Worker {
     }
 
     // ── MONTHLY_CATEGORY_REPORT: emails the last-3-months category
-    // comparison for the active cashbook. Runs at 12:05 AM on the 1st, so
-    // "current month" has ~0 data yet — compares the month that just ended
-    // against the one before it (matches the CASHBOOK case's "current
-    // month at trigger time" convention, one turn earlier since this looks
-    // BACKWARD instead of creating something forward).
+    // comparison — SEPARATELY for each cashbook series (plain "<Month>
+    // <Year>", "<Month> <Year> Expense", "<Month> <Year> Credit Card" —
+    // same 3 suffixes runCashBook() creates every month), one individual
+    // email per series. Runs at 12:05 AM on the 1st, so "current month"
+    // has ~0 data yet — compares the month that just ended against the
+    // one before it.
+    private static final String[] MONTHLY_REPORT_SUFFIXES = {"", "Expense", "Credit Card"};
+
     private MonthlyReportOutcome runMonthlyCategoryReport(Context ctx) {
         MonthlyReportOutcome outcome = new MonthlyReportOutcome();
-        try {
-            int bookId = com.expenseos.util.AppConfig.get(ctx).getActiveBookId();
-            com.expenseos.util.CategoryComparisonReport.Result result =
-                    com.expenseos.util.CategoryComparisonReport.build(ctx, bookId, 3, false);
+        String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
+        int sent = 0, skipped = 0;
+        List<String> failures = new ArrayList<>();
 
-            if (result.rows.isEmpty()) {
-                outcome.ok = true;
-                outcome.message = "No expense data to report — skipped email";
-                return outcome;
+        for (String suffix : MONTHLY_REPORT_SUFFIXES) {
+            String label = suffix.isEmpty() ? "Main" : suffix;
+            try {
+                com.expenseos.util.CategoryComparisonReport.Result result =
+                        com.expenseos.util.CategoryComparisonReport.buildForSuffix(ctx, suffix, 3, false);
+
+                if (result.rows.isEmpty()) {
+                    skipped++;
+                    continue;
+                }
+
+                java.io.ByteArrayOutputStream pdfBytes = new java.io.ByteArrayOutputStream();
+                com.expenseos.util.CategoryComparisonReport.writePdf(result, pdfBytes);
+
+                String subject = "Monthly Category Report" + (suffix.isEmpty() ? "" : " (" + suffix + ")") + " — " +
+                        result.months.get(result.months.size() - 1).getMonth().getDisplayName(
+                                java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+                String html = com.expenseos.util.CategoryComparisonReport.buildHtmlEmail(result);
+                String fileSuffix = suffix.isEmpty() ? "" : "_" + suffix.toLowerCase(java.util.Locale.ENGLISH).replace(" ", "_");
+                com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
+                        "monthly_category_report" + fileSuffix + ".pdf", pdfBytes.toByteArray(), "application/pdf");
+
+                com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, attachment);
+                sent++;
+            } catch (Exception e) {
+                failures.add(label + ": " + (e.getMessage() != null ? e.getMessage() : e.toString()));
             }
+        }
 
-            java.io.ByteArrayOutputStream pdfBytes = new java.io.ByteArrayOutputStream();
-            com.expenseos.util.CategoryComparisonReport.writePdf(result, pdfBytes);
-
-            String subject = "Monthly Category Report — " +
-                    result.months.get(result.months.size() - 1).getMonth().getDisplayName(
-                            java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
-            String html = com.expenseos.util.CategoryComparisonReport.buildHtmlEmail(result);
-            com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
-                    "monthly_category_report.pdf", pdfBytes.toByteArray(), "application/pdf");
-
-            String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
-            com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, attachment);
-            outcome.ok = true;
-            outcome.message = "Report emailed (" + result.rows.size() + " categories)";
-        } catch (Exception e) {
+        if (!failures.isEmpty()) {
             outcome.ok = false;
-            outcome.message = e.getMessage() != null ? e.getMessage() : e.toString();
+            outcome.message = "Sent " + sent + ", skipped " + skipped + " (no data), failed: " + String.join("; ", failures);
+        } else {
+            outcome.ok = true;
+            outcome.message = "Sent " + sent + " report email(s), skipped " + skipped + " series with no data";
         }
         return outcome;
     }

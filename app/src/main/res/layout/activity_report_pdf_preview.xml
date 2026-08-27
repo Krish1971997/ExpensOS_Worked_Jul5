@@ -66,12 +66,57 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvPdfPreviewPages"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:visibility="gone" />
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvPdfPreviewPages"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <!-- Manual zoom controls — pinch venaam-nu irundhaalum idhu vachi zoom pannalam -->
+        <LinearLayout
+            android:id="@+id/zoomControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_zoom_controls"
+            android:elevation="4dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/btnZoomIn"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="+"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#22000000" />
+
+            <TextView
+                android:id="@+id/btnZoomOut"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="−"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Bottom action bar -->
     <LinearLayout
@@ -85,17 +130,23 @@
             android:id="@+id/btnPdfPreviewSave"
             style="@style/BtnPrimary"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
+            android:minHeight="46dp"
+            android:paddingVertical="10dp"
             android:layout_marginEnd="6dp"
             android:layout_weight="1"
-            android:text="⬇ Save to Downloads" />
+            android:maxLines="1"
+            android:text="⬇ Save" />
 
         <Button
             android:id="@+id/btnPdfPreviewShare"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
+            android:minHeight="46dp"
+            android:paddingVertical="10dp"
             android:layout_weight="1"
+            android:maxLines="1"
             android:text="Share" />
     </LinearLayout>
 </LinearLayout>

@@ -130,6 +130,17 @@
                         android:layout_height="wrap_content"
                         android:background="@android:color/white"
                         android:nestedScrollingEnabled="false" />
+
+                    <!-- Total row — MonthlyCategoryReportActivity.buildTotalRow() runtime-la fill pannudhu -->
+                    <LinearLayout
+                        android:id="@+id/rowMcrTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@color/bg"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="8dp"
+                        android:visibility="gone" />
                 </LinearLayout>
             </HorizontalScrollView>
 

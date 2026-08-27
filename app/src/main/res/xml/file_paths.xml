@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths xmlns:android="http://schemas.android.com/apk/res/android">
+<paths>
     <!-- Matches new File(getCacheDir(), "receipts") in
          TransactionEntryActivity.launchCamera() -->
     <cache-path
@@ -16,4 +16,9 @@
     <cache-path
         name="reports"
         path="reports/" />
+    <!-- Matches new File(getFilesDir(), "ai_attachments") in
+         ChatActivity.handlePickedFile() -->
+    <files-path
+        name="ai_attachments"
+        path="ai_attachments/" />
 </paths>

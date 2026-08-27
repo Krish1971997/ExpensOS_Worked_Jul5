@@ -28,6 +28,7 @@ import com.expenseos.util.GmailSender;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
@@ -98,6 +99,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
         TextView tvRange = findViewById(R.id.tvMcrRange);
         LinearLayout header = findViewById(R.id.rowMcrHeader);
+        LinearLayout totalRow = findViewById(R.id.rowMcrTotal);
         View exportBar = findViewById(R.id.exportBar);
 
         TextView emptyView = findViewById(R.id.tvMcrEmpty);
@@ -109,6 +111,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
         if (currentResult.rows.isEmpty()) {
             header.setVisibility(View.GONE);
+            totalRow.setVisibility(View.GONE);
             exportBar.setVisibility(View.GONE);
             emptyView.setVisibility(View.VISIBLE);
             emptyView.setText("No expense data in this range.");
@@ -122,6 +125,9 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setAdapter(new ComparisonAdapter(currentResult.rows, months));
+
+        buildTotalRow(totalRow, currentResult);
+        totalRow.setVisibility(View.VISIBLE);
     }
 
     // ── Dynamic header — Category + one cell per selected month + % Chg ──
@@ -338,5 +344,27 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
                 mainHandler.post(() -> Toast.makeText(this, "✘ Send failed: " + msg, Toast.LENGTH_LONG).show());
             }
         });
+    }
+
+    // Total row — Category label + column sums; Diff/% Change "—" (per-
+    // category-ku thaan andha 2 columns porul, total-ku illa).
+    private void buildTotalRow(LinearLayout totalRow, CategoryComparisonReport.Result result) {
+        totalRow.removeAllViews();
+        totalRow.addView(totalCell("Total", COL_CATEGORY_DP, Gravity.START));
+        for (BigDecimal amt : result.monthlyTotals)
+            totalRow.addView(totalCell("₹" + amt.toPlainString(), COL_MONTH_DP, Gravity.END));
+        totalRow.addView(totalCell("—", COL_PCT_DP, Gravity.END));
+    }
+
+    private TextView totalCell(String text, int widthDp, int gravity) {
+        TextView tv = new TextView(this);
+        tv.setLayoutParams(new LinearLayout.LayoutParams(dp(widthDp), ViewGroup.LayoutParams.WRAP_CONTENT));
+        tv.setText(text);
+        tv.setGravity(gravity);
+        tv.setPadding(dp(4), dp(2), dp(4), dp(2));
+        tv.setTextColor(getResources().getColor(R.color.text, null));
+        tv.setTextSize(12);
+        tv.setTypeface(tv.getTypeface(), Typeface.BOLD);
+        return tv;
     }
 }

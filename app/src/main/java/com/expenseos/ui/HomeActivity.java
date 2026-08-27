@@ -209,6 +209,7 @@ public class HomeActivity extends AppCompatActivity {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, SqlConsoleActivity.class));
         });
+
     }
 
     // ── Sync Button ───────────────────────────────────────

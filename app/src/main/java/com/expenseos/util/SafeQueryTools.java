@@ -14,8 +14,7 @@ import java.util.regex.Pattern;
 
 /**
  * Everything the AI assistant is allowed to touch in the database. This is
- * the actual security boundary — not the system prompt. Even if the model
- * is tricked/jailbroken into "wanting" to write data, there is no code
+ * the actual security boundary — not the system prompt. There is no code
  * path here that can execute anything but a validated SELECT.
  */
 public class SafeQueryTools {
@@ -37,8 +36,6 @@ public class SafeQueryTools {
         try (Cursor c = db.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != 'transaction_receipts' ORDER BY name",
                 null)) {
-            // transaction_receipts excluded — its file_data BLOBs aren't
-            // relevant to stats/questions and can be large.
             while (c.moveToNext()) out.put(c.getString(0));
         }
         return out.toString();
@@ -51,10 +48,6 @@ public class SafeQueryTools {
         if ("transaction_receipts".equalsIgnoreCase(tableName)) {
             return errorJson("This table is not available to the assistant");
         }
-        // Table name is now known-safe (matches identifier pattern, verified
-        // against sqlite_master implicitly by PRAGMA failing harmlessly if
-        // the table doesn't exist) — safe to interpolate for PRAGMA, which
-        // doesn't accept bind parameters for the table name.
         JSONArray cols = new JSONArray();
         try (Cursor c = db.rawQuery("PRAGMA table_info(" + tableName + ")", null)) {
             while (c.moveToNext()) {
@@ -73,33 +66,26 @@ public class SafeQueryTools {
     }
 
     /**
-     * The one entry point for AI-authored SQL. Every gate here is a hard
-     * reject, not a suggestion — there is no "best effort" mode.
+     * The one entry point for AI-authored SQL. Every gate here is a hard reject.
      */
     public String runQuery(String sql) {
         if (sql == null || sql.isBlank()) return errorJson("Empty query");
         String trimmed = sql.trim();
-
-        // Only a single statement, and it must be a SELECT.
         String withoutTrailingSemi = trimmed.endsWith(";") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
-        if (withoutTrailingSemi.contains(";")) {
+        if (withoutTrailingSemi.contains(";"))
             return errorJson("Multiple statements are not allowed");
-        }
+
         String lower = withoutTrailingSemi.toLowerCase(Locale.ROOT).trim();
-        if (!lower.startsWith("select")) {
-            return errorJson("Only SELECT queries are allowed");
-        }
-        if (DISALLOWED.matcher(withoutTrailingSemi).find()) {
+        if (!lower.startsWith("select")) return errorJson("Only SELECT queries are allowed");
+        if (DISALLOWED.matcher(withoutTrailingSemi).find())
             return errorJson("Query contains a disallowed keyword");
-        }
-        if (lower.contains("transaction_receipts")) {
+        if (lower.contains("transaction_receipts"))
             return errorJson("transaction_receipts is not available to the assistant");
-        }
 
         JSONArray rows = new JSONArray();
         try (Cursor c = db.rawQuery(withoutTrailingSemi, null)) {
             int rowCount = 0;
-            while (c.moveToNext() && rowCount < 200) { // hard cap — keeps responses small & bounds cost
+            while (c.moveToNext() && rowCount < 200) {
                 JSONObject row = new JSONObject();
                 for (int i = 0; i < c.getColumnCount(); i++) {
                     String col = c.getColumnName(i);

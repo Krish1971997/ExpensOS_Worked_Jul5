@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 39; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 40; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -350,6 +350,20 @@ public class LocalDB extends SQLiteOpenHelper {
                 "record_json TEXT NOT NULL," +
                 "deleted_at  TEXT DEFAULT (datetime('now'))," +
                 "UNIQUE(table_name, record_id))");
+
+        // ai_chat_messages — persisted AI Assistant chat history, one row
+        // per turn. attachment_path/chart_path point at files in the app's
+        // cache/files dir (never store image bytes in this table).
+        db.execSQL("CREATE TABLE IF NOT EXISTS ai_chat_messages (" +
+                "id INTEGER PRIMARY KEY, " +
+                "role TEXT NOT NULL, " +           // 'user' | 'assistant'
+                "content TEXT, " +
+                "attachment_path TEXT, " +          // user-attached image/file, if any
+                "attachment_name TEXT, " +
+                "chart_path TEXT, " +               // assistant-rendered chart image, if any
+                "provider TEXT, " +                 // which AI provider answered (assistant rows only)
+                "created_at TEXT NOT NULL)");
+
 
         // Seed default categories
         String[] incomes = {"Salary", "Freelance", "Gift", "Other"};
@@ -813,6 +827,23 @@ public class LocalDB extends SQLiteOpenHelper {
             } catch (Exception e) {
                 log.error("installBookGuardTriggers failed: " + e.getMessage());
             }
+        }
+
+        if (oldV < 40) {
+            // ai_chat_messages — persisted AI Assistant chat history, one row
+            // per turn. attachment_path/chart_path point at files in the app's
+            // cache/files dir (never store image bytes in this table).
+            db.execSQL("CREATE TABLE IF NOT EXISTS ai_chat_messages (" +
+                    "id INTEGER PRIMARY KEY, " +
+                    "role TEXT NOT NULL, " +           // 'user' | 'assistant'
+                    "content TEXT, " +
+                    "attachment_path TEXT, " +          // user-attached image/file, if any
+                    "attachment_name TEXT, " +
+                    "chart_path TEXT, " +               // assistant-rendered chart image, if any
+                    "provider TEXT, " +                 // which AI provider answered (assistant rows only)
+                    "created_at TEXT NOT NULL)");
+
+            initSequences(db);
         }
     }
 

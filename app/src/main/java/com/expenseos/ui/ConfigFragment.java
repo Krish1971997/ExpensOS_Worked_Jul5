@@ -86,11 +86,28 @@ public class ConfigFragment extends Fragment {
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
     }
 
+    private static final String[] AI_PROVIDERS = {"gemini", "openai", "grok", "claude"};
+
     private void setupSpinner() {
-        String[] providers = {"gemini", "openai"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_dropdown_item, providers);
+                android.R.layout.simple_spinner_dropdown_item, AI_PROVIDERS);
         spAiProvider.setAdapter(adapter);
+
+        // Reload the key/model fields for whichever provider is selected —
+        // each provider has its own saved slot (see AppConfig.getAiKey/getAiModel).
+        spAiProvider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                String provider = AI_PROVIDERS[position];
+                AppConfig cfg = AppConfig.get(requireContext());
+                etOpenAiKey.setText(cfg.getAiKey(provider));
+                etOpenAiModel.setText(cfg.getAiModel(provider));
+            }
+
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+            }
+        });
     }
 
     private void loadSavedValues() {
@@ -107,14 +124,11 @@ public class ConfigFragment extends Fragment {
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
 
-        etOpenAiKey.setText(cfg.getOpenAiApiKey());
-        etOpenAiModel.setText(cfg.getOpenAiModel());
-
-        if ("openai".equalsIgnoreCase(cfg.getAiProvider())) {
-            spAiProvider.setSelection(1);
-        } else {
-            spAiProvider.setSelection(0);
-        }
+        // Select the active provider first — the spinner's onItemSelected
+        // above will then load THAT provider's own saved key/model.
+        String activeProvider = cfg.getAiProvider();
+        int idx = java.util.Arrays.asList(AI_PROVIDERS).indexOf(activeProvider);
+        spAiProvider.setSelection(idx >= 0 ? idx : 0);
     }
 
     private void setupButtons() {
@@ -143,7 +157,7 @@ public class ConfigFragment extends Fragment {
                     etOpenAiKey.getText().toString().trim(),
                     etOpenAiModel.getText().toString().trim(),
                     selectedProvider);
-            toast("✓ AI Config saved!");
+            toast("✓ " + selectedProvider + " config saved!");
         });
 
         btnTestConnection.setOnClickListener(v -> testConnection());
