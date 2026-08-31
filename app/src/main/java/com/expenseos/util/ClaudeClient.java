@@ -15,13 +15,22 @@ public class ClaudeClient implements AiProvider {
 
     private static final String ENDPOINT = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
-    private static final String SYSTEM_PROMPT =
-            "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
-                    "You can ONLY answer questions about this app's own data using the provided tools. " +
-                    "You must NEVER attempt to modify data — you only have read tools available. " +
-                    "Always start by calling list_tables, then describe_table on relevant tables before " +
-                    "writing a query. If asked to visualize/chart something, call render_chart after " +
-                    "querying. Keep answers concise and grounded only in query results.";
+
+    private static String buildSystemPrompt() {
+        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
+        return
+                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
+                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
+                        "style questions instead of spending a step figuring out the date. " +
+                        "You can ONLY answer questions about this app's own data using the provided tools. " +
+                        "You must NEVER attempt to modify data — you only have read tools available. " +
+                        "Always start by calling list_tables, then describe_table on relevant tables before " +
+                        "writing a query. If asked to visualize/chart something, call render_chart after " +
+                        "querying. Always reply in the same language and style the user wrote in — including " +
+                        "Tanglish (Tamil written in English letters), plain English, or Tamil script; match " +
+                        "their language rather than defaulting to English. " +
+                        "Keep answers concise and grounded only in query results.";
+    }
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
@@ -40,6 +49,11 @@ public class ClaudeClient implements AiProvider {
     }
 
     @Override
+    public String getLastImagePath() {
+        return dispatcher.getLastImagePath();
+    }
+
+    @Override
     public void ask(String userMessage, String imagePath, JSONArray priorMessages, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
@@ -50,7 +64,8 @@ public class ClaudeClient implements AiProvider {
             JSONArray messages = priorMessages != null ? priorMessages : new JSONArray();
             messages.put(imagePath != null ? userMsgWithImage(userMessage, imagePath) : userMsg(userMessage));
 
-            for (int round = 0; round < 6; round++) {
+            cb.onProgress("Thinking…");
+            for (int round = 0; round < 12; round++) {
                 JSONObject response = call(messages);
                 JSONArray content = response.getJSONArray("content");
                 String stopReason = response.optString("stop_reason", "");
@@ -71,6 +86,7 @@ public class ClaudeClient implements AiProvider {
                         JSONObject args = block.optJSONObject("input");
                         if (args == null) args = new JSONObject();
 
+                        cb.onProgress(progressLabel(fnName, args));
                         String result = dispatcher.dispatch(fnName, args);
 
                         JSONObject toolResultBlock = new JSONObject();
@@ -84,6 +100,7 @@ public class ClaudeClient implements AiProvider {
                     userToolMsg.put("role", "user");
                     userToolMsg.put("content", toolResults);
                     messages.put(userToolMsg);
+                    cb.onProgress("Thinking…");
                     continue;
                 }
 
@@ -101,6 +118,18 @@ public class ClaudeClient implements AiProvider {
         } catch (Exception e) {
             cb.onError(e.getMessage() != null ? e.getMessage() : e.toString());
         }
+    }
+
+    private String progressLabel(String toolName, JSONObject args) {
+        return switch (toolName) {
+            case "list_tables" -> "Checking tables…";
+            case "describe_table" ->
+                    "Reading \"" + args.optString("table_name", "table") + "\" structure…";
+            case "run_query" -> "Querying your data…";
+            case "render_chart" -> "Drawing chart…";
+            case "generate_image" -> "Generating image…";
+            default -> "Working on \"" + toolName + "\"…";
+        };
     }
 
     private JSONObject userMsg(String text) throws Exception {
@@ -140,7 +169,7 @@ public class ClaudeClient implements AiProvider {
         JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("max_tokens", 1024);
-        body.put("system", SYSTEM_PROMPT);
+        body.put("system", buildSystemPrompt());
         body.put("messages", messages);
         body.put("tools", toolDefinitions());
 
@@ -152,19 +181,44 @@ public class ClaudeClient implements AiProvider {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
         conn.setConnectTimeout(20000);
-        conn.setReadTimeout(30000);
+        conn.setReadTimeout(60000); // model "thinking" + tool round trips can run long
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (java.net.SocketTimeoutException e) {
+            throw new RuntimeException("Claude: request timed out — try a shorter/simpler question.");
         }
 
-        int status = conn.getResponseCode();
+        int status;
+        try {
+            status = conn.getResponseCode();
+        } catch (java.net.SocketTimeoutException e) {
+            throw new RuntimeException("Claude: response timed out (model took too long) — try again.");
+        }
         InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
         String responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         if (status < 200 || status >= 300)
-            throw new RuntimeException("Claude error (" + status + "): " + responseBody);
+            throw new RuntimeException(friendlyError(status, responseBody));
         return new JSONObject(responseBody);
     }
+
+    private String friendlyError(int status, String responseBody) {
+        try {
+            JSONObject err = new JSONObject(responseBody).optJSONObject("error");
+            String type = err != null ? err.optString("type", "") : "";
+            String message = err != null ? err.optString("message", "") : "";
+
+            if (status == 401) return "Claude: invalid API key — check it in Config.";
+            if (status == 404 || "not_found_error".equals(type))
+                return "Claude: model \"" + model + "\" not found — check the model name in Config.";
+            if (status == 429 || "rate_limit_error".equals(type))
+                return "Claude: quota/rate limit reached — check your plan & billing.";
+            if (!message.isEmpty()) return "Claude error (" + status + "): " + message;
+        } catch (Exception ignored) {
+        }
+        return "Claude error (" + status + "): " + responseBody;
+    }
+
 
     private JSONArray toolDefinitions() throws Exception {
         JSONArray tools = new JSONArray();
@@ -193,6 +247,14 @@ public class ClaudeClient implements AiProvider {
         chartSchema.put("properties", chartProps);
         chartSchema.put("required", new JSONArray().put("labels").put("values"));
         tools.put(tool("render_chart", "Render a bar chart from labels/values, shown to the user as an image.", chartSchema));
+
+        JSONObject imageSchema = new JSONObject();
+        imageSchema.put("type", "object");
+        imageSchema.put("properties", new JSONObject().put("prompt",
+                new JSONObject().put("type", "string").put("description",
+                        "Description of the illustrative image to generate. Use render_chart instead for real data/stats.")));
+        imageSchema.put("required", new JSONArray().put("prompt"));
+        tools.put(tool("generate_image", "Generate an AI illustrative image from a text prompt (via Grok/xAI). Requires a Grok API key configured in Config.", imageSchema));
 
         return tools;
     }

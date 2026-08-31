@@ -13,14 +13,23 @@ import java.nio.charset.StandardCharsets;
 
 public class GeminiClient implements AiProvider {
     private static final String GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final String SYSTEM_PROMPT =
-            "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
-                    "You can ONLY answer questions about this app's own data (transactions, categories, " +
-                    "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
-                    "You must NEVER attempt to modify data — you only have read tools available. " +
-                    "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
-                    "If the user asks to visualize or chart something, call render_chart with the labels/values " +
-                    "AFTER you've queried the data. Keep answers concise and grounded only in query results.";
+
+    private static String buildSystemPrompt() {
+        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
+        return
+                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
+                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
+                        "style questions instead of spending a step figuring out the date. " +
+                        "You can ONLY answer questions about this app's own data (transactions, categories, " +
+                        "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
+                        "You must NEVER attempt to modify data — you only have read tools available. " +
+                        "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
+                        "If the user asks to visualize or chart something, call render_chart with the labels/values " +
+                        "AFTER you've queried the data. Always reply in the same language and style the user wrote " +
+                        "in — including Tanglish (Tamil written in English letters), plain English, or Tamil script; " +
+                        "match their language rather than defaulting to English. " +
+                        "Keep answers concise and grounded only in query results.";
+    }
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
@@ -39,6 +48,11 @@ public class GeminiClient implements AiProvider {
     }
 
     @Override
+    public String getLastImagePath() {
+        return dispatcher.getLastImagePath();
+    }
+
+    @Override
     public void ask(String userMessage, String imagePath, JSONArray conversationHistory, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
@@ -50,7 +64,8 @@ public class GeminiClient implements AiProvider {
             JSONArray contents = conversationHistory != null ? conversationHistory : new JSONArray();
             contents.put(imagePath != null ? createContentWithImage(userMessage, imagePath) : createContent("user", userMessage));
 
-            for (int round = 0; round < 6; round++) {
+            cb.onProgress("Thinking…");
+            for (int round = 0; round < 12; round++) {
                 JSONObject response = callGeminiApi(contents);
                 JSONObject candidate = response.getJSONArray("candidates").getJSONObject(0);
                 JSONObject content = candidate.getJSONObject("content");
@@ -67,6 +82,7 @@ public class GeminiClient implements AiProvider {
                     JSONObject args = fnCall.optJSONObject("args");
                     if (args == null) args = new JSONObject();
 
+                    cb.onProgress(progressLabel(fnName, args));
                     String toolResult = dispatcher.dispatch(fnName, args);
 
                     // Send Tool response back to Gemini
@@ -81,6 +97,7 @@ public class GeminiClient implements AiProvider {
                     toolResponseContent.put("parts", new JSONArray().put(responsePart));
                     contents.put(toolResponseContent);
 
+                    cb.onProgress("Thinking…");
                     continue;
                 }
 
@@ -93,6 +110,18 @@ public class GeminiClient implements AiProvider {
         } catch (Exception e) {
             cb.onError(e.getMessage() != null ? e.getMessage() : e.toString());
         }
+    }
+
+    private String progressLabel(String toolName, JSONObject args) {
+        return switch (toolName) {
+            case "list_tables" -> "Checking tables…";
+            case "describe_table" ->
+                    "Reading \"" + args.optString("table_name", "table") + "\" structure…";
+            case "run_query" -> "Querying your data…";
+            case "render_chart" -> "Drawing chart…";
+            case "generate_image" -> "Generating image…";
+            default -> "Working on \"" + toolName + "\"…";
+        };
     }
 
     private JSONObject createContent(String role, String text) throws Exception {
@@ -127,7 +156,7 @@ public class GeminiClient implements AiProvider {
 
         // System Instruction
         JSONObject sysInstruction = new JSONObject();
-        sysInstruction.put("parts", new JSONArray().put(new JSONObject().put("text", SYSTEM_PROMPT)));
+        sysInstruction.put("parts", new JSONArray().put(new JSONObject().put("text", buildSystemPrompt())));
         body.put("systemInstruction", sysInstruction);
         body.put("contents", contents);
 
@@ -149,6 +178,12 @@ public class GeminiClient implements AiProvider {
         chartProps.put("values", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "NUMBER")));
         functionDeclarations.put(createToolDeclaration("render_chart", "Render a bar chart from labels and values, shown to the user as an image", chartProps));
 
+        JSONObject imageProps = new JSONObject();
+        imageProps.put("prompt", new JSONObject().put("type", "STRING"));
+        functionDeclarations.put(createToolDeclaration("generate_image",
+                "Generate an AI illustrative image from a text prompt (via Grok/xAI). Only for explicit picture/illustration requests — use render_chart for real data/stats instead.",
+                imageProps));
+
         JSONArray toolsArray = new JSONArray();
 
         toolsArray.put(new JSONObject().put("functionDeclarations", functionDeclarations));
@@ -160,20 +195,45 @@ public class GeminiClient implements AiProvider {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
         conn.setConnectTimeout(20000);
-        conn.setReadTimeout(30000);
+        conn.setReadTimeout(60000); // model "thinking" + tool round trips can run long
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (java.net.SocketTimeoutException e) {
+            throw new RuntimeException("Gemini: request timed out — try a shorter/simpler question.");
         }
 
-        int status = conn.getResponseCode();
+        int status;
+        try {
+            status = conn.getResponseCode();
+        } catch (java.net.SocketTimeoutException e) {
+            throw new RuntimeException("Gemini: response timed out (model took too long) — try again.");
+        }
         InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
         String responseStr = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
         if (status < 200 || status >= 300) {
-            throw new RuntimeException("Gemini error (" + status + "): " + responseStr);
+            throw new RuntimeException(friendlyError(status, responseStr));
         }
         return new JSONObject(responseStr);
+    }
+
+    private String friendlyError(int status, String responseBody) {
+        try {
+            JSONObject err = new JSONObject(responseBody).optJSONObject("error");
+            String apiStatus = err != null ? err.optString("status", "") : "";
+            String message = err != null ? err.optString("message", "") : "";
+
+            if (status == 400 && "API_KEY_INVALID".equals(apiStatus))
+                return "Gemini: invalid API key — check it in Config.";
+            if (status == 404 || "NOT_FOUND".equals(apiStatus))
+                return "Gemini: model \"" + model + "\" not found — try \"gemini-2.0-flash\" in Config.";
+            if (status == 429 || "RESOURCE_EXHAUSTED".equals(apiStatus))
+                return "Gemini: quota limit reached on this API key — check your plan & billing.";
+            if (!message.isEmpty()) return "Gemini error (" + status + "): " + message;
+        } catch (Exception ignored) {
+        }
+        return "Gemini error (" + status + "): " + responseBody;
     }
 
     private JSONObject createToolDeclaration(String name, String description, JSONObject properties) throws Exception {

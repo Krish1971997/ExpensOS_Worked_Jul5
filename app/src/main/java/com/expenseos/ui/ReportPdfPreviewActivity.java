@@ -77,17 +77,25 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         renderAllPages();
     }
 
+    // new
     // Currently visible page-oda ZoomableImageView-ah kandupidichu, andha
     // page mattum +/− button click-ku zoom in/out pannudhu.
+    //
+    // NOTE: findViewHolderForAdapterPosition(pos) use pannirundhom munnadi
+    // — adhu chill RecyclerView internal states-la (pending layout/animation)
+    // null return pannudhu, adhunala button silently no-op-ah irundhuchu.
+    // LayoutManager.findViewByPosition(pos) andha position-oda ACTUAL
+    // attached View-ah directly kudukkum — reliable-ah irukkum. Ithoda item
+    // root view-ye ZoomableImageView (PdfPageAdapter-la VH wrap pannala),
+    // so direct cast pannikkalam.
     private void zoomCurrentPage(boolean in) {
         RecyclerView rv = findViewById(R.id.rvPdfPreviewPages);
         LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
         if (lm == null) return;
         int pos = lm.findFirstVisibleItemPosition();
         if (pos < 0) return;
-        RecyclerView.ViewHolder vh = rv.findViewHolderForAdapterPosition(pos);
-        if (vh instanceof PdfPageAdapter.VH) {
-            ZoomableImageView iv = ((PdfPageAdapter.VH) vh).iv;
+        View child = lm.findViewByPosition(pos);
+        if (child instanceof ZoomableImageView iv) {
             if (in) iv.zoomIn();
             else iv.zoomOut();
         }
@@ -132,7 +140,7 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
                     findViewById(R.id.zoomControls).setVisibility(View.VISIBLE);
 
                     pageIndicator.setVisibility(totalPages > 1 ? View.VISIBLE : View.GONE);
-                    
+
                     pageIndicator.setText("Page 1 / " + totalPages);
                     rv.addOnScrollListener(new RecyclerView.OnScrollListener() {
                         @Override

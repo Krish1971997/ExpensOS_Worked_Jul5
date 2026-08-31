@@ -185,7 +185,8 @@ public class ChatActivity extends AppCompatActivity {
         }
 
         btnSend.setEnabled(false);
-        View typing = addBotBubble("…thinking", null);
+        TextView typingText = new TextView(this);
+        View typing = addBotBubbleView(typingText, "Thinking…");
 
         String finalMessage = effectiveMessage;
         String finalImagePath = imagePathForApi;
@@ -193,10 +194,15 @@ public class ChatActivity extends AppCompatActivity {
             @Override
             public void onResult(String answer) {
                 String chartPath = aiClient.getLastChartPath();
+                String imagePath = aiClient.getLastImagePath();
+                // A turn could produce a chart, a generated image, or both — the
+                // chart_path column already exists, reuse it as "the image to
+                // show", preferring the AI-generated picture if both happened.
+                String pathToShow = imagePath != null ? imagePath : chartPath;
                 runOnUiThread(() -> {
                     messagesContainer.removeView(typing);
-                    addBotBubble(answer, chartPath);
-                    saveMessage(ChatMessage.ROLE_ASSISTANT, answer, null, null, chartPath, AppConfig.get(ChatActivity.this).getAiProvider());
+                    addBotBubble(answer, pathToShow);
+                    saveMessage(ChatMessage.ROLE_ASSISTANT, answer, null, null, pathToShow, AppConfig.get(ChatActivity.this).getAiProvider());
                     btnSend.setEnabled(true);
                 });
             }
@@ -207,6 +213,14 @@ public class ChatActivity extends AppCompatActivity {
                     messagesContainer.removeView(typing);
                     addBotBubble("⚠ " + message, null);
                     btnSend.setEnabled(true);
+                });
+            }
+
+            @Override
+            public void onProgress(String stage) {
+                runOnUiThread(() -> {
+                    typingText.setText(stage);
+                    scrollToBottom();
                 });
             }
         })).start();
@@ -267,6 +281,22 @@ public class ChatActivity extends AppCompatActivity {
         return col;
     }
 
+    // Like addBotBubble, but returns the live TextView so its text can be
+    // updated in place as onProgress() reports each step — avoids
+    // add/remove churn for what's really one evolving "typing" bubble.
+    private View addBotBubbleView(TextView reusableTextView, String initialText) {
+        LinearLayout col = bubbleColumn(false);
+        reusableTextView.setText(initialText);
+        reusableTextView.setTextSize(14);
+        reusableTextView.setPadding(dp(12), dp(8), dp(12), dp(8));
+        reusableTextView.setBackgroundResource(R.drawable.bg_chat_bubble_bot);
+        reusableTextView.setTextColor(getColor(R.color.text));
+        col.addView(reusableTextView);
+        messagesContainer.addView(col);
+        scrollToBottom();
+        return col;
+    }
+
     private LinearLayout bubbleColumn(boolean isUser) {
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -282,12 +312,37 @@ public class ChatActivity extends AppCompatActivity {
 
     private TextView textBubble(String text, boolean isUser) {
         TextView tv = new TextView(this);
-        tv.setText(text);
+        tv.setText(renderSimpleMarkdown(text));
         tv.setTextSize(14);
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         tv.setBackgroundResource(isUser ? R.drawable.bg_chat_bubble_user : R.drawable.bg_chat_bubble_bot);
         tv.setTextColor(getColor(isUser ? android.R.color.white : R.color.text));
+        tv.setTextIsSelectable(true); // Issue 2 — long-press to select & copy
         return tv;
+    }
+
+    // Minimal markdown: **bold** and *italic* only — enough for what the
+    // assistant actually produces (emphasis on numbers/labels), without
+    // pulling in a full markdown-rendering library.
+    private CharSequence renderSimpleMarkdown(String text) {
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*")
+                .matcher(text);
+        int last = 0;
+        while (m.find()) {
+            sb.append(text, last, m.start());
+            boolean bold = m.group(1) != null;
+            String inner = bold ? m.group(1) : m.group(2);
+            int start = sb.length();
+            sb.append(inner);
+            sb.setSpan(new android.text.style.StyleSpan(
+                            bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.ITALIC),
+                    start, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            last = m.end();
+        }
+        sb.append(text, last, text.length());
+        return sb;
     }
 
     private ImageView imageView(String path) {

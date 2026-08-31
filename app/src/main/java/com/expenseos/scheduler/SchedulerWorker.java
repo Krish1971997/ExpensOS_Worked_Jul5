@@ -69,78 +69,114 @@ public class SchedulerWorker extends Worker {
         return Result.success();
     }
 
-    private void
-    runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
+    // Retry knobs — 3 retries after the first failure (4 attempts total),
+    // 30s buffer between each. NOTE: this blocks the worker thread for up
+    // to ~90s on a persistently-failing scheduler, which can delay other
+    // due schedulers in the same 15-min tick — acceptable for occasional
+    // transient failures (network blips etc); lower these if it becomes an
+    // issue with many schedulers failing at once.
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_BUFFER_MS = 30_000;
+
+    private void runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
         log.info("▶ Running scheduler: " + s.getDisplayName() + " (" + s.getName() + ")");
         long logId = dao.logStart(s.getId());
+
+        Exception lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+            try {
+                AttemptResult r = attemptScheduler(ctx, s);
+                LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
+                dao.logFinish((int) logId, s.getId(), "SUCCESS", r.message, r.rows, nextRun);
+                log.success("✔ " + s.getDisplayName() + " — " + r.message
+                        + (r.rows > 0 ? " (" + r.rows + " rows)" : "")
+                        + (attempt > 1 ? " [succeeded on retry " + (attempt - 1) + "]" : ""));
+                return; // success — no email, no further attempts
+            } catch (Exception e) {
+                lastFailure = e;
+                boolean hasMoreRetries = attempt <= MAX_RETRIES;
+                log.warn("⚠ " + s.getDisplayName() + " attempt " + attempt + " failed: " + e.getMessage()
+                        + (hasMoreRetries ? " — retrying in " + (RETRY_BUFFER_MS / 1000) + "s" : " — giving up"));
+                if (hasMoreRetries) {
+                    try {
+                        Thread.sleep(RETRY_BUFFER_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break; // worker is being stopped — don't keep retrying
+                    }
+                }
+            }
+        }
+
+        // Every attempt failed — log the final failure and send exactly one email.
+        LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
+        String finalMessage = lastFailure != null ? lastFailure.getMessage() : "Unknown failure";
+        dao.logFinish((int) logId, s.getId(), "FAILED", finalMessage, 0, nextRun);
+        log.error("✘ " + s.getDisplayName() + " failed after " + (MAX_RETRIES + 1) + " attempts: " + finalMessage);
+        sendFailureAlert(ctx, s, lastFailure != null ? lastFailure : new RuntimeException("Unknown failure"));
+    }
+
+    // The actual dispatch — same switch/behavior as before, just extracted
+    // so runScheduler() can retry it. Throws on failure, same as the old
+    // "if (!ok) throw" pattern.
+    private AttemptResult attemptScheduler(Context ctx, SchedulerConfig s) throws Exception {
         String message;
         int rows = 0;
         boolean ok;
-        try {
-            switch (s.getName()) {
-                case "BACKUP": {
-                    com.expenseos.sync.BackupManager.get().createBackupScheduled(ctx.getApplicationContext());
-                    // createBackupScheduled() already runs its own background task with a
-                    // silent no-op callback (see BackupManager) — treat enqueue as success here,
-                    // detailed result will show up as a new row in Backup & Restore's list.
-                    ok = true;
-                    message = "Scheduled backup triggered";
-                    break;
-                }
-                case "CASHBOOK": {
-                    CashBookResult r = runCashBook(ctx);
-                    ok = true;
-                    message = r.message;
-                    rows = r.count;   // <-- was r.created ? 1 : 0, now actual count (0-3)
-                    break;
-                }
-                case "BUDGET": {
-                    BudgetOutcome o = runBudgetAllocation(ctx);
-                    ok = o.ok;
-                    message = o.message;
-                    rows = o.categoriesAllocated;
-                    break;
-                }
-                case "NEON_SYNC_PUSH": {
-                    LocalDateTime fromDate = computeFromDate(s);
-                    SyncOutcome o = runSync(ctx, true, fromDate);
-                    ok = o.ok;
-                    message = o.summary;
-                    rows = o.rows;
-                    break;
-                }
-                case "NEON_SYNC_PULL": {
-                    LocalDateTime fromDate = computeFromDate(s);
-                    SyncOutcome o = runSync(ctx, false, fromDate);
-                    ok = o.ok;
-                    message = o.summary;
-                    rows = o.rows;
-                    break;
-                }
-                case "MONTHLY_CATEGORY_REPORT": {
-                    MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
-                    ok = o.ok;
-                    message = o.message;
-                    break;
-                }
-                default:
-                    ok = false;
-                    message = "Unknown scheduler: " + s.getName();
+        switch (s.getName()) {
+            case "BACKUP": {
+                com.expenseos.sync.BackupManager.get().createBackupScheduled(ctx.getApplicationContext());
+                ok = true;
+                message = "Scheduled backup triggered";
+                break;
             }
-            if (!ok) throw new RuntimeException(message);
-
-            LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
-            dao.logFinish((int) logId, s.getId(), "SUCCESS", message, rows, nextRun);
-            log.success("✔ " + s.getDisplayName() + " — " + message
-                    + (rows > 0 ? " (" + rows + " rows)" : ""));
-        } catch (Exception e) {
-            LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
-            dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
-            log.error("✘ " + s.getDisplayName() + " failed: " + e.getMessage());
-            sendFailureAlert(ctx, s, e);
+            case "CASHBOOK": {
+                CashBookResult r = runCashBook(ctx);
+                ok = true;
+                message = r.message;
+                rows = r.count;
+                break;
+            }
+            case "BUDGET": {
+                BudgetOutcome o = runBudgetAllocation(ctx);
+                ok = o.ok;
+                message = o.message;
+                rows = o.categoriesAllocated;
+                break;
+            }
+            case "NEON_SYNC_PUSH": {
+                LocalDateTime fromDate = computeFromDate(s);
+                SyncOutcome o = runSync(ctx, true, fromDate);
+                ok = o.ok;
+                message = o.summary;
+                rows = o.rows;
+                break;
+            }
+            case "NEON_SYNC_PULL": {
+                LocalDateTime fromDate = computeFromDate(s);
+                SyncOutcome o = runSync(ctx, false, fromDate);
+                ok = o.ok;
+                message = o.summary;
+                rows = o.rows;
+                break;
+            }
+            case "MONTHLY_CATEGORY_REPORT": {
+                MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
+                ok = o.ok;
+                message = o.message;
+                break;
+            }
+            default:
+                ok = false;
+                message = "Unknown scheduler: " + s.getName();
         }
+        if (!ok) throw new RuntimeException(message);
+        return new AttemptResult(message, rows);
     }
 
+    private record AttemptResult(String message, int rows) {
+    }
+    
     // Best-effort email on any scheduler failure — swallowed on error so an
     // alert-sending problem (bad SMTP creds, no network) never masks the
     // original failure that's already been logged above.

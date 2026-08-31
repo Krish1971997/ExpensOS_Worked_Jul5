@@ -7,6 +7,11 @@ public interface AiProvider {
         void onResult(String answer);
 
         void onError(String message);
+
+        /**
+         * Called on a background thread whenever the assistant moves to a new step (e.g. "Checking tables…").
+         */
+        void onProgress(String stage);
     }
 
     /**
@@ -20,4 +25,10 @@ public interface AiProvider {
      * Non-null only if a chart was rendered during the most recent ask() call.
      */
     String getLastChartPath();
+
+    /**
+     * Non-null only if generate_image was called (via Grok) during the most recent ask() call.
+     */
+    String getLastImagePath();
+
 }

@@ -90,7 +90,7 @@ public class AppConfig {
             case PROVIDER_OPENAI -> "gpt-4o-mini";
             case PROVIDER_GROK -> "grok-2-latest";
             case PROVIDER_CLAUDE -> "claude-3-5-sonnet-20241022";
-            default -> "gemini-1.5-flash";
+            default -> "gemini-2.0-flash";
         };
     }
 
