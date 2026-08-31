@@ -43,34 +43,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Two launch modes, controlled by Intent extras:
- * <p>
- * GLOBAL (default — launched from the Cashbooks list, no book context yet):
- * new Intent(this, SettingsActivity.class)
- * -> only common (book_id IS NULL) categories/sub-categories are shown or
- * addable. The "This book only" scope option never appears.
- * <p>
- * CASHBOOK-SCOPED (launched from inside a cashbook, e.g. HomeActivity or the
- * transaction entry screen's gear icon):
- * new Intent(this, SettingsActivity.class)
- * .putExtra("bookScoped", true)
- * .putExtra("bookId", activeBookId)   // must be > 0
- * .putExtra("startTab", 2)            // optional: 0=Cat,1=Sub-Cat,2=Columns
- * -> category "Add" dialog shows a scope dropdown: "Common (all books)"
- * (default/first option) and "This book only" (second option).
- * If bookId isn't a valid positive number, this activity shows an
- * error and finishes immediately.
- * <p>
- * Sub-categories aren't separately book-scoped in the schema (they belong
- * to a category, which is itself common or book-specific) — no scope
- * dropdown for them, but the Add dialog does let you pick which parent
- * category a new sub-category belongs to (this was previously easy to lose
- * track of, so the list now also shows the parent category name on each row).
- * <p>
- * Custom columns (column_definitions) have no book_id column in the current
- * schema, so they're global-only regardless of launch mode.
- */
 public class SettingsActivity extends AppCompatActivity {
 
     private boolean bookScoped;
@@ -81,24 +53,23 @@ public class SettingsActivity extends AppCompatActivity {
     private ColumnDefinitionDao colDao;
     private PaymentTypeDao payDao;
     private KeywordMappingDao kwDao;
-    private CashBookDao cashBookDao; // NEW — used to check is_active before book-scoped writes
+    private CashBookDao cashBookDao;
 
     // ── Categories tab state ──
     private int catSubTab = 0; // 0=INCOME, 1=EXPENSE
     private String catSearch = "";
     private String paySearch = "";
-    private boolean paySearchWired = false; // guards against stacking duplicate TextWatchers
+    private boolean paySearchWired = false;
     private TextView tabCatIncome, tabCatExpense;
     private EditText etCatSearch;
 
     // ── Sub-Categories tab state ──
-// ── Sub-Categories tab state ──
     private int subCatSubTab = 0; // 0=INCOME, 1=EXPENSE
     private String subCatSearch = "";
     private TextView tabSubIncome, tabSubExpense;
     private EditText etSubCatSearch;
 
-    // ── Keywords tab state (auto-suggest category/sub-category from description) ──
+    // ── Keywords tab state ──
     private String kwSearch = "";
     private int titleTapCount = 0;
 
@@ -134,7 +105,6 @@ public class SettingsActivity extends AppCompatActivity {
                 ? "📘 Cashbook Settings — applies to this book (or Common)"
                 : "🌐 Global Settings — common categories only");
 
-        // Hidden SQL Console trigger (Tap 7 times)
         tvMode.setOnClickListener(v -> {
             titleTapCount++;
             if (titleTapCount >= 7) {
@@ -144,7 +114,11 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
-        findViewById(R.id.btnBackSettings).setOnClickListener(v -> finish());
+        // UPDATE: Back button-ல் RESULT_OK set செய்யப்பட்டுள்ளது
+        findViewById(R.id.btnBackSettings).setOnClickListener(v -> {
+            setResult(RESULT_OK);
+            finish();
+        });
 
         bindCategoryViews();
         bindSubCategoryViews();
@@ -155,7 +129,13 @@ public class SettingsActivity extends AppCompatActivity {
         switchTab(startTab);
     }
 
-    // ── Top-level Tabs: Categories | Sub-Categories | Columns ───
+    // UPDATE: Physical / Gesture Back Button-க்கும் RESULT_OK set செய்யப்படுகிறது
+    @Override
+    public void onBackPressed() {
+        setResult(RESULT_OK);
+        super.onBackPressed();
+    }
+
     private void setupTabs() {
         findViewById(R.id.btnTabCat).setOnClickListener(v -> switchTab(0));
         findViewById(R.id.btnTabSub).setOnClickListener(v -> switchTab(1));
@@ -257,8 +237,8 @@ public class SettingsActivity extends AppCompatActivity {
     private void showAddCategoryDialog() {
         String type = catSubTab == 0 ? "INCOME" : "EXPENSE";
 
-        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
-        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
 
@@ -274,10 +254,6 @@ public class SettingsActivity extends AppCompatActivity {
                     new String[]{"Common (all books)", "This book only"});
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spScope.setAdapter(adp);
-            // Default to "This book only" here — adding a category from a
-            // specific cashbook's Settings screen means that's almost always
-            // the intent, and leaving "Common" as the silent default is what
-            // caused categories to accidentally end up global.
             spScope.setSelection(1);
             form.addView(spScope);
         }
@@ -306,20 +282,6 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    /**
-     * When this screen is scoped to a specific cashbook (bookId > 0) and
-     * that book has been marked inactive, block any create/update/delete of
-     * data belonging to it — categories, sub-categories, keyword mappings,
-     * budgets. "Common" (book_id == null) items aren't scoped to any one
-     * book, but for simplicity this screen treats the whole session as
-     * read-only once its book is inactive; open Global Settings instead to
-     * manage Common items. LocalDB's guard triggers enforce this at the DB
-     * level regardless, so this is purely for a friendly message instead of
-     * a raw SQLiteConstraintException.
-     * <p>
-     * Call at the very top of every add/edit/delete handler and bail out
-     * (return) if this returns false.
-     */
     private boolean ensureBookWritable() {
         if (bookScoped && bookId > 0 && !cashBookDao.isBookActive(bookId)) {
             Toast.makeText(this,
@@ -330,9 +292,6 @@ public class SettingsActivity extends AppCompatActivity {
         return true;
     }
 
-    // Long-press on any list row's name shows its raw DB id via a Toast.
-    // Kept out of the normal UI — ids aren't meant to be visible day-to-day,
-    // this is just a quick peek for debugging/support when someone needs it.
     private void attachIdPeek(View target, String label, int id) {
         attachIdPeek(target, label, "ID: " + id);
     }
@@ -379,9 +338,6 @@ public class SettingsActivity extends AppCompatActivity {
             h.tvScope.setTextColor(getColor(c.isCommon() ? R.color.primary : R.color.amber));
             attachIdPeek(h.tvName, c.getName(), c.getId());
 
-            // Long-press the name to peek the category ID — kept off the
-            // normal UI on purpose; user shouldn't see raw ids day-to-day,
-            // but devs/support need a quick way to check it when debugging.
             h.tvName.setOnLongClickListener(v -> {
                 Toast.makeText(SettingsActivity.this,
                         c.getName() + " → ID: " + c.getId(),
@@ -415,8 +371,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     // ══════════════════════════════════════════════════════
-    // KEYWORDS TAB — description keyword -> Category/Sub-category,
-    // used by TransactionEntryActivity to auto-pick while typing the note.
+    // KEYWORDS TAB
     // ══════════════════════════════════════════════════════
 
     private void bindKeywordViews() {
@@ -439,13 +394,9 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btnKwAdd).setOnClickListener(v -> showKeywordDialog(null));
     }
 
-    // NEW
     private void loadKeywordsTab() {
         List<KeywordMapping> all = kwDao.findAll(bookScoped && bookId > 0 ? bookId : null);
 
-        // Case-2 dupes only: same keyword+type but different category/sub-category
-        // pair. Grouping by keyword+type+category+subcategory means Case-1
-        // (chocobar/ice cream/ice all -> Snacks/Ice) never gets flagged.
         Map<String, Integer> keywordTypeCount = new HashMap<>();
         Map<String, Integer> keywordTypeTargetCount = new HashMap<>();
         for (KeywordMapping k : all) {
@@ -458,7 +409,6 @@ public class SettingsActivity extends AppCompatActivity {
         for (KeywordMapping k : all) {
             String kwKey = k.getKeyword().toLowerCase(Locale.ROOT) + "|" + k.getType();
             String targetKey = kwKey + "|" + k.getCategoryId() + "|" + k.getSubCategoryId();
-            // conflict = same keyword appears with more distinct targets than just this one
             boolean hasConflict = keywordTypeCount.get(kwKey) > keywordTypeTargetCount.get(targetKey);
             conflict.put(kwKey, conflict.getOrDefault(kwKey, false) || hasConflict);
         }
@@ -473,14 +423,9 @@ public class SettingsActivity extends AppCompatActivity {
         rv.setAdapter(new KeywordAdapter(filtered, conflict));
     }
 
-    // existing == null -> Add, else Edit. Combined so the category/sub-category
-    // cascade logic isn't duplicated between the two flows. Scope (Common/This
-    // book only) is only offered on Add — changing scope after creation isn't
-    // supported here, same as CategoryDao's separate updateScope() approach.
-    // NEW (full method)
     private void showKeywordDialog(KeywordMapping existing) {
-        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
-        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
 
@@ -524,14 +469,9 @@ public class SettingsActivity extends AppCompatActivity {
         Spinner spSub = new Spinner(this);
         form.addView(spSub);
 
-        // NEW — reference to the scope spinner, filled in once it's built below,
-        // so the category listener can reach it.
         final Spinner[] spScopeRef = new Spinner[1];
 
         Runnable[] refreshSubRef = new Runnable[1];
-        // Category list always starts with a "Select Category" placeholder —
-        // for Add it's the real default (nothing pre-picked); for Edit it's
-        // skipped straight past since we select the saved category below.
         Runnable refreshCat = () -> {
             String type = spType.getSelectedItemPosition() == 0 ? "EXPENSE" : "INCOME";
             List<Category> realCats = catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
@@ -546,17 +486,16 @@ public class SettingsActivity extends AppCompatActivity {
             if (existing != null) {
                 for (int i = 0; i < realCats.size(); i++) {
                     if (realCats.get(i).getId() == existing.getCategoryId()) {
-                        spCat.setSelection(i + 1); // +1 for the placeholder row
+                        spCat.setSelection(i + 1);
                         break;
                     }
                 }
             } else {
-                spCat.setSelection(0); // stays on "Select Category"
+                spCat.setSelection(0);
             }
             refreshSubRef[0].run();
         };
-        // Sub-category only loads once a real category is picked (position > 0)
-        // — never queries/loads against the placeholder.
+
         refreshSubRef[0] = () -> {
             List<SubCategory> subs = new ArrayList<>();
             subs.add(new SubCategory(0, "None", 0));
@@ -600,8 +539,6 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
-        // Scope — shown for both Add and Edit now, so a wrong pick can be
-        // corrected later instead of forcing a delete + re-add.
         Spinner spScope = null;
         TextView tvScopeLocked = null;
         if (bookScoped) {
@@ -621,7 +558,7 @@ public class SettingsActivity extends AppCompatActivity {
                     new String[]{"Common (all books)", "This book only"});
             scopeAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spScope.setAdapter(scopeAdp);
-            spScope.setSelection(existing != null ? (existing.isCommon() ? 0 : 1) : 0); // default: Common
+            spScope.setSelection(existing != null ? (existing.isCommon() ? 0 : 1) : 0);
             form.addView(spScope);
 
             tvScopeLocked = new TextView(this);
@@ -632,11 +569,10 @@ public class SettingsActivity extends AppCompatActivity {
             form.addView(tvScopeLocked);
 
             spScopeRef[0] = spScope;
-            enforceScopeForCategory(spCat, spScope, tvScopeLocked); // in case Edit pre-selected a book-only category
+            enforceScopeForCategory(spCat, spScope, tvScopeLocked);
         }
 
         Spinner finalSpScope = spScope;
-        TextView finalTvScopeLocked = tvScopeLocked;
 
         new AlertDialog.Builder(this)
                 .setTitle(existing == null ? "Add Keyword Mapping" : "Edit Keyword Mapping")
@@ -654,7 +590,6 @@ public class SettingsActivity extends AppCompatActivity {
                     boolean catIsBookSpecific = selectedCat.getBookId() != null;
                     boolean scopeIsCommon = finalSpScope == null || finalSpScope.getSelectedItemPosition() == 0;
                     if (catIsBookSpecific && scopeIsCommon) {
-                        // Safety net — UI already locks this, but guard the save too.
                         Toast.makeText(this, "\"" + selectedCat.getName() +
                                 "\" is a this-book-only category — this mapping can't be Common.", Toast.LENGTH_LONG).show();
                         return;
@@ -689,11 +624,6 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    // enforceScopeForCategory() — puthu helper method add பண்ணுங்க (showKeywordDialog()-க்கு கீழே)
-    // A keyword mapping can't be "Common" while its target category is
-    // book-specific — a common mapping fires from every book, and the
-    // category simply won't exist in the others. Lock the scope spinner to
-    // "This book only" (and explain why) whenever that's the case.
     private void enforceScopeForCategory(Spinner spCat, Spinner spScope) {
         enforceScopeForCategory(spCat, spScope, null);
     }
@@ -703,7 +633,7 @@ public class SettingsActivity extends AppCompatActivity {
         Category selected = (Category) spCat.getSelectedItem();
         boolean bookSpecific = selected != null && selected.getBookId() != null;
         spScope.setEnabled(!bookSpecific);
-        if (bookSpecific) spScope.setSelection(1); // This book only
+        if (bookSpecific) spScope.setSelection(1);
         if (tvLocked != null) {
             tvLocked.setVisibility(bookSpecific ? View.VISIBLE : View.GONE);
             tvLocked.setText(bookSpecific
@@ -712,7 +642,6 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    // NEW
     class KeywordAdapter extends RecyclerView.Adapter<KeywordAdapter.VH> {
         private final List<KeywordMapping> list;
         private final Map<String, Boolean> conflict;
@@ -750,7 +679,7 @@ public class SettingsActivity extends AppCompatActivity {
             String target = k.getCategoryName()
                     + (k.getSubCategoryName() != null ? " ▸ " + k.getSubCategoryName() : "")
                     + "  (" + (k.getType().equals("INCOME") ? "Income" : "Expense") + ")";
-// NEW
+
             String kwKey = k.getKeyword().toLowerCase(Locale.ROOT) + "|" + k.getType();
             if (Boolean.TRUE.equals(conflict.get(kwKey))) {
                 h.tvTarget.setText("→ " + target + "\n⚠ \"" + k.getKeyword() + "\" maps to more than one category/sub-category — remove the extra mapping");
@@ -787,7 +716,6 @@ public class SettingsActivity extends AppCompatActivity {
             return list.size();
         }
     }
-
 
     // ══════════════════════════════════════════════════════
     // SUB-CATEGORIES TAB
@@ -831,10 +759,6 @@ public class SettingsActivity extends AppCompatActivity {
         loadSubCategoryList();
     }
 
-    /**
-     * Categories of the active sub-tab's type, used both for the list's
-     * category-name lookup and for the Add dialog's parent-category spinner.
-     */
     private List<Category> categoriesForSubCatTab() {
         String type = subCatSubTab == 0 ? "INCOME" : "EXPENSE";
         return catDao.findByType(type, bookScoped && bookId > 0 ? bookId : null);
@@ -859,16 +783,11 @@ public class SettingsActivity extends AppCompatActivity {
         rv.setAdapter(new SubCatAdapter(matched, catNameById));
     }
 
-    // ── Edit Sub-Category — name + parent category ─────────────────────
-    // Mirrors showEditCategoryDialog()'s reasoning: fixes a sub-category
-    // created under the wrong parent (e.g. "Ice" meant for Snacks, mapped to
-    // Food by mistake) without deleting/recreating it — the sub-category id
-    // stays the same, so already-mapped transactions keep pointing at it.
     private void showEditSubCategoryDialog(SubCategory sc) {
         List<Category> cats = categoriesForSubCatTab();
 
-        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
-        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
 
@@ -883,7 +802,7 @@ public class SettingsActivity extends AppCompatActivity {
         spParent.setAdapter(catAdp);
         for (int i = 0; i < cats.size(); i++) {
             if (cats.get(i).getId() == sc.getParentCategoryId()) {
-                spParent.setSelection(i); // pre-select its CURRENT parent
+                spParent.setSelection(i);
                 break;
             }
         }
@@ -911,11 +830,6 @@ public class SettingsActivity extends AppCompatActivity {
                     int newCatId = ((Category) spParent.getSelectedItem()).getId();
                     if (newCatId != sc.getParentCategoryId()) {
                         scDao.updateParentCategory(sc.getId(), newCatId);
-                        // Keep already-recorded transactions consistent — their
-                        // stored category_id must follow the sub-category to its
-                        // new parent, otherwise a txn would still show the OLD
-                        // category (e.g. Food) even though its sub-category
-                        // (Ice) now belongs to Snacks.
                         SQLiteDatabase db = LocalDB.getInstance(this).getWritableDatabase();
                         db.execSQL("UPDATE transactions SET category_id = ? WHERE sub_categories_id = ?",
                                 new Object[]{newCatId, sc.getId()});
@@ -936,8 +850,8 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
-        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
-        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
 
@@ -1041,7 +955,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     // ══════════════════════════════════════════════════════
-    // CUSTOM COLUMNS TAB (global-only, see class-level note)
+    // CUSTOM COLUMNS TAB
     // ══════════════════════════════════════════════════════
 
     private void loadColumnsTab() {
@@ -1129,16 +1043,9 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    // ── Edit Category — name + scope (Common <-> This book only) ──────
-    // Categories are the only one of the four editable lists that carry a
-    // scope, so this gets its own dialog instead of the generic rename one
-    // below — lets you fix a category that was accidentally created as
-    // Common when it should've been book-specific (or vice versa), without
-    // having to delete and recreate it (which would orphan its transactions'
-    // category link).
     private void showEditCategoryDialog(Category c) {
-        android.widget.LinearLayout form = new android.widget.LinearLayout(this);
-        form.setOrientation(android.widget.LinearLayout.VERTICAL);
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         form.setPadding(pad, pad, pad, pad);
 
@@ -1155,7 +1062,7 @@ public class SettingsActivity extends AppCompatActivity {
                     new String[]{"Common (all books)", "This book only"});
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spScope.setAdapter(adp);
-            spScope.setSelection(c.isCommon() ? 0 : 1); // pre-select its CURRENT scope
+            spScope.setSelection(c.isCommon() ? 0 : 1);
             form.addView(spScope);
         }
 
@@ -1177,11 +1084,8 @@ public class SettingsActivity extends AppCompatActivity {
                     catDao.update(c.getId(), newName);
                     if (finalSpScope != null) {
                         boolean thisBookOnly = finalSpScope.getSelectedItemPosition() == 1;
-                        // Only a risk going Common -> this-book-only: narrowing
-                        // scope would silently drop this category out of any
-                        // OTHER cashbook that already has transactions on it.
                         if (thisBookOnly && c.isCommon()) {
-                            java.util.Map<String, Integer> otherBooks = booksUsingCategory(c.getId(), bookId);
+                            Map<String, Integer> otherBooks = booksUsingCategory(c.getId(), bookId);
                             if (!otherBooks.isEmpty()) {
                                 showScopeBlockedDialog(otherBooks);
                                 return;
@@ -1199,12 +1103,8 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    // Books (other than the current one) that have transactions on this
-    // category, with how many each — used to block a Common -> book-only
-    // scope change that would otherwise silently orphan those cashbooks'
-    // transactions from the category.
-    private java.util.Map<String, Integer> booksUsingCategory(int categoryId, int excludeBookId) {
-        java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
+    private Map<String, Integer> booksUsingCategory(int categoryId, int excludeBookId) {
+        Map<String, Integer> result = new java.util.LinkedHashMap<>();
         SQLiteDatabase db = LocalDB.getInstance(this).getReadableDatabase();
         String sql = "SELECT cb.name, COUNT(*) FROM transactions t " +
                 "JOIN cash_books cb ON cb.id = t.book_id " +
@@ -1216,9 +1116,9 @@ public class SettingsActivity extends AppCompatActivity {
         return result;
     }
 
-    private void showScopeBlockedDialog(java.util.Map<String, Integer> otherBooks) {
+    private void showScopeBlockedDialog(Map<String, Integer> otherBooks) {
         StringBuilder sb = new StringBuilder("This category is still used in other cashbooks:\n\n");
-        for (java.util.Map.Entry<String, Integer> e : otherBooks.entrySet())
+        for (Map.Entry<String, Integer> e : otherBooks.entrySet())
             sb.append("• ").append(e.getKey()).append(" — ").append(e.getValue())
                     .append(e.getValue() == 1 ? " transaction\n" : " transactions\n");
         sb.append("\nMaking it \"This book only\" would remove it from those cashbooks. Move or delete those transactions first, or keep it Common.");
@@ -1229,7 +1129,6 @@ public class SettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ── Rename helper (shared by sub-category/column/payment type edit icon) ──
     private void showRenameDialog(String title, String currentName, Runnable onRenamed, java.util.function.Consumer<String> doRename) {
         EditText et = new EditText(this);
         et.setText(currentName);
@@ -1251,8 +1150,8 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     // ══════════════════════════════════════════════════════
-// PAYMENT TYPES TAB
-// ══════════════════════════════════════════════════════
+    // PAYMENT TYPES TAB
+    // ══════════════════════════════════════════════════════
 
     private void loadPaymentTypesTab() {
         if (!paySearchWired) {
@@ -1316,13 +1215,13 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         class VH extends RecyclerView.ViewHolder {
-            TextView tvName, tvDefaultBadge; // tvDefaultBadge சேர்க்கப்பட்டுள்ளது
+            TextView tvName, tvDefaultBadge;
             View btnEdit, btnDel;
 
             VH(View v) {
                 super(v);
                 tvName = v.findViewById(R.id.tvPaymentTypeName);
-                tvDefaultBadge = v.findViewById(R.id.tvDefaultBadge); // Bind badge view
+                tvDefaultBadge = v.findViewById(R.id.tvDefaultBadge);
                 btnEdit = v.findViewById(R.id.btnPaymentTypeEdit);
                 btnDel = v.findViewById(R.id.btnPaymentTypeDel);
             }
@@ -1338,10 +1237,8 @@ public class SettingsActivity extends AppCompatActivity {
         public void onBindViewHolder(VH h, int pos) {
             com.expenseos.model.PaymentType pt = list.get(pos);
 
-            // 1. Text Concatenation-க்கு பதிலாக Name மட்டும் வைக்கப்படுகிறது
             h.tvName.setText(pt.getName());
 
-// 2. Default status-ஐப் பொறுத்து Badge காட்டுவது/மறைப்பது
             if (pt.isDefault()) {
                 h.tvDefaultBadge.setVisibility(View.VISIBLE);
             } else {

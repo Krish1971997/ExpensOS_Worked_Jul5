@@ -98,6 +98,7 @@ public class BackupManager {
                 backup.put("budget_allocation_template", tableToJson(db, "budget_allocation_template"));
                 backup.put("recycle_bin", tableToJson(db, "recycle_bin"));
                 backup.put("app_config", tableToJson(db, "app_config"));
+                backup.put("ai_chat_messages", tableToJson(db, "ai_chat_messages"));
 
                 String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 String fileName = "backup_" + ts + ".zip";
@@ -240,7 +241,8 @@ public class BackupManager {
             restoreTable(db, "budget_allocation_template", backup.optJSONArray("budget_allocation_template"));
             restoreTable(db, "recycle_bin", backup.optJSONArray("recycle_bin"));
             restoreTable(db, "app_config", backup.optJSONArray("app_config"));
-            
+            restoreTable(db, "ai_chat_messages", backup.optJSONArray("ai_chat_messages"));
+
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();

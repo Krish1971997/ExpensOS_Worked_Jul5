@@ -78,42 +78,85 @@ public class SchedulerWorker extends Worker {
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_BUFFER_MS = 30_000;
 
+    private static final int FAILURE_THRESHOLD = 3; // consecutive real ticks, not in-process retries
+
     private void runScheduler(Context ctx, SchedulerDao dao, SchedulerConfig s) {
         log.info("▶ Running scheduler: " + s.getDisplayName() + " (" + s.getName() + ")");
         long logId = dao.logStart(s.getId());
-
-        Exception lastFailure = null;
-        for (int attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-            try {
-                AttemptResult r = attemptScheduler(ctx, s);
-                LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
-                dao.logFinish((int) logId, s.getId(), "SUCCESS", r.message, r.rows, nextRun);
-                log.success("✔ " + s.getDisplayName() + " — " + r.message
-                        + (r.rows > 0 ? " (" + r.rows + " rows)" : "")
-                        + (attempt > 1 ? " [succeeded on retry " + (attempt - 1) + "]" : ""));
-                return; // success — no email, no further attempts
-            } catch (Exception e) {
-                lastFailure = e;
-                boolean hasMoreRetries = attempt <= MAX_RETRIES;
-                log.warn("⚠ " + s.getDisplayName() + " attempt " + attempt + " failed: " + e.getMessage()
-                        + (hasMoreRetries ? " — retrying in " + (RETRY_BUFFER_MS / 1000) + "s" : " — giving up"));
-                if (hasMoreRetries) {
-                    try {
-                        Thread.sleep(RETRY_BUFFER_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break; // worker is being stopped — don't keep retrying
-                    }
+        String message;
+        int rows = 0;
+        boolean ok;
+        try {
+            switch (s.getName()) {
+                case "BACKUP": {
+                    com.expenseos.sync.BackupManager.get().createBackupScheduled(ctx.getApplicationContext());
+                    ok = true;
+                    message = "Scheduled backup triggered";
+                    break;
                 }
+                case "CASHBOOK": {
+                    CashBookResult r = runCashBook(ctx);
+                    ok = true;
+                    message = r.message;
+                    rows = r.count;
+                    break;
+                }
+                case "BUDGET": {
+                    BudgetOutcome o = runBudgetAllocation(ctx);
+                    ok = o.ok;
+                    message = o.message;
+                    rows = o.categoriesAllocated;
+                    break;
+                }
+                case "NEON_SYNC_PUSH": {
+                    LocalDateTime fromDate = computeFromDate(s);
+                    SyncOutcome o = runSync(ctx, true, fromDate);
+                    ok = o.ok;
+                    message = o.summary;
+                    rows = o.rows;
+                    break;
+                }
+                case "NEON_SYNC_PULL": {
+                    LocalDateTime fromDate = computeFromDate(s);
+                    SyncOutcome o = runSync(ctx, false, fromDate);
+                    ok = o.ok;
+                    message = o.summary;
+                    rows = o.rows;
+                    break;
+                }
+                case "MONTHLY_CATEGORY_REPORT": {
+                    MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
+                    ok = o.ok;
+                    message = o.message;
+                    break;
+                }
+                default:
+                    ok = false;
+                    message = "Unknown scheduler: " + s.getName();
+            }
+            if (!ok) throw new RuntimeException(message);
+
+            dao.resetFailureCount(s.getId()); // clear any earlier failure streak on success
+            LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
+            dao.logFinish((int) logId, s.getId(), "SUCCESS", message, rows, nextRun);
+            log.success("✔ " + s.getDisplayName() + " — " + message
+                    + (rows > 0 ? " (" + rows + " rows)" : ""));
+        } catch (Exception e) {
+            LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
+            dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
+
+            int failureCount = dao.incrementFailureCount(s.getId());
+            log.error("✘ " + s.getDisplayName() + " failed (failure " + failureCount + "/" + FAILURE_THRESHOLD
+                    + " consecutive ticks): " + e.getMessage());
+
+            if (failureCount >= FAILURE_THRESHOLD) {
+                sendFailureAlert(ctx, s, e, failureCount);
+                dao.resetFailureCount(s.getId()); // start a fresh streak after alerting
+            } else {
+                log.info("📧 Alert email held back — needs " + (FAILURE_THRESHOLD - failureCount)
+                        + " more consecutive failure(s) first.");
             }
         }
-
-        // Every attempt failed — log the final failure and send exactly one email.
-        LocalDateTime nextRun = SchedulerTimeUtil.calcNextRun(s);
-        String finalMessage = lastFailure != null ? lastFailure.getMessage() : "Unknown failure";
-        dao.logFinish((int) logId, s.getId(), "FAILED", finalMessage, 0, nextRun);
-        log.error("✘ " + s.getDisplayName() + " failed after " + (MAX_RETRIES + 1) + " attempts: " + finalMessage);
-        sendFailureAlert(ctx, s, lastFailure != null ? lastFailure : new RuntimeException("Unknown failure"));
     }
 
     // The actual dispatch — same switch/behavior as before, just extracted
@@ -176,12 +219,23 @@ public class SchedulerWorker extends Worker {
 
     private record AttemptResult(String message, int rows) {
     }
-    
+
     // Best-effort email on any scheduler failure — swallowed on error so an
     // alert-sending problem (bad SMTP creds, no network) never masks the
     // original failure that's already been logged above.
-    private void sendFailureAlert(Context ctx, SchedulerConfig s, Exception failure) {
-        log.info("📧 Attempting to send failure alert email for: " + s.getDisplayName());
+    private void sendFailureAlert(Context ctx, SchedulerConfig s, Exception failure, int failureCount) {
+        log.info("📧 Attempting to send failure alert email for: " + s.getDisplayName()
+                + " (" + failureCount + " consecutive failures)");
+
+        // 0. Network check — avoids a multi-minute SMTP connect timeout
+        // hanging the worker when there's clearly no usable connection.
+        // NOTE: this only confirms general internet connectivity, not that
+        // smtp.gmail.com:587 specifically is reachable (e.g. a firewall
+        // could still block that port) — the try/catch below still covers that case.
+        if (!hasUsableNetwork(ctx)) {
+            log.warn("⚠️ Scheduler failure alert skipped — no network connection available right now.");
+            return;
+        }
 
         com.expenseos.util.AppConfig appConfig = com.expenseos.util.AppConfig.get(ctx);
         String alertEmail = appConfig.getSchedulerAlertEmail();
@@ -204,8 +258,9 @@ public class SchedulerWorker extends Worker {
         }
 
         try {
-            String subject = "ExpenseOS scheduler failed: " + s.getDisplayName();
+            String subject = "ExpenseOS scheduler failed " + failureCount + "x: " + s.getDisplayName();
             String html = "<p><b>Scheduler:</b> " + s.getDisplayName() + " (" + s.getName() + ")</p>"
+                    + "<p><b>Consecutive failures:</b> " + failureCount + "</p>"
                     + "<p><b>Failed at:</b> " + LocalDateTime.now() + "</p>"
                     + "<p><b>Error:</b> " + (failure.getMessage() != null ? failure.getMessage() : failure.toString()) + "</p>";
 
@@ -222,6 +277,18 @@ public class SchedulerWorker extends Worker {
             mailEx.printStackTrace(new java.io.PrintWriter(sw));
             log.error("✘ Details: " + sw);
         }
+    }
+
+    private boolean hasUsableNetwork(Context ctx) {
+        android.net.ConnectivityManager cm =
+                (android.net.ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        android.net.Network network = cm.getActiveNetwork();
+        if (network == null) return false;
+        android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+        return caps != null
+                && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
     }
 
     // ── CASHBOOK: create next month's cash book if it doesn't exist ────

@@ -11,7 +11,7 @@ import com.expenseos.util.ConsoleLogger;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 40; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 41; // bumped: added events, reminders, tasks
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -158,20 +158,21 @@ public class LocalDB extends SQLiteOpenHelper {
 
         // schedulers — mirrors public.schedulers (Postgres) on the server side
         db.execSQL("CREATE TABLE IF NOT EXISTS schedulers (" +
-                "id              INTEGER PRIMARY KEY," +
-                "name            TEXT NOT NULL UNIQUE," +
-                "display_name    TEXT NOT NULL," +
-                "enabled         INTEGER NOT NULL DEFAULT 1," +
-                "repeat_type     TEXT NOT NULL DEFAULT 'DAILY'," +
-                "repeat_days     TEXT," +
-                "run_hour        INTEGER NOT NULL DEFAULT 0," +
-                "run_minute      INTEGER NOT NULL DEFAULT 0," +
-                "last_run_at     TEXT," +
-                "last_run_status TEXT," +
-                "last_run_msg    TEXT," +
-                "next_run_at     TEXT," +
-                "created_at      TEXT NOT NULL DEFAULT (datetime('now'))," +
-                "updated_at      TEXT NOT NULL DEFAULT (datetime('now')))");
+                "id                  INTEGER PRIMARY KEY," +
+                "name                TEXT NOT NULL UNIQUE," +
+                "display_name        TEXT NOT NULL," +
+                "enabled             INTEGER NOT NULL DEFAULT 1," +
+                "repeat_type         TEXT NOT NULL DEFAULT 'DAILY'," +
+                "repeat_days         TEXT," +
+                "run_hour            INTEGER NOT NULL DEFAULT 0," +
+                "run_minute          INTEGER NOT NULL DEFAULT 0," +
+                "last_run_at         TEXT," +
+                "last_run_status     TEXT," +
+                "last_run_msg        TEXT," +
+                "next_run_at         TEXT," +
+                "consecutive_failures INTEGER NOT NULL DEFAULT 0," +
+                "created_at          TEXT NOT NULL DEFAULT (datetime('now'))," +
+                "updated_at          TEXT NOT NULL DEFAULT (datetime('now')))");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_schedulers_updated ON schedulers(updated_at ASC)");
 
         SchedulerSeedData.insert(db);
@@ -845,6 +846,12 @@ public class LocalDB extends SQLiteOpenHelper {
 
             initSequences(db);
         }
+
+        if (oldV < 41) {
+            if (!isColumnExists(db, "schedulers", "consecutive_failures")) {
+                db.execSQL("ALTER TABLE schedulers ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0");
+            }
+        }
     }
 
     @Override
@@ -931,6 +938,10 @@ public class LocalDB extends SQLiteOpenHelper {
                     "UNIQUE(table_name, record_id))");
         } else if (!isColumnExists(db, "recycle_bin", "book_id")) {
             db.execSQL("ALTER TABLE recycle_bin ADD COLUMN book_id INTEGER");
+        }
+
+        if (tableExists(db, "schedulers") && !isColumnExists(db, "schedulers", "consecutive_failures")) {
+            db.execSQL("ALTER TABLE schedulers ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0");
         }
     }
 

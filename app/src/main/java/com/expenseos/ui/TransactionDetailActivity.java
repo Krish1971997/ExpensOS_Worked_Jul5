@@ -279,7 +279,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
             loadSubCategoriesFor(currentCategories.get(catPos).getId());
         }
 
-        // ISSUE 2 FIX: Immediate Subcategory Refresh Listener
         spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
@@ -380,12 +379,9 @@ public class TransactionDetailActivity extends AppCompatActivity {
         adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spSubCategory.setAdapter(adp);
 
-        // Suggestion-ல் இருந்து வந்த subcategory ID உள்ளதா என்று சரிபார்க்கவும்
         int targetSubId = (pendingSubCategoryId != null && pendingSubCategoryId > 0)
                 ? pendingSubCategoryId
                 : current.getSubCategoryId();
-
-        // Selection அமைக்கும் வரை pendingSubCategoryId-ஐ வைத்திருக்கவும்
 
         int selectedIndex = 0;
         for (int i = 0; i < listWithPlaceholder.size(); i++) {
@@ -395,8 +391,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
             }
         }
         spSubCategory.setSelection(selectedIndex, false);
-
-        // Selection முடிந்த பிறகு reset செய்யவும்
         pendingSubCategoryId = null;
     }
 
@@ -673,12 +667,6 @@ public class TransactionDetailActivity extends AppCompatActivity {
         }
         Category selCat = (Category) spCategory.getSelectedItem();
 
-        // NEW — validate against the actual data (currentSubCategories), not the
-// View's rendered visibility state. A View can be GONE for reasons other
-// than "this category has zero sub-categories" (e.g. a stale/duplicate
-// category id silently returning no rows) — checking the list itself is
-// the more reliable source of truth and fails loud instead of silently
-// skipping the requirement.
         SubCategory selSub = null;
         if (!currentSubCategories.isEmpty()) {
             selSub = (SubCategory) spSubCategory.getSelectedItem();
@@ -791,7 +779,14 @@ public class TransactionDetailActivity extends AppCompatActivity {
                     moved.setNote(current.getNote());
                     moved.setDateTime(current.getDateTime());
                     moved.setBookId(targetBookId);
-                    moved.setPaymentType(current.getPaymentType());
+
+                    // Current Spinner payment type-ஐ எடுக்க
+                    if (spPaymentType.getSelectedItem() != null) {
+                        moved.setPaymentType(((PaymentType) spPaymentType.getSelectedItem()).getName());
+                    } else {
+                        moved.setPaymentType(current.getPaymentType());
+                    }
+
                     moved.setCustomValues(current.getCustomValues());
                     txnDao.update(current, moved);
                     Toast.makeText(this, "Moved!", Toast.LENGTH_SHORT).show();
@@ -810,34 +805,41 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {
     }
 
-    // NEW — Edit Entry has no "placeholder" category (it's always pre-filled
-// from the loaded transaction), so "already filled" here means: a real
-// category is selected AND, if the sub-category picker is showing, a real
-// sub-category is too (not its own "Select Sub Category" placeholder).
-    private boolean categoryAlreadyFilled() {
-        Category selCat = (Category) spCategory.getSelectedItem();
-        if (selCat == null) return false;
-        if (spSubCategory.getVisibility() == View.VISIBLE) {
-            SubCategory selSub = (SubCategory) spSubCategory.getSelectedItem();
-            return selSub != null && selSub.getId() != 0;
+    private boolean isSuggestionDifferent(KeywordMapping match) {
+        if (match == null) return false;
+
+        int selectedCatId = 0;
+        if (spCategory.getSelectedItem() != null && spCategory.getSelectedItem() instanceof Category) {
+            selectedCatId = ((Category) spCategory.getSelectedItem()).getId();
         }
-        return true;
+
+        if (selectedCatId != match.getCategoryId()) {
+            return true;
+        }
+
+        int selectedSubId = 0;
+        if (spSubCategory.getVisibility() == View.VISIBLE && spSubCategory.getSelectedItem() != null) {
+            if (spSubCategory.getSelectedItem() instanceof SubCategory) {
+                selectedSubId = ((SubCategory) spSubCategory.getSelectedItem()).getId();
+            }
+        }
+
+        int matchSubId = match.getSubCategoryName() != null ? match.getSubCategoryId() : 0;
+        return selectedSubId != matchSubId;
     }
 
     private void showKeywordSuggestion(String note) {
-        // Note-ஐ trim செய்து, நடுவில் உள்ள multiple spaces-ஐ single space-ஆக மாற்றவும்
         String cleanedNote = (note != null) ? note.trim().replaceAll("\\s+", " ") : "";
 
-        if (cleanedNote.length() < 3 || current == null || categoryAlreadyFilled()) {
+        if (cleanedNote.length() < 3 || current == null) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;
         }
 
-        // Clean செய்யப்பட்ட note-ஐ வைத்து Database-ல் search செய்யவும்
         KeywordMapping match = kwDao.suggest(cleanedNote, current.getType().name(), bookId);
 
-        if (match == null) {
+        if (!isSuggestionDifferent(match)) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;
@@ -871,15 +873,11 @@ public class TransactionDetailActivity extends AppCompatActivity {
         tvKwSuggestion.setOnClickListener(v -> {
             if (pendingSuggestion == null) return;
 
-            // 1. SubCategory ID-ஐ முதலில் சேமிக்கவும்
             pendingSubCategoryId = pendingSuggestion.getSubCategoryId();
 
             for (int i = 0; i < currentCategories.size(); i++) {
                 if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
-                    // 2. Category selection அமைக்கவும்
                     spCategory.setSelection(i, false);
-
-                    // 3. SubCategory பட்டியலை லோட் செய்து Subcategory-ஐத் தேர்ந்தெடுக்கவும்
                     loadSubCategoriesFor(pendingSuggestion.getCategoryId());
                     break;
                 }

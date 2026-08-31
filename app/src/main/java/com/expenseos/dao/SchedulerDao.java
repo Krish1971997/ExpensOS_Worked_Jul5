@@ -203,6 +203,26 @@ public class SchedulerDao {
         }
     }
 
+    // ── Consecutive-failure tracking (across real scheduled ticks, not
+    // in-process retries) — the alert email only fires once this streak
+    // hits the threshold in SchedulerWorker, then resets.
+    public int incrementFailureCount(int schedulerId) {
+        db.execSQL("UPDATE schedulers SET consecutive_failures = COALESCE(consecutive_failures,0) + 1 WHERE id=?",
+                new Object[]{schedulerId});
+        return getFailureCount(schedulerId);
+    }
+
+    public void resetFailureCount(int schedulerId) {
+        db.execSQL("UPDATE schedulers SET consecutive_failures = 0 WHERE id=?", new Object[]{schedulerId});
+    }
+
+    public int getFailureCount(int schedulerId) {
+        try (Cursor c = db.rawQuery("SELECT COALESCE(consecutive_failures,0) FROM schedulers WHERE id=?",
+                new String[]{String.valueOf(schedulerId)})) {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        }
+    }
+
     private SchedulerConfig mapConfig(Cursor c) {
         SchedulerConfig s = new SchedulerConfig();
         s.setId(c.getInt(c.getColumnIndexOrThrow("id")));
