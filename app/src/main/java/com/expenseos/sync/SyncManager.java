@@ -3,6 +3,8 @@ package com.expenseos.sync;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.CursorWindow;
+import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 
 import com.expenseos.dao.LocalDatabase;
@@ -118,6 +120,39 @@ public class SyncManager {
                     log.info("Starting scheduler_log push...");
                     totalRows += pushSchedulerLog(local, remote, fromStr);
 
+                    log.info("Starting payment_types push...");
+                    totalRows += pushPaymentTypes(local, remote, fromStr);
+
+                    log.info("Starting keyword_mappings push...");
+                    totalRows += pushKeywordMappings(local, remote, fromStr);
+
+                    log.info("Starting events push...");
+                    totalRows += pushEvents(local, remote, fromStr);
+
+                    log.info("Starting reminders push...");
+                    totalRows += pushReminders(local, remote, fromStr);
+
+                    log.info("Starting event_reminders push...");
+                    totalRows += pushEventReminders(local, remote, fromStr);
+
+                    log.info("Starting tasks push...");
+                    totalRows += pushTasks(local, remote, fromStr);
+
+                    log.info("Starting task_events push...");
+                    totalRows += pushTaskEvents(local, remote, fromStr);
+
+                    log.info("Starting task_alarms push...");
+                    totalRows += pushTaskAlarms(local, remote, fromStr);
+
+                    log.info("Starting budget_allocation_template push...");
+                    totalRows += pushBudgetAllocationTemplate(local, remote, fromStr);
+
+                    log.info("Starting recycle_bin push...");
+                    totalRows += pushRecycleBin(local, remote, fromStr);
+
+                    log.info("Starting deleted_records push...");
+                    totalRows += pushDeletedRecords(local, remote, fromStr);
+
                     remote.commit();
                     String summary = "Pushed " + totalRows + " rows across all tables";
                     log.success("═══ PUSH DONE — " + summary + " ═══");
@@ -171,6 +206,18 @@ public class SyncManager {
                 totalRows += pullBudgetCategories(remote, local, fromStr);
                 totalRows += pullSchedulers(remote, local, fromStr);
                 totalRows += pullSchedulerLog(remote, local, fromStr);
+
+                totalRows += pullPaymentTypes(remote, local, fromStr);
+                totalRows += pullKeywordMappings(remote, local, fromStr);
+                totalRows += pullEvents(remote, local, fromStr);
+                totalRows += pullReminders(remote, local, fromStr);
+                totalRows += pullEventReminders(remote, local, fromStr);
+                totalRows += pullTasks(remote, local, fromStr);
+                totalRows += pullTaskEvents(remote, local, fromStr);
+                totalRows += pullTaskAlarms(remote, local, fromStr);
+                totalRows += pullBudgetAllocationTemplate(remote, local, fromStr);
+                totalRows += pullRecycleBin(remote, local, fromStr);
+                totalRows += pullDeletedRecords(remote, local, fromStr);
 
                 com.expenseos.db.LocalDB.getInstance(ctx).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
@@ -376,11 +423,11 @@ public class SyncManager {
     }
 
     private int pushTransactions(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
-        String sel = "SELECT id, book_id, category_id, sub_categories_id, amount, type, txn_datetime, note, created_at, updated_at FROM transactions"
+        String sel = "SELECT id, book_id, category_id, sub_categories_id, amount, type, txn_datetime, note, created_at, updated_at, payment_type FROM transactions"
                 + (fromStr != null ? " WHERE updated_at>=?" : "");
 
-        String sql = "INSERT INTO transactions (id, book_id, category_id, sub_categories_id, amount, type, txn_datetime, note, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?::txn_type, ?::timestamp, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+        String sql = "INSERT INTO transactions (id, book_id, category_id, sub_categories_id, amount, type, txn_datetime, note, created_at, updated_at, payment_type) "
+                + "VALUES (?, ?, ?, ?, ?, ?::txn_type, ?::timestamp, ?, ?::timestamp, ?::timestamp, ?) ON CONFLICT (id) DO UPDATE SET "
                 + "book_id=EXCLUDED.book_id, "
                 + "category_id=EXCLUDED.category_id, "
                 + "sub_categories_id=EXCLUDED.sub_categories_id, "
@@ -389,7 +436,8 @@ public class SyncManager {
                 + "txn_datetime=EXCLUDED.txn_datetime, "
                 + "note=EXCLUDED.note, "
                 + "created_at=EXCLUDED.created_at, "
-                + "updated_at=EXCLUDED.updated_at";
+                + "updated_at=EXCLUDED.updated_at, "
+                + "payment_type=EXCLUDED.payment_type";
 
         // Speed Optimization: Turn off AutoCommit for batch insertion
         boolean originalAutoCommit = remote.getAutoCommit();
@@ -420,6 +468,7 @@ public class SyncManager {
                 ps.setString(8, c.getString(7));      // 8: note
                 ps.setString(9, c.getString(8));      // 9: created_at
                 ps.setString(10, c.getString(9));     // 10: updated_at
+                ps.setString(11, c.getString(10));    // 11: payment_type
 
                 // Individual update-க்கு பதிலாக Batch-ல் சேர்க்கிறோம்
                 ps.addBatch();
@@ -797,19 +846,19 @@ public class SyncManager {
 
     private int pushSchedulers(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
         String sel = "SELECT id, name, display_name, enabled, repeat_type, repeat_days, run_hour, run_minute, "
-                + "last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at FROM schedulers"
+                + "last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at, consecutive_failures FROM schedulers"
                 + (fromStr != null ? " WHERE updated_at>=?" : "");
 
         // 💡 timestamp casting (?::timestamp) சேர்க்கப்பட்டுள்ளது
         String sql = "INSERT INTO schedulers (id, name, display_name, enabled, repeat_type, repeat_days, run_hour, "
-                + "run_minute, last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::timestamp, ?, ?, ?::timestamp, ?::timestamp, ?::timestamp) "
+                + "run_minute, last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at, consecutive_failures) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::timestamp, ?, ?, ?::timestamp, ?::timestamp, ?::timestamp, ?) "
                 + "ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, "
                 + "display_name=EXCLUDED.display_name, enabled=EXCLUDED.enabled, repeat_type=EXCLUDED.repeat_type, "
                 + "repeat_days=EXCLUDED.repeat_days, run_hour=EXCLUDED.run_hour, run_minute=EXCLUDED.run_minute, "
                 + "last_run_at=EXCLUDED.last_run_at, last_run_status=EXCLUDED.last_run_status, "
                 + "last_run_msg=EXCLUDED.last_run_msg, next_run_at=EXCLUDED.next_run_at, created_at=EXCLUDED.created_at, "
-                + "updated_at=EXCLUDED.updated_at";
+                + "updated_at=EXCLUDED.updated_at, consecutive_failures=EXCLUDED.consecutive_failures";
 
         boolean originalAutoCommit = remote.getAutoCommit();
         remote.setAutoCommit(false);
@@ -833,6 +882,7 @@ public class SyncManager {
                 ps.setString(12, c.getString(11)); // next_run_at -> ?::timestamp
                 ps.setString(13, c.getString(12)); // created_at -> ?::timestamp
                 ps.setString(14, c.getString(13)); // updated_at -> ?::timestamp
+                ps.setInt(15, c.getInt(14));        // consecutive_failures
 
                 ps.addBatch();
                 n++;
@@ -913,6 +963,324 @@ public class SyncManager {
             throw e;
         } finally {
             remote.setAutoCommit(originalAutoCommit);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // PUSH — newly-added tables (were missing sync coverage entirely)
+    // ════════════════════════════════════════════════════════════════════
+
+    private int pushPaymentTypes(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, name, is_default, created_at, updated_at FROM payment_types"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO payment_types (id, name, is_default, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "name=EXCLUDED.name, is_default=EXCLUDED.is_default, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setBoolean(3, c.getInt(2) == 1);
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("payment_types: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushKeywordMappings(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, keyword, type, category_id, sub_category_id, book_id, created_at, updated_at FROM keyword_mappings"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO keyword_mappings (id, keyword, type, category_id, sub_category_id, book_id, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "keyword=EXCLUDED.keyword, type=EXCLUDED.type, category_id=EXCLUDED.category_id, "
+                + "sub_category_id=EXCLUDED.sub_category_id, book_id=EXCLUDED.book_id, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setString(3, c.getString(2));
+                ps.setLong(4, c.getLong(3));
+                if (c.isNull(4)) ps.setNull(5, java.sql.Types.BIGINT);
+                else ps.setLong(5, c.getLong(4));
+                if (c.isNull(5)) ps.setNull(6, java.sql.Types.BIGINT);
+                else ps.setLong(6, c.getLong(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, c.getString(7));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("keyword_mappings: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushEvents(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, name, offset_direction, offset_days, header, created_at, updated_at FROM events"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO events (id, name, offset_direction, offset_days, header, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "name=EXCLUDED.name, offset_direction=EXCLUDED.offset_direction, offset_days=EXCLUDED.offset_days, "
+                + "header=EXCLUDED.header, created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setString(3, c.getString(2));
+                ps.setInt(4, c.getInt(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, safeTs(c.getString(5)));   // created_at
+                ps.setString(7, safeTs(c.getString(6)));   // updated_at
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("events: pushed " + n);
+            return n;
+        }
+    }
+
+    /**
+     * Guards against corrupt TEXT date values (e.g. a literal "datetime('now')"
+     * string that got written instead of an actual evaluated timestamp) so a
+     * bad row doesn't fail the whole batch with a Postgres ::timestamp cast error.
+     */
+    private static final DateTimeFormatter LOCAL_TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private String safeTs(String v) {
+        if (v == null) return LocalDateTime.now().format(LOCAL_TS_FMT);
+        try {
+            LocalDateTime.parse(v, LOCAL_TS_FMT);
+            return v;
+        } catch (Exception e) {
+            log.warn("Bad timestamp value \"" + v + "\" — substituting now()");
+            return LocalDateTime.now().format(LOCAL_TS_FMT);
+        }
+    }
+
+    private int pushReminders(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, name, offset_value, offset_unit, time_hour, time_minute, created_at, updated_at FROM reminders"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO reminders (id, name, offset_value, offset_unit, time_hour, time_minute, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "name=EXCLUDED.name, offset_value=EXCLUDED.offset_value, offset_unit=EXCLUDED.offset_unit, "
+                + "time_hour=EXCLUDED.time_hour, time_minute=EXCLUDED.time_minute, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setInt(3, c.getInt(2));
+                ps.setString(4, c.getString(3));
+                ps.setInt(5, c.getInt(4));
+                ps.setInt(6, c.getInt(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, c.getString(7));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("reminders: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushEventReminders(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, event_id, reminder_id, type, created_at, updated_at FROM event_reminders"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO event_reminders (id, event_id, reminder_id, type, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "event_id=EXCLUDED.event_id, reminder_id=EXCLUDED.reminder_id, type=EXCLUDED.type, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setLong(2, c.getLong(1));
+                ps.setLong(3, c.getLong(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("event_reminders: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushTasks(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, name, task_datetime, description, color, google_event_id, created_at, updated_at FROM tasks"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO tasks (id, name, task_datetime, description, color, google_event_id, created_at, updated_at) "
+                + "VALUES (?, ?, ?::timestamp, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "name=EXCLUDED.name, task_datetime=EXCLUDED.task_datetime, description=EXCLUDED.description, "
+                + "color=EXCLUDED.color, google_event_id=EXCLUDED.google_event_id, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setString(3, c.getString(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, c.getString(7));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("tasks: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushTaskEvents(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, task_id, event_id, created_at, updated_at FROM task_events"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO task_events (id, task_id, event_id, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "task_id=EXCLUDED.task_id, event_id=EXCLUDED.event_id, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setLong(2, c.getLong(1));
+                ps.setLong(3, c.getLong(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("task_events: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pushTaskAlarms(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, task_id, event_reminder_id, request_code, trigger_at, type, created_at, updated_at FROM task_alarms"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO task_alarms (id, task_id, event_reminder_id, request_code, trigger_at, type, created_at, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?::timestamp, ?, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "task_id=EXCLUDED.task_id, event_reminder_id=EXCLUDED.event_reminder_id, "
+                + "request_code=EXCLUDED.request_code, trigger_at=EXCLUDED.trigger_at, type=EXCLUDED.type, "
+                + "created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setLong(2, c.getLong(1));
+                ps.setLong(3, c.getLong(2));
+                ps.setInt(4, c.getInt(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, c.getString(7));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("task_alarms: pushed " + n);
+            return n;
+        }
+    }
+
+    /**
+     * No created_at column locally — filtered by updated_at only.
+     */
+    private int pushBudgetAllocationTemplate(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, book_id, category_id, percent, default_overall_limit, updated_at FROM budget_allocation_template"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        String sql = "INSERT INTO budget_allocation_template (id, book_id, category_id, percent, default_overall_limit, updated_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "book_id=EXCLUDED.book_id, category_id=EXCLUDED.category_id, percent=EXCLUDED.percent, "
+                + "default_overall_limit=EXCLUDED.default_overall_limit, updated_at=EXCLUDED.updated_at";
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setLong(2, c.getLong(1));
+                ps.setLong(3, c.getLong(2));
+                ps.setDouble(4, c.getDouble(3));
+                if (c.isNull(4)) ps.setNull(5, java.sql.Types.DOUBLE);
+                else ps.setDouble(5, c.getDouble(4));
+                ps.setString(6, c.getString(5));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("budget_allocation_template: pushed " + n);
+            return n;
+        }
+    }
+
+    /**
+     * No updated_at column locally — filtered by deleted_at instead.
+     */
+    private int pushRecycleBin(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, table_name, record_id, book_id, record_json, deleted_at FROM recycle_bin"
+                + (fromStr != null ? " WHERE deleted_at>=?" : "");
+        String sql = "INSERT INTO recycle_bin (id, table_name, record_id, book_id, record_json, deleted_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "table_name=EXCLUDED.table_name, record_id=EXCLUDED.record_id, book_id=EXCLUDED.book_id, "
+                + "record_json=EXCLUDED.record_json, deleted_at=EXCLUDED.deleted_at";
+        try (Cursor c = rawQueryBigWindow(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setLong(3, c.getLong(2));
+                if (c.isNull(3)) ps.setNull(4, java.sql.Types.BIGINT);
+                else ps.setLong(4, c.getLong(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("recycle_bin: pushed " + n);
+            return n;
+        }
+    }
+
+    /**
+     * Same as rawQuery() but with a larger CursorWindow (default 2MB blows up
+     * on recycle_bin.record_json rows that embed big JSON snapshots).
+     */
+    private Cursor rawQueryBigWindow(SQLiteDatabase db, String sql, String fromStr) {
+        SQLiteCursor cursor = (SQLiteCursor) rawQuery(db, sql, fromStr);
+        cursor.setWindow(new CursorWindow("bigWindow", 50L * 1024 * 1024)); // 50MB
+        return cursor;
+    }
+
+    /**
+     * No updated_at column locally — filtered by deleted_at instead.
+     */
+    private int pushDeletedRecords(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
+        String sel = "SELECT id, table_name, record_id, deleted_at FROM deleted_records"
+                + (fromStr != null ? " WHERE deleted_at>=?" : "");
+
+        String sql = "INSERT INTO deleted_records (table_name, record_id, deleted_at) "
+                + "VALUES (?, ?, ?::timestamp) ON CONFLICT (table_name, record_id) DO UPDATE SET "
+                + "deleted_at=EXCLUDED.deleted_at";
+
+        try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setString(1, c.getString(1));  // table_name
+                ps.setLong(2, c.getLong(2));      // record_id
+                ps.setString(3, c.getString(3));  // deleted_at
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("deleted_records: pushed " + n);
+            return n;
         }
     }
 
@@ -1007,7 +1375,7 @@ public class SyncManager {
 
     private int pullTransactions(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
         String sql = "SELECT id, type, txn_datetime, amount, category_id, note, created_at, updated_at, "
-                + "sub_categories_id, book_id FROM transactions" + (fromStr != null ? " WHERE updated_at>=? Order by id" : " Order by id");
+                + "sub_categories_id, book_id, payment_type FROM transactions" + (fromStr != null ? " WHERE updated_at>=? Order by id" : " Order by id");
         int n = 0;
         log.info("Transactions : fromStr ==>> " + fromStr);
         try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
@@ -1025,6 +1393,7 @@ public class SyncManager {
                 if (rs.wasNull()) cv.putNull("sub_categories_id");
                 else cv.put("sub_categories_id", subCat);
                 cv.put("book_id", rs.getInt("book_id"));
+                cv.put("payment_type", rs.getString("payment_type"));
                 cv.put("synced", 1);
 //                local.insertWithOnConflict("transactions", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
                 try {
@@ -1198,7 +1567,7 @@ public class SyncManager {
 
     private int pullSchedulers(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
         String sql = "SELECT id, name, display_name, enabled, repeat_type, repeat_days, run_hour, run_minute, "
-                + "last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at FROM schedulers"
+                + "last_run_at, last_run_status, last_run_msg, next_run_at, created_at, updated_at, consecutive_failures FROM schedulers"
                 + (fromStr != null ? " WHERE updated_at>=?" : "");
         int n = 0;
         try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
@@ -1218,6 +1587,7 @@ public class SyncManager {
                 cv.put("next_run_at", strTs(rs, "next_run_at"));
                 cv.put("created_at", strTs(rs, "created_at"));
                 cv.put("updated_at", strTs(rs, "updated_at"));
+                cv.put("consecutive_failures", rs.getInt("consecutive_failures"));
                 local.insertWithOnConflict("schedulers", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
                 n++;
             }
@@ -1247,6 +1617,265 @@ public class SyncManager {
             }
         }
         log.info("scheduler_log: pulled " + n);
+        return n;
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // PULL — newly-added tables (were missing sync coverage entirely)
+    // ════════════════════════════════════════════════════════════════════
+
+    private int pullPaymentTypes(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, name, is_default, created_at, updated_at FROM payment_types"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("name", rs.getString("name"));
+                cv.put("is_default", rs.getBoolean("is_default") ? 1 : 0);
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("payment_types", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("payment_types: pulled " + n);
+        return n;
+    }
+
+    private int pullKeywordMappings(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, keyword, type, category_id, sub_category_id, book_id, created_at, updated_at FROM keyword_mappings"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("keyword", rs.getString("keyword"));
+                cv.put("type", rs.getString("type"));
+                cv.put("category_id", rs.getInt("category_id"));
+                int subCat = rs.getInt("sub_category_id");
+                if (rs.wasNull()) cv.putNull("sub_category_id");
+                else cv.put("sub_category_id", subCat);
+                int bookId = rs.getInt("book_id");
+                if (rs.wasNull()) cv.putNull("book_id");
+                else cv.put("book_id", bookId);
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("keyword_mappings", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("keyword_mappings: pulled " + n);
+        return n;
+    }
+
+    private int pullEvents(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, name, offset_direction, offset_days, header, created_at, updated_at FROM events"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("name", rs.getString("name"));
+                cv.put("offset_direction", rs.getString("offset_direction"));
+                cv.put("offset_days", rs.getInt("offset_days"));
+                cv.put("header", rs.getString("header"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("events", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("events: pulled " + n);
+        return n;
+    }
+
+    private int pullReminders(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, name, offset_value, offset_unit, time_hour, time_minute, created_at, updated_at FROM reminders"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("name", rs.getString("name"));
+                cv.put("offset_value", rs.getInt("offset_value"));
+                cv.put("offset_unit", rs.getString("offset_unit"));
+                cv.put("time_hour", rs.getInt("time_hour"));
+                cv.put("time_minute", rs.getInt("time_minute"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("reminders", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("reminders: pulled " + n);
+        return n;
+    }
+
+    private int pullEventReminders(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, event_id, reminder_id, type, created_at, updated_at FROM event_reminders"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("event_id", rs.getInt("event_id"));
+                cv.put("reminder_id", rs.getInt("reminder_id"));
+                cv.put("type", rs.getString("type"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("event_reminders", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("event_reminders: pulled " + n);
+        return n;
+    }
+
+    private int pullTasks(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, name, task_datetime, description, color, google_event_id, created_at, updated_at FROM tasks"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("name", rs.getString("name"));
+                cv.put("task_datetime", strTs(rs, "task_datetime"));
+                cv.put("description", rs.getString("description"));
+                cv.put("color", rs.getString("color"));
+                cv.put("google_event_id", rs.getString("google_event_id"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                cv.put("synced", 1);
+                local.insertWithOnConflict("tasks", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("tasks: pulled " + n);
+        return n;
+    }
+
+    private int pullTaskEvents(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, task_id, event_id, created_at, updated_at FROM task_events"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("task_id", rs.getInt("task_id"));
+                cv.put("event_id", rs.getInt("event_id"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("task_events", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("task_events: pulled " + n);
+        return n;
+    }
+
+    private int pullTaskAlarms(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, task_id, event_reminder_id, request_code, trigger_at, type, created_at, updated_at FROM task_alarms"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("task_id", rs.getInt("task_id"));
+                cv.put("event_reminder_id", rs.getInt("event_reminder_id"));
+                cv.put("request_code", rs.getInt("request_code"));
+                cv.put("trigger_at", strTs(rs, "trigger_at"));
+                cv.put("type", rs.getString("type"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("task_alarms", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("task_alarms: pulled " + n);
+        return n;
+    }
+
+    /**
+     * No created_at column — filtered by updated_at only.
+     */
+    private int pullBudgetAllocationTemplate(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, book_id, category_id, percent, default_overall_limit, updated_at FROM budget_allocation_template"
+                + (fromStr != null ? " WHERE updated_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("book_id", rs.getInt("book_id"));
+                cv.put("category_id", rs.getInt("category_id"));
+                cv.put("percent", rs.getDouble("percent"));
+                double defLimit = rs.getDouble("default_overall_limit");
+                if (rs.wasNull()) cv.putNull("default_overall_limit");
+                else cv.put("default_overall_limit", defLimit);
+                cv.put("updated_at", strTs(rs, "updated_at"));
+                local.insertWithOnConflict("budget_allocation_template", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("budget_allocation_template: pulled " + n);
+        return n;
+    }
+
+    /**
+     * No updated_at column — filtered by deleted_at instead.
+     */
+    private int pullRecycleBin(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, table_name, record_id, book_id, record_json, deleted_at FROM recycle_bin"
+                + (fromStr != null ? " WHERE deleted_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("table_name", rs.getString("table_name"));
+                cv.put("record_id", rs.getInt("record_id"));
+                int bookId = rs.getInt("book_id");
+                if (rs.wasNull()) cv.putNull("book_id");
+                else cv.put("book_id", bookId);
+                cv.put("record_json", rs.getString("record_json"));
+                cv.put("deleted_at", strTs(rs, "deleted_at"));
+                local.insertWithOnConflict("recycle_bin", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("recycle_bin: pulled " + n);
+        return n;
+    }
+
+    /**
+     * No updated_at column — filtered by deleted_at instead.
+     */
+    private int pullDeletedRecords(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
+        String sql = "SELECT id, table_name, record_id, deleted_at FROM deleted_records"
+                + (fromStr != null ? " WHERE deleted_at>=?" : "");
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("table_name", rs.getString("table_name"));
+                cv.put("record_id", rs.getInt("record_id"));
+                cv.put("deleted_at", strTs(rs, "deleted_at"));
+                cv.put("synced", 1);
+                local.insertWithOnConflict("deleted_records", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("deleted_records: pulled " + n);
         return n;
     }
 

@@ -8,10 +8,13 @@ import android.database.sqlite.SQLiteOpenHelper;
 
 import com.expenseos.util.ConsoleLogger;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 41; // bumped: added events, reminders, tasks
+    private static final int DB_VERSION = 43; // bumped: added created_at/updated_at to event_reminders, task_events, task_alarms
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -297,6 +300,8 @@ public class LocalDB extends SQLiteOpenHelper {
                 "event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
                 "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
                 "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                "created_at  TEXT DEFAULT (datetime('now'))," +
+                "updated_at  TEXT DEFAULT (datetime('now'))," +
                 "UNIQUE(event_id, type))");
 
         // tasks — Phase 2 la use aagum, table ippove create pannitrom
@@ -312,9 +317,11 @@ public class LocalDB extends SQLiteOpenHelper {
                 "synced           INTEGER DEFAULT 0)");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS task_events (" +
-                "id       INTEGER PRIMARY KEY," +
-                "task_id  INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
-                "event_id INTEGER NOT NULL REFERENCES events(id)," +
+                "id         INTEGER PRIMARY KEY," +
+                "task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE," +
+                "event_id   INTEGER NOT NULL REFERENCES events(id)," +
+                "created_at TEXT DEFAULT (datetime('now'))," +
+                "updated_at TEXT DEFAULT (datetime('now'))," +
                 "UNIQUE(task_id,event_id))");
 
         // task_alarms — tracks which AlarmManager request_code maps to which
@@ -325,7 +332,9 @@ public class LocalDB extends SQLiteOpenHelper {
                 "event_reminder_id  INTEGER NOT NULL REFERENCES event_reminders(id) ON DELETE CASCADE," +
                 "request_code       INTEGER NOT NULL UNIQUE," +
                 "trigger_at         TEXT NOT NULL," +
-                "type               TEXT NOT NULL)");
+                "type               TEXT NOT NULL," +
+                "created_at         TEXT DEFAULT (datetime('now'))," +
+                "updated_at         TEXT DEFAULT (datetime('now')))");
 
         // id_sequences — app-controlled "next id" per table, replacing
         // AUTOINCREMENT so that ids stay predictable/reservable and won't
@@ -852,6 +861,40 @@ public class LocalDB extends SQLiteOpenHelper {
                 db.execSQL("ALTER TABLE schedulers ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0");
             }
         }
+
+        // v41 → v42: event_reminders / task_events / task_alarms had no
+        // created_at/updated_at — SyncManager could only full-sync them.
+        // Add the columns so they can be incrementally pushed/pulled like
+        // every other table.
+        if (oldV < 43) {
+            // NEW (add with constant default, then backfill separately):
+            String now = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            if (!isColumnExists(db, "event_reminders", "created_at")) {
+                db.execSQL("ALTER TABLE event_reminders ADD COLUMN created_at TEXT");
+                db.execSQL("UPDATE event_reminders SET created_at='" + now + "' WHERE created_at IS NULL");
+            }
+            if (!isColumnExists(db, "event_reminders", "updated_at")) {
+                db.execSQL("ALTER TABLE event_reminders ADD COLUMN updated_at TEXT");
+                db.execSQL("UPDATE event_reminders SET updated_at='" + now + "' WHERE updated_at IS NULL");
+            }
+            if (!isColumnExists(db, "task_events", "created_at")) {
+                db.execSQL("ALTER TABLE task_events ADD COLUMN created_at TEXT");
+                db.execSQL("UPDATE task_events SET created_at='" + now + "' WHERE created_at IS NULL");
+            }
+            if (!isColumnExists(db, "task_events", "updated_at")) {
+                db.execSQL("ALTER TABLE task_events ADD COLUMN updated_at TEXT");
+                db.execSQL("UPDATE task_events SET updated_at='" + now + "' WHERE updated_at IS NULL");
+            }
+            if (!isColumnExists(db, "task_alarms", "created_at")) {
+                db.execSQL("ALTER TABLE task_alarms ADD COLUMN created_at TEXT");
+                db.execSQL("UPDATE task_alarms SET created_at='" + now + "' WHERE created_at IS NULL");
+            }
+            if (!isColumnExists(db, "task_alarms", "updated_at")) {
+                db.execSQL("ALTER TABLE task_alarms ADD COLUMN updated_at TEXT");
+                db.execSQL("UPDATE task_alarms SET updated_at='" + now + "' WHERE updated_at IS NULL");
+            }
+        }
+
     }
 
     @Override
@@ -884,7 +927,13 @@ public class LocalDB extends SQLiteOpenHelper {
                 {"column_definitions", "updated_at", "TEXT DEFAULT (datetime('now'))"},
                 {"transactions", "created_at", "TEXT DEFAULT (datetime('now'))"},
                 {"transactions", "updated_at", "TEXT DEFAULT (datetime('now'))"},
-                {"transactions", "payment_type", "TEXT NOT NULL DEFAULT 'UPI'"}
+                {"transactions", "payment_type", "TEXT NOT NULL DEFAULT 'UPI'"},
+                {"event_reminders", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"event_reminders", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"task_events", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"task_events", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                {"task_alarms", "created_at", "TEXT DEFAULT (datetime('now'))"},
+                {"task_alarms", "updated_at", "TEXT DEFAULT (datetime('now'))"}
         };
 
         for (String[] r : repairs) {
@@ -943,6 +992,10 @@ public class LocalDB extends SQLiteOpenHelper {
         if (tableExists(db, "schedulers") && !isColumnExists(db, "schedulers", "consecutive_failures")) {
             db.execSQL("ALTER TABLE schedulers ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0");
         }
+
+        db.execSQL("UPDATE events SET created_at = datetime('now') WHERE created_at = 'datetime(''now'')' OR created_at IS NULL");
+        db.execSQL("UPDATE events SET updated_at = datetime('now') WHERE updated_at = 'datetime(''now'')' OR updated_at IS NULL");
+
     }
 
     // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க

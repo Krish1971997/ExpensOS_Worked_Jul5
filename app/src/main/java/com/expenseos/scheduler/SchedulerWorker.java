@@ -531,9 +531,9 @@ public class SchedulerWorker extends Worker {
         else SyncManager.get().fetchFromCloud(ctx, fromDate, cb);
 
         try {
-            if (!latch.await(2, TimeUnit.MINUTES)) {
+            if (!latch.await(3, TimeUnit.MINUTES)) {
                 outcome.ok = false;
-                outcome.summary = "Timed out after 2 minutes";
+                outcome.summary = "Timed out after 3 minutes";
                 log.error((push ? "↑ Scheduled push" : "↓ Scheduled pull") + " timed out");
             }
         } catch (InterruptedException ignored) {
