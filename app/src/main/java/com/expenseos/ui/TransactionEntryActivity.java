@@ -19,6 +19,7 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
@@ -204,11 +205,20 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tabIncome.setOnClickListener(v -> switchType(Transaction.Type.INCOME));
         tabExpense.setOnClickListener(v -> switchType(Transaction.Type.EXPENSE));
 
-        boxDate.setOnClickListener(v -> showDatePicker());
-        boxTime.setOnClickListener(v -> showTimePicker());
+        boxDate.setOnClickListener(v -> {
+            hideKeyboard();
+            showDatePicker();
+        });
+        boxTime.setOnClickListener(v -> {
+            hideKeyboard();
+            showTimePicker();
+        });
 
         btnMic.setOnClickListener(v -> startVoiceInput());
-        btnAttach.setOnClickListener(v -> pickAttachment());
+        btnAttach.setOnClickListener(v -> {
+            hideKeyboard();
+            pickAttachment();
+        });
 
         btnCalculator = findViewById(R.id.btnCalc);
         btnCalculator.setOnClickListener(v ->
@@ -217,6 +227,28 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));
+
+        // Category / Sub-category / Payment-type dropdowns — Spinner-ku
+        // "before it opens" click callback illa, adhunala ACTION_DOWN
+        // touch-la hideKeyboard() pannitu (return false) — dropdown
+        // eppovum pola thaan open aagum, keyboard mattum hide aagum.
+        dismissKeyboardOnTouch(spCategory);
+        dismissKeyboardOnTouch(spSubCategory);
+        dismissKeyboardOnTouch(spPaymentType);
+    }
+
+    private void dismissKeyboardOnTouch(View v) {
+        v.setOnTouchListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) hideKeyboard();
+            return false; // touch event-ah normal-ah continue pannunga (dropdown open aaganum)
+        });
+    }
+
+    private void hideKeyboard() {
+        View focused = getCurrentFocus();
+        if (focused == null) return;
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
     }
 
     // ── Income/Expense tab switch (add mode only) ──────────

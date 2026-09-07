@@ -13,6 +13,7 @@ import android.provider.OpenableColumns;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -178,9 +179,18 @@ public class TransactionDetailActivity extends AppCompatActivity {
             }
         });
 
-        boxDetailDate.setOnClickListener(v -> showDatePicker());
-        boxDetailTime.setOnClickListener(v -> showTimePicker());
-        btnDetailAttach.setOnClickListener(v -> pickAttachment());
+        boxDetailDate.setOnClickListener(v -> {
+            hideKeyboard();
+            showDatePicker();
+        });
+        boxDetailTime.setOnClickListener(v -> {
+            hideKeyboard();
+            showTimePicker();
+        });
+        btnDetailAttach.setOnClickListener(v -> {
+            hideKeyboard();
+            pickAttachment();
+        });
 
         findViewById(R.id.btnDetailCalc).setOnClickListener(v ->
                 CalculatorDialog.show(this, etAmount.getText().toString(), resultText -> {
@@ -190,6 +200,30 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
         markDirtyOn(etAmount);
         markDirtyOn(etNote);
+
+        // Category / Sub-category / Payment-type / Move-book dropdowns —
+        // Spinner-ku "before it opens" callback illa, adhunala ACTION_DOWN
+        // touch-la hideKeyboard() pannitu (return false) — dropdown eppovum
+        // pola thaan open aagum, keyboard mattum hide aagum.
+        dismissKeyboardOnTouch(spCategory);
+        dismissKeyboardOnTouch(spSubCategory);
+        dismissKeyboardOnTouch(spPaymentType);
+        dismissKeyboardOnTouch(spMoveBook);
+    }
+
+    private void dismissKeyboardOnTouch(View v) {
+        v.setOnTouchListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) hideKeyboard();
+            return false; // touch event-ah normal-ah continue pannunga (dropdown open aaganum)
+        });
+    }
+
+    private void hideKeyboard() {
+        View focused = getCurrentFocus();
+        if (focused == null) return;
+        android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
     }
 
     private void markDirtyOn(EditText field) {

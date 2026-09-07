@@ -295,7 +295,7 @@ public class SchedulerWorker extends Worker {
     // ── CASHBOOK: create this month's set of 3 books if they don't exist ────
     private CashBookResult runCashBook(Context ctx) {
         java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
-        java.time.LocalDate nextMonth = thisMonth.plusMonths(2);
+        java.time.LocalDate nextMonth = thisMonth.plusMonths(1);
 
         String thisMonthName = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
         String nextMonthName = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
@@ -384,11 +384,17 @@ public class SchedulerWorker extends Worker {
         int sent = 0, skipped = 0;
         List<String> failures = new ArrayList<>();
 
+// NEW — Credit Card cashbooks use the CURRENT month's anchor (Sep/Aug/Jul
+// when run in September), not last month's, since a credit card
+// statement covers spend up to its own cycle date — unlike the plain/
+// Expense series where "last month just ended" is the meaningful window.
+// Everything else keeps the existing includeCurrent=false behaviour.
         for (String suffix : MONTHLY_REPORT_SUFFIXES) {
             String label = suffix.isEmpty() ? "Main" : suffix;
+            boolean includeCurrentMonth = "Credit Card".equals(suffix);
             try {
                 com.expenseos.util.CategoryComparisonReport.Result result =
-                        com.expenseos.util.CategoryComparisonReport.buildForSuffix(ctx, suffix, 3, false);
+                        com.expenseos.util.CategoryComparisonReport.buildForSuffix(ctx, suffix, 3, includeCurrentMonth);
 
                 if (result.rows.isEmpty()) {
                     skipped++;
