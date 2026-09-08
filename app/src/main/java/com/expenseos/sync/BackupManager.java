@@ -3,7 +3,9 @@ package com.expenseos.sync;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.CursorWindow;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -208,7 +210,9 @@ public class BackupManager {
                 while ((len = zis.read(buf)) > 0) bos.write(buf, 0, len);
 
                 if (entry.getName().equals("backup_data.json")) {
-                    backup = new JSONObject(bos.toString(StandardCharsets.UTF_8));
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        backup = new JSONObject(bos.toString(StandardCharsets.UTF_8));
+                    }
                 } else if (entry.getName().startsWith("Receipts/")) {
                     receiptBytesByEntry.put(entry.getName().substring("Receipts/".length()), bos.toByteArray());
                 }
@@ -302,10 +306,33 @@ public class BackupManager {
         }
     }
 
+    // ── Cursor Window Size Fix Helper ─────────────────────────────────────────
+    private void fixCursorWindowSize(Cursor cursor) {
+        if (cursor instanceof android.database.AbstractWindowedCursor) {
+            try {
+                // Set window size to 20 MB to handle huge BLOBs/Rows in recycle_bin & other tables
+                android.database.CursorWindow window = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    window = new CursorWindow("LargeWindow", 20 * 1024 * 1024);
+                }
+                ((android.database.AbstractWindowedCursor) cursor).setWindow(window);
+            } catch (Exception e) {
+                // Fallback using Reflection if setWindow fails on older Android versions
+                try {
+                    java.lang.reflect.Field field = android.database.CursorWindow.class.getDeclaredField("sCursorWindowSize");
+                    field.setAccessible(true);
+                    field.set(null, 20 * 1024 * 1024);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
     private JSONArray tableToJson(SQLiteDatabase db, String table) throws Exception {
         JSONArray arr = new JSONArray();
         try (Cursor c = db.rawQuery("SELECT * FROM " + table, null)) {
+            fixCursorWindowSize(c); // 👈 CURSOR WINDOW SIZE FIX ADDED HERE
             String[] cols = c.getColumnNames();
             while (c.moveToNext()) {
                 JSONObject row = new JSONObject();
@@ -315,6 +342,16 @@ public class BackupManager {
                         case Cursor.FIELD_TYPE_INTEGER -> row.put(col, c.getLong(idx));
                         case Cursor.FIELD_TYPE_FLOAT -> row.put(col, c.getDouble(idx));
                         case Cursor.FIELD_TYPE_NULL -> row.put(col, JSONObject.NULL);
+                        case Cursor.FIELD_TYPE_BLOB -> {
+                            // BLOB data (Base64) - Recycle bin or image byte array safety
+                            byte[] blob = c.getBlob(idx);
+                            if (blob != null) {
+                                row.put(col, android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP));
+                                row.put(col + "_is_blob", true); // Flag to identify BLOB during restore
+                            } else {
+                                row.put(col, JSONObject.NULL);
+                            }
+                        }
                         default -> row.put(col, c.getString(idx));
                     }
                 }
@@ -348,6 +385,10 @@ public class BackupManager {
     private void writeReceiptsToZip(SQLiteDatabase db, ZipOutputStream zos) throws Exception {
         try (Cursor c = db.rawQuery(
                 "SELECT id, file_name, file_data FROM transaction_receipts WHERE file_data IS NOT NULL", null)) {
+
+            // 👈 CURSOR WINDOW SIZE FIX ADDED HERE
+            fixCursorWindowSize(c);
+
             while (c.moveToNext()) {
                 int id = c.getInt(0);
                 String fname = c.getString(1);
@@ -370,12 +411,24 @@ public class BackupManager {
             if (names != null) {
                 for (int j = 0; j < names.length(); j++) {
                     String key = names.getString(j);
+                    if (key.endsWith("_is_blob")) continue; // Skip helper key
+
                     Object val = row.get(key);
-                    if (val == JSONObject.NULL) cv.putNull(key);
-                    else if (val instanceof Integer) cv.put(key, (Integer) val);
-                    else if (val instanceof Long) cv.put(key, (Long) val);
-                    else if (val instanceof Double) cv.put(key, (Double) val);
-                    else cv.put(key, val.toString());
+                    if (val == JSONObject.NULL) {
+                        cv.putNull(key);
+                    } else if (row.optBoolean(key + "_is_blob", false)) {
+                        // Decode Base64 string back to byte[] for BLOB columns
+                        byte[] blob = android.util.Base64.decode(val.toString(), android.util.Base64.NO_WRAP);
+                        cv.put(key, blob);
+                    } else if (val instanceof Integer) {
+                        cv.put(key, (Integer) val);
+                    } else if (val instanceof Long) {
+                        cv.put(key, (Long) val);
+                    } else if (val instanceof Double) {
+                        cv.put(key, (Double) val);
+                    } else {
+                        cv.put(key, val.toString());
+                    }
                 }
             }
             db.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
