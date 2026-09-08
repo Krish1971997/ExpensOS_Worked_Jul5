@@ -85,14 +85,10 @@ public class BudgetActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBudgetBack).setOnClickListener(v -> finish());
 
-        // Configure Budget button navigation
-        findViewById(R.id.btnConfigureBudget).setOnClickListener(v -> {
-            Intent i = new Intent(this, BudgetConfigActivity.class);
-            i.putExtra("bookId", bookId);
-            i.putExtra("year", selYear);
-            i.putExtra("month", selMonth);
-            startActivity(i);
-        });
+        // Configure Budget button navigation — this now opens the ONE shared
+        // template used by every cash book, so no bookId/year/month to pass.
+        findViewById(R.id.btnConfigureBudget).setOnClickListener(v ->
+                startActivity(new Intent(this, BudgetConfigActivity.class)));
 
         bindTabs();
         setupMonthNav();

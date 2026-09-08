@@ -442,62 +442,66 @@ public class SchedulerWorker extends Worker {
     private BudgetOutcome runBudgetAllocation(Context ctx) {
         BudgetOutcome outcome = new BudgetOutcome();
         try {
-            int bookId = com.expenseos.util.AppConfig.get(ctx).getActiveBookId();
             com.expenseos.dao.BudgetTemplateDao templateDao = new com.expenseos.dao.BudgetTemplateDao(ctx);
 
-            if (!templateDao.hasTemplate(bookId)) {
+            if (!templateDao.hasGlobalTemplate()) {
                 outcome.ok = true;
-                outcome.message = "No budget template configured for this book — skipped";
+                outcome.message = "No budget template configured — skipped";
                 return outcome;
             }
+
+            java.util.Map<Integer, java.math.BigDecimal> amounts = templateDao.loadGlobalAmounts();
+            if (amounts.isEmpty()) {
+                outcome.ok = true;
+                outcome.message = "Budget template is empty — skipped";
+                return outcome;
+            }
+
+            java.math.BigDecimal overallLimit = java.math.BigDecimal.ZERO;
+            for (java.math.BigDecimal amt : amounts.values()) overallLimit = overallLimit.add(amt);
 
             java.time.LocalDate now = java.time.LocalDate.now();
             int year = now.getYear();
             int month = now.getMonthValue();
 
-            java.math.BigDecimal overallLimit = templateDao.loadDefaultOverallLimit(bookId);
-            java.util.Map<Integer, java.math.BigDecimal> percents = templateDao.loadPercents(bookId);
-
-            if (overallLimit == null || percents.isEmpty()) {
-                outcome.ok = true;
-                outcome.message = "Budget template incomplete — skipped";
-                return outcome;
-            }
-
             com.expenseos.dao.BudgetDao budgetDao = new com.expenseos.dao.BudgetDao(ctx);
+            com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);
+            java.util.List<com.expenseos.model.CashBook> books = bookDao.findAll();
 
-            // Don't overwrite a budget the user already has for this month
-            // (e.g. they already opened Budget tab and set/adjusted it manually).
-            if (budgetDao.findByMonth(bookId, year, month) != null) {
-                outcome.ok = true;
-                outcome.message = "Budget already exists for " + month + "/" + year + " — skipped";
-                return outcome;
-            }
+            int booksUpdated = 0, categoriesAllocated = 0;
 
-            com.expenseos.model.Budget b = new com.expenseos.model.Budget();
-            b.setBookId(bookId);
-            b.setYear(year);
-            b.setMonth(month);
-            b.setOverallLimit(overallLimit);
-            int budgetId = budgetDao.upsert(b);
+            for (com.expenseos.model.CashBook book : books) {
+                int bookId = book.getId();
 
-            int count = 0;
-            for (java.util.Map.Entry<Integer, java.math.BigDecimal> e : percents.entrySet()) {
-                java.math.BigDecimal amt = overallLimit.multiply(e.getValue())
-                        .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-                com.expenseos.model.BudgetCategory bc = new com.expenseos.model.BudgetCategory();
-                bc.setBudgetId(budgetId);
-                bc.setCategoryId(e.getKey());
-                bc.setCatLimit(amt);
-                bc.setAlertPct(80);
-                budgetDao.upsertCategory(bc);
-                count++;
+                // Don't overwrite a budget the user already has for this
+                // month in this book.
+                if (budgetDao.findByMonth(bookId, year, month) != null) continue;
+
+                com.expenseos.model.Budget b = new com.expenseos.model.Budget();
+                b.setBookId(bookId);
+                b.setYear(year);
+                b.setMonth(month);
+                b.setOverallLimit(overallLimit);
+                int budgetId = budgetDao.upsert(b);
+
+                for (java.util.Map.Entry<Integer, java.math.BigDecimal> e : amounts.entrySet()) {
+                    com.expenseos.model.BudgetCategory bc = new com.expenseos.model.BudgetCategory();
+                    bc.setBudgetId(budgetId);
+                    bc.setCategoryId(e.getKey());
+                    bc.setCatLimit(e.getValue()); // exact amount from the shared template — no scaling
+                    bc.setAlertPct(80);
+                    budgetDao.upsertCategory(bc);
+                    categoriesAllocated++;
+                }
+                booksUpdated++;
             }
 
             outcome.ok = true;
-            outcome.categoriesAllocated = count;
-            outcome.message = "Budget auto-created for " + java.time.Month.of(month) + " " + year
-                    + " (" + count + " categories, ₹" + overallLimit.stripTrailingZeros().toPlainString() + " total)";
+            outcome.categoriesAllocated = categoriesAllocated;
+            outcome.message = booksUpdated > 0
+                    ? "Budget auto-created for " + java.time.Month.of(month) + " " + year
+                      + " across " + booksUpdated + " book(s), ₹" + overallLimit.stripTrailingZeros().toPlainString() + " each"
+                    : "All books already have a budget for " + java.time.Month.of(month) + " " + year + " — skipped";
         } catch (Exception e) {
             outcome.ok = false;
             outcome.message = e.getMessage() != null ? e.getMessage() : e.toString();

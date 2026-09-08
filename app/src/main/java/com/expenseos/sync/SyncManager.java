@@ -306,8 +306,7 @@ public class SyncManager {
                 ps.setString(3, c.getString(2));                               // 3: description
                 ps.setString(4, c.getString(3));                               // 4: created_at -> ?::timestamp
                 ps.setString(5, c.getString(4));                               // 5: updated_at -> ?::timestamp
-                ps.setBoolean(6, c.isNull(5) || c.getInt(5) == 1);       // 6: is_active  -> boolean
-
+                ps.setBoolean(6, !c.isNull(5) && c.getInt(5) == 1);      // 6: is_active  -> boolean (NULL-ah irundha inactive-ah treat pannunga)
                 ps.executeUpdate();
                 n++;
             }

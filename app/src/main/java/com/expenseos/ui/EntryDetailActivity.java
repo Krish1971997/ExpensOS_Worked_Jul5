@@ -421,6 +421,7 @@ public class EntryDetailActivity extends AppCompatActivity {
         refund.setAmount(txn.getAmount());
         refund.setCategoryId(cat.getId());
         refund.setBookId(txn.getBookId());
+        refund.setPaymentType(txn.getPaymentType()); // original entry-oda ade payment mode-ah refund-kum
         String originalNote = txn.getNote() != null ? txn.getNote() : "";
         refund.setNote("Refund : " + originalNote);
 

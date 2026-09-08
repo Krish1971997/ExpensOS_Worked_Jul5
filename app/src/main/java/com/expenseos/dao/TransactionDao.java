@@ -1138,4 +1138,27 @@ public class TransactionDao {
         cursor.close();
         return list;
     }
+
+    /**
+     * Note field-la type pannumbodhu-ye, andha book-oda past transactions-la
+     * matching notes-ah (case-insensitive substring) most-recent-first-ah
+     * kudukkum — TransactionEntryActivity/TransactionDetailActivity-oda Note
+     * autocomplete dropdown-ku.
+     */
+    public List<String> findDistinctNotesContaining(String query, int bookId, int limit) {
+        List<String> result = new ArrayList<>();
+        if (query == null || query.trim().isEmpty()) return result;
+
+//        SQLiteDatabase db = getReadableDatabase(); // ⚠️ ungal DAO base class-la idhu evvaru access pannuranga nu adjust pannunga
+        String sql = "SELECT note, MAX(txn_datetime) AS last_used FROM transactions " +
+                "WHERE book_id = ? AND note IS NOT NULL AND note != '' AND LOWER(note) LIKE ? " +
+                "GROUP BY LOWER(note) ORDER BY last_used DESC LIMIT ?";
+        try (Cursor c = db.rawQuery(sql, new String[]{
+                String.valueOf(bookId),
+                "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%",
+                String.valueOf(limit)})) {
+            while (c.moveToNext()) result.add(c.getString(0));
+        }
+        return result;
+    }
 }

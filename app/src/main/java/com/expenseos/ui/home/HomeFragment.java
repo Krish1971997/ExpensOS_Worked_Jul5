@@ -200,6 +200,9 @@ public class HomeFragment extends Fragment {
             btnSyncCloud.setEnabled(false);
             btnSyncCloud.setText("Syncing…");
             SyncManager.get().syncToCloud(requireContext(), (ok, summary) -> {
+                // 👇 Add check here
+                if (!isAdded() || getContext() == null) return;
+
                 btnSyncCloud.setEnabled(true);
                 btnSyncCloud.setText("↑ Sync to Cloud");
                 Toast.makeText(getContext(), ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
@@ -211,6 +214,9 @@ public class HomeFragment extends Fragment {
             btnFetchCloud.setEnabled(false);
             btnFetchCloud.setText("Fetching…");
             SyncManager.get().fetchFromCloud(requireContext(), (ok, summary) -> {
+                // 👇 Add check here
+                if (!isAdded() || getContext() == null) return;
+
                 btnFetchCloud.setEnabled(true);
                 btnFetchCloud.setText("↓ Fetch from Cloud");
                 Toast.makeText(getContext(), ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();

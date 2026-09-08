@@ -167,6 +167,12 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(i);
         });
 
+        View drawerConfigureBudget = findViewById(R.id.drawerConfigureBudget);
+        if (drawerConfigureBudget != null) drawerConfigureBudget.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, BudgetConfigActivity.class));
+        });
+
         View drawerScheduler = findViewById(R.id.drawerScheduler);
         if (drawerScheduler != null) drawerScheduler.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
@@ -209,7 +215,6 @@ public class HomeActivity extends AppCompatActivity {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, SqlConsoleActivity.class));
         });
-
     }
 
     // ── Sync Button ───────────────────────────────────────

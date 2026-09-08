@@ -27,6 +27,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListPopupWindow;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -36,6 +37,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
+import com.expenseos.adapter.NoteSuggestionAdapter;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.KeywordMappingDao;
@@ -139,6 +141,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         bindViews();
         setupClicks();
         wireDescriptionAutoSuggest();
+        wireNoteSuggestions();
 
         txnId = getIntent().getIntExtra("txnId", -1);
 
@@ -403,6 +406,13 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private final Handler suggestHandler = new Handler(Looper.getMainLooper());
     private Runnable suggestRunnable;
 
+    // Note-field autocomplete (past matching notes) — 💡 keyword-category
+    // suggestion (mேlе irukkura suggestHandler) vேறu, idhu vேறu feature.
+    private final Handler noteSuggestHandler = new Handler(Looper.getMainLooper());
+    private Runnable noteSuggestRunnable;
+    private ListPopupWindow noteSuggestPopup;
+    private NoteSuggestionAdapter noteSuggestAdapter;
+
     private void wireDescriptionAutoSuggest() {
         etNote.addTextChangedListener(new TextWatcher() {
             @Override
@@ -425,27 +435,36 @@ public class TransactionEntryActivity extends AppCompatActivity {
         tvKwSuggestion.setOnClickListener(v -> applyPendingSuggestion());
     }
 
-    // NEW — restored: don't suggest once the fields the suggestion would fill
-// are already filled. "Filled" means a real category (not the "Select
-// Category" placeholder), and if a sub-category picker is showing, a real
-// sub-category too (not its own placeholder).
-    private boolean categoryAlreadyFilled() {
-        if (spCategory.getSelectedItemPosition() == 0) return false;
+    // NEW — a filled category/sub-category no longer blocks the suggestion
+// outright. Instead: compute the match, then compare it against what's
+// currently selected. Same selection already → nothing new to offer, stay
+// hidden. Different (or nothing selected yet) → show it, since switching
+// category/note mid-entry is exactly when a better keyword match should
+// surface (e.g. "Snacks ▸ Tea" already picked, note edited to mention
+// "bus" → offer "Transport ▸ Bus" instead).
+    private boolean suggestionMatchesCurrentSelection(KeywordMapping match) {
+        int catPos = spCategory.getSelectedItemPosition();
+        if (catPos <= 0) return false; // "Select Category" placeholder — nothing to match yet
+        Category selCat = currentCategories.get(catPos - 1);
+        if (selCat.getId() != match.getCategoryId()) return false;
+
+        Integer selSubId = null;
         if (spSubCategory.getVisibility() == View.VISIBLE) {
             Object sel = spSubCategory.getSelectedItem();
-            return !(sel instanceof SubCategory) || ((SubCategory) sel).getId() != 0;
+            if (sel instanceof SubCategory && ((SubCategory) sel).getId() > 0)
+                selSubId = ((SubCategory) sel).getId();
         }
-        return true;
+        return java.util.Objects.equals(selSubId, match.getSubCategoryId());
     }
 
     private void showKeywordSuggestion(String note) {
-        if (note == null || note.trim().length() < 3 || categoryAlreadyFilled()) {
+        if (note == null || note.trim().length() < 3) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;
         }
         KeywordMapping match = kwDao.suggest(note.trim(), currentType.name(), bookId);
-        if (match == null) {
+        if (match == null || suggestionMatchesCurrentSelection(match)) {
             pendingSuggestion = null;
             tvKwSuggestion.setVisibility(View.GONE);
             return;
@@ -966,5 +985,70 @@ public class TransactionEntryActivity extends AppCompatActivity {
     }
 
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {
+    }
+
+    // ── Note -> past matching notes autocomplete ──────────────────
+    // Type panra letters-oda substring match panni, andha book-oda past
+    // notes-ah dropdown-ah kaatudhu (most recent first). Tap panna andha
+    // note-ah fill pannidum.
+    private void wireNoteSuggestions() {
+        noteSuggestAdapter = new NoteSuggestionAdapter(this, new ArrayList<>());
+        noteSuggestPopup = new ListPopupWindow(this);
+        noteSuggestPopup.setAnchorView(etNote);
+        noteSuggestPopup.setAdapter(noteSuggestAdapter);
+        noteSuggestPopup.setModal(false);
+        noteSuggestPopup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);
+
+        etNote.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                if (noteSuggestRunnable != null)
+                    noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
+                String text = e.toString();
+                noteSuggestRunnable = () -> showNoteSuggestions(text);
+                noteSuggestHandler.postDelayed(noteSuggestRunnable, 250);
+            }
+        });
+
+        noteSuggestPopup.setOnItemClickListener((parent, view, position, id) -> {
+            String picked = noteSuggestAdapter.getItem(position);
+            if (picked != null) {
+                etNote.removeTextChangedListener(null); // no-op guard, safe to skip
+                etNote.setText(picked);
+                etNote.setSelection(picked.length());
+            }
+            noteSuggestPopup.dismiss();
+        });
+
+        etNote.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) noteSuggestPopup.dismiss();
+        });
+    }
+
+    private void showNoteSuggestions(String text) {
+        String trimmed = text.trim();
+        if (trimmed.length() < 2 || !etNote.hasFocus()) {
+            noteSuggestPopup.dismiss();
+            return;
+        }
+        List<String> matches = txnDao.findDistinctNotesContaining(trimmed, bookId, 8);
+        // Already exact-ah type pannirukura ஒரே ஒரு match-ku dropdown redundant.
+        if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(trimmed))) {
+            noteSuggestPopup.dismiss();
+            return;
+        }
+        noteSuggestAdapter.clear();
+        noteSuggestAdapter.addAll(matches);
+        noteSuggestAdapter.setQuery(trimmed);
+        noteSuggestAdapter.notifyDataSetChanged();
+        noteSuggestPopup.show();
     }
 }

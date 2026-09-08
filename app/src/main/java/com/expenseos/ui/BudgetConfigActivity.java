@@ -23,9 +23,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Edits the ONE shared budget template (category -> amount) used by every
+ * cash book. Not tied to a bookId/month — this screen doesn't belong to
+ * any single book's Budget tab, and creates nothing by itself; the
+ * scheduler (or a manual apply) is what copies these amounts into an
+ * actual month's budget for each book.
+ */
 public class BudgetConfigActivity extends AppCompatActivity {
 
-    private int bookId, year, month;
     private CategoryDao catDao;
     private BudgetTemplateDao templateDao;
 
@@ -36,20 +42,12 @@ public class BudgetConfigActivity extends AppCompatActivity {
     private final List<Category> categories = new ArrayList<>();
     private final Map<Integer, EditText> pctFields = new HashMap<>();
     private final Map<Integer, EditText> amtFields = new HashMap<>();
-    private boolean suppressSync = false; // guards against %<->amount TextWatcher feedback loops
+    private boolean suppressSync = false;
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_budget_config);
-
-        bookId = getIntent().getIntExtra("bookId", 0);
-        year = getIntent().getIntExtra("year", java.time.LocalDate.now().getYear());
-        month = getIntent().getIntExtra("month", java.time.LocalDate.now().getMonthValue());
-        if (bookId <= 0) {
-            finish();
-            return;
-        }
 
         catDao = new CategoryDao(this);
         templateDao = new BudgetTemplateDao(this);
@@ -61,24 +59,22 @@ public class BudgetConfigActivity extends AppCompatActivity {
         rowsContainer = findViewById(R.id.configRowsContainer);
         findViewById(R.id.btnConfigSave).setOnClickListener(v -> saveConfig());
 
-        etTotalBudget.addTextChangedListener(simpleWatcher(this::recalcAllRowsFromTotal));
+        // Total is derived from the category amounts below — read-only.
+        etTotalBudget.setFocusable(false);
+        etTotalBudget.setClickable(false);
+        etTotalBudget.setCursorVisible(false);
+        etTotalBudget.setHint("Sum of category amounts below");
 
         loadCategoriesAndBuildTable();
     }
 
     private void loadCategoriesAndBuildTable() {
         categories.clear();
-        categories.addAll(catDao.findByType("EXPENSE", bookId));
+        // Common (book-independent) categories only — this template is
+        // shared across every book, so book-specific categories don't apply.
+        categories.addAll(catDao.findByType("EXPENSE"));
 
-        BigDecimal defaultTotal = templateDao.loadDefaultOverallLimit(bookId);
-        Map<Integer, BigDecimal> savedPercents = templateDao.loadPercents(bookId);
-
-        // Guard the initial setText — it fires the TextWatcher immediately,
-        // but the per-row EditTexts (pctFields/amtFields) don't exist yet at
-        // this point, so recalcAllRowsFromTotal() would NPE on a null field.
-        suppressSync = true;
-        etTotalBudget.setText(defaultTotal != null ? defaultTotal.stripTrailingZeros().toPlainString() : "");
-        suppressSync = false;
+        Map<Integer, BigDecimal> savedAmounts = templateDao.loadGlobalAmounts();
 
         rowsContainer.removeAllViews();
         pctFields.clear();
@@ -99,10 +95,11 @@ public class BudgetConfigActivity extends AppCompatActivity {
 
             EditText etPct = new EditText(this);
             etPct.setHint("%");
+            etPct.setFocusable(false);
+            etPct.setClickable(false);
+            etPct.setCursorVisible(false);
             etPct.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
             etPct.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
-            BigDecimal savedPct = savedPercents.get(c.getId());
-            if (savedPct != null) etPct.setText(savedPct.stripTrailingZeros().toPlainString());
             row.addView(etPct);
 
             EditText etAmt = new EditText(this);
@@ -111,117 +108,77 @@ public class BudgetConfigActivity extends AppCompatActivity {
             LinearLayout.LayoutParams amtLp = new LinearLayout.LayoutParams(dp(90), LinearLayout.LayoutParams.WRAP_CONTENT);
             amtLp.setMarginStart(dp(8));
             etAmt.setLayoutParams(amtLp);
+
+            BigDecimal savedAmt = savedAmounts.get(c.getId());
+            if (savedAmt != null) etAmt.setText(savedAmt.stripTrailingZeros().toPlainString());
             row.addView(etAmt);
 
             pctFields.put(c.getId(), etPct);
             amtFields.put(c.getId(), etAmt);
 
-            etPct.addTextChangedListener(simpleWatcher(() -> onPctChanged(c.getId())));
-            etAmt.addTextChangedListener(simpleWatcher(() -> onAmtChanged(c.getId())));
+            etAmt.addTextChangedListener(simpleWatcher(this::recalcFromAmounts));
 
             rowsContainer.addView(row);
         }
 
-        recalcAllRowsFromTotal();
+        recalcFromAmounts();
     }
 
-    private BigDecimal totalBudget() {
-        String s = etTotalBudget.getText().toString().trim();
-        try {
-            return s.isEmpty() ? BigDecimal.ZERO : new BigDecimal(s);
-        } catch (NumberFormatException e) {
-            return BigDecimal.ZERO;
-        }
+    private BigDecimal sumOfAmounts() {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (EditText et : amtFields.values()) sum = sum.add(parse(et.getText().toString()));
+        return sum;
     }
 
-    // Amount changed by hand -> recompute that row's % against the total, then totals.
-    private void onAmtChanged(int categoryId) {
+    private void recalcFromAmounts() {
         if (suppressSync) return;
-        BigDecimal total = totalBudget();
-        EditText etAmt = amtFields.get(categoryId);
-        EditText etPct = pctFields.get(categoryId);
-        BigDecimal amt = parse(etAmt.getText().toString());
         suppressSync = true;
-        if (total.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal pct = amt.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
-            etPct.setText(pct.stripTrailingZeros().toPlainString());
-        }
-        suppressSync = false;
-        refreshTotals();
-    }
 
-    // % changed by hand -> recompute that row's amount against the total, then totals.
-    private void onPctChanged(int categoryId) {
-        if (suppressSync) return;
-        BigDecimal total = totalBudget();
-        EditText etAmt = amtFields.get(categoryId);
-        EditText etPct = pctFields.get(categoryId);
-        BigDecimal pct = parse(etPct.getText().toString());
-        suppressSync = true;
-        BigDecimal amt = total.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        etAmt.setText(amt.stripTrailingZeros().toPlainString());
-        suppressSync = false;
-        refreshTotals();
-    }
+        BigDecimal total = sumOfAmounts();
+        etTotalBudget.setText(total.stripTrailingZeros().toPlainString());
 
-    // Total budget changed by hand -> keep each row's % fixed, recompute amounts.
-    private void recalcAllRowsFromTotal() {
-        if (suppressSync) return;
-        BigDecimal total = totalBudget();
-        suppressSync = true;
         for (Category c : categories) {
-            EditText etPct = pctFields.get(c.getId());
             EditText etAmt = amtFields.get(c.getId());
-            if (etPct == null || etAmt == null) continue; // rows not built yet — skip safely
-            BigDecimal pct = parse(etPct.getText().toString());
-            if (pct.compareTo(BigDecimal.ZERO) > 0 && total.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal amt = total.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                etAmt.setText(amt.stripTrailingZeros().toPlainString());
+            EditText etPct = pctFields.get(c.getId());
+            if (etAmt == null || etPct == null) continue;
+            BigDecimal amt = parse(etAmt.getText().toString());
+            if (total.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal pct = amt.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
+                etPct.setText(pct.stripTrailingZeros().toPlainString());
+            } else {
+                etPct.setText("");
             }
         }
+
         suppressSync = false;
-        refreshTotals();
+        refreshTotals(total);
     }
 
-    private void refreshTotals() {
-        BigDecimal total = totalBudget();
-        BigDecimal allocated = BigDecimal.ZERO;
-        for (EditText et : amtFields.values())
-            allocated = allocated.add(parse(et.getText().toString()));
-        BigDecimal remaining = total.subtract(allocated);
-
-        tvAllocated.setText("Allocated: ₹" + allocated.setScale(2, RoundingMode.HALF_UP).toPlainString());
-        tvRemaining.setText("Remaining: ₹" + remaining.setScale(2, RoundingMode.HALF_UP).toPlainString());
-        tvRemaining.setTextColor(getColor(remaining.compareTo(BigDecimal.ZERO) < 0 ? R.color.red : R.color.green));
+    private void refreshTotals(BigDecimal total) {
+        tvAllocated.setText("Allocated: ₹" + total.setScale(2, RoundingMode.HALF_UP).toPlainString());
+        tvRemaining.setText("Remaining: ₹0.00");
+        tvRemaining.setTextColor(getColor(R.color.green));
     }
 
     private void saveConfig() {
-        BigDecimal total = totalBudget();
-        if (total.compareTo(BigDecimal.ZERO) <= 0) {
-            Toast.makeText(this, "Enter a total monthly budget first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Map<Integer, BigDecimal> percents = new HashMap<>();
+        Map<Integer, BigDecimal> amounts = new HashMap<>();
         for (Category c : categories) {
-            BigDecimal pct = parse(pctFields.get(c.getId()).getText().toString());
-            if (pct.compareTo(BigDecimal.ZERO) > 0) percents.put(c.getId(), pct);
+            BigDecimal amt = parse(amtFields.get(c.getId()).getText().toString());
+            if (amt.compareTo(BigDecimal.ZERO) > 0) amounts.put(c.getId(), amt);
         }
-        if (percents.isEmpty()) {
-            Toast.makeText(this, "Allocate at least one category", Toast.LENGTH_SHORT).show();
+        if (amounts.isEmpty()) {
+            Toast.makeText(this, "Enter an amount for at least one category", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Config screen only ever writes the reusable % template — it never
-        // touches an actual month's budgets/budget_categories rows directly.
-        // Those get materialized only when the BUDGET scheduler runs (auto
-        // on its schedule, or manually via "Run now" in Scheduler screen).
-        // This keeps "edit the template" and "apply it to a real month"
-        // as two separate, predictable actions.
-        templateDao.saveTemplate(bookId, percents, total);
+        // This template is common to every book. It never touches an
+        // actual month's budgets/budget_categories rows itself — those get
+        // created only when the BUDGET scheduler runs (auto or "Run now"),
+        // one per book, copying these exact amounts.
+        templateDao.saveGlobalTemplate(amounts);
 
         Toast.makeText(this,
-                "Template saved. Run the Budget scheduler to apply it to a month.",
+                "Budget template saved — applies to every cash book. Run the Budget scheduler to apply it.",
                 Toast.LENGTH_LONG).show();
         finish();
     }

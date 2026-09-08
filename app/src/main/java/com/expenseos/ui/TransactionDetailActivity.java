@@ -8,9 +8,13 @@ import android.database.Cursor;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -20,6 +24,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListPopupWindow;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -100,6 +105,13 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private Integer pendingSubCategoryId;
     private KeywordMappingDao kwDao;
 
+    // Note-field autocomplete (past matching notes) — 💡 keyword-category
+    // suggestion (mேlе tvKwSuggestion) vேறு, idhu vேறு feature.
+    private final Handler noteSuggestHandler = new Handler(Looper.getMainLooper());
+    private Runnable noteSuggestRunnable;
+    private ListPopupWindow noteSuggestPopup;
+    private ArrayAdapter<String> noteSuggestAdapter;
+
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
@@ -124,6 +136,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
         bindViews();
         wireDescriptionAutoSuggest();
+        wireNoteSuggestions();
         setupButtons();
         loadTransaction();
     }
@@ -918,5 +931,69 @@ public class TransactionDetailActivity extends AppCompatActivity {
             }
             tvKwSuggestion.setVisibility(View.GONE);
         });
+    }
+
+    // ── Note -> past matching notes autocomplete ──────────────────
+    // Type panra letters-oda substring match panni, andha book-oda past
+    // notes-ah dropdown-ah kaatudhu (most recent first). Tap panna andha
+    // note-ah fill pannidum.
+    private void wireNoteSuggestions() {
+        noteSuggestAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
+        noteSuggestPopup = new ListPopupWindow(this);
+        noteSuggestPopup.setAnchorView(etNote);
+        noteSuggestPopup.setAdapter(noteSuggestAdapter);
+        noteSuggestPopup.setModal(false);
+        noteSuggestPopup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);
+
+        etNote.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                if (noteSuggestRunnable != null)
+                    noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
+                String text = e.toString();
+                noteSuggestRunnable = () -> showNoteSuggestions(text);
+                noteSuggestHandler.postDelayed(noteSuggestRunnable, 250);
+            }
+        });
+
+        noteSuggestPopup.setOnItemClickListener((parent, view, position, id) -> {
+            String picked = noteSuggestAdapter.getItem(position);
+            if (picked != null) {
+                etNote.setText(picked);
+                etNote.setSelection(picked.length());
+                isDirty = true;
+            }
+            noteSuggestPopup.dismiss();
+        });
+
+        etNote.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) noteSuggestPopup.dismiss();
+        });
+    }
+
+    private void showNoteSuggestions(String text) {
+        String trimmed = text.trim();
+        if (trimmed.length() < 2 || !etNote.hasFocus() || current == null) {
+            noteSuggestPopup.dismiss();
+            return;
+        }
+        List<String> matches = txnDao.findDistinctNotesContaining(trimmed, current.getBookId(), 8);
+        // Already exact-ah type pannirukura ஒரே ஒரு match-ku dropdown redundant.
+        if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(trimmed))) {
+            noteSuggestPopup.dismiss();
+            return;
+        }
+        noteSuggestAdapter.clear();
+        noteSuggestAdapter.addAll(matches);
+        noteSuggestAdapter.notifyDataSetChanged();
+        noteSuggestPopup.show();
     }
 }
