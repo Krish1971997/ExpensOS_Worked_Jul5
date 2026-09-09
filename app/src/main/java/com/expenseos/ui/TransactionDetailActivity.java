@@ -111,6 +111,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private Runnable noteSuggestRunnable;
     private ListPopupWindow noteSuggestPopup;
     private ArrayAdapter<String> noteSuggestAdapter;
+    private boolean suppressNoteSuggestion = false;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -956,6 +957,10 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable e) {
+                if (suppressNoteSuggestion) {
+                    suppressNoteSuggestion = false;
+                    return;
+                }
                 if (noteSuggestRunnable != null)
                     noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
                 String text = e.toString();
@@ -967,6 +972,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
         noteSuggestPopup.setOnItemClickListener((parent, view, position, id) -> {
             String picked = noteSuggestAdapter.getItem(position);
             if (picked != null) {
+                suppressNoteSuggestion = true;
                 etNote.setText(picked);
                 etNote.setSelection(picked.length());
                 isDirty = true;

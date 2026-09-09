@@ -11,6 +11,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -161,6 +162,18 @@ public class BudgetActivity extends AppCompatActivity {
                 java.time.Month.of(selMonth).getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + selYear);
 
         currentBudget = budgetDao.findByMonth(bookId, selYear, selMonth);
+
+        // Self-heal: if categories were added to the shared template AFTER
+        // this month's budget was first created, the scheduler's
+        // "already exists — skip" rule means it never went back to add
+        // them. Fill in anything missing every time this screen loads.
+        if (currentBudget != null) {
+            com.expenseos.dao.BudgetTemplateDao templateDao = new com.expenseos.dao.BudgetTemplateDao(this);
+            if (templateDao.hasGlobalTemplate()) {
+                budgetDao.syncMissingCategoriesFromTemplate(currentBudget.getId(), templateDao.loadGlobalAmounts());
+                currentBudget = budgetDao.findByMonth(bookId, selYear, selMonth); // reload with synced rows
+            }
+        }
 
         EditText etOverallLimit = findViewById(R.id.etOverallLimit);
         View summaryCard = findViewById(R.id.summaryCard);
@@ -465,6 +478,174 @@ public class BudgetActivity extends AppCompatActivity {
     private void loadTrend(int months) {
         loadMonthlyTrendChart(months);
         loadCategoryTrendChart(months);
+        loadBudgetVsSpendChart(months);
+        loadCategoryStatusList();
+        loadAdherenceSummary(months);
+    }
+
+    // ── Overall Budget vs Spend, month-by-month ─────────────────────
+    private void loadBudgetVsSpendChart(int months) {
+        List<Map<String, Object>> expenseData = budgetDao.monthlyTrend(bookId, months);
+        List<Map<String, Object>> limitData = budgetDao.budgetLimitTrend(bookId, months);
+
+        // Key both lists by "yr-mo" so months with a budget but no spend
+        // (or vice versa) still line up correctly instead of silently misaligning.
+        Map<String, BigDecimal> limitByKey = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> row : limitData) {
+            limitByKey.put(row.get("yr") + "-" + row.get("mo"), (BigDecimal) row.get("limit"));
+        }
+
+        List<String> labels = new ArrayList<>();
+        List<com.github.mikephil.charting.data.BarEntry> budgetEntries = new ArrayList<>();
+        List<com.github.mikephil.charting.data.BarEntry> spendEntries = new ArrayList<>();
+
+        for (int i = 0; i < expenseData.size(); i++) {
+            Map<String, Object> row = expenseData.get(i);
+            String key = row.get("yr") + "-" + row.get("mo");
+            BigDecimal limit = limitByKey.getOrDefault(key, BigDecimal.ZERO);
+            BigDecimal spend = (BigDecimal) row.get("expense");
+
+            labels.add((String) row.get("label"));
+            budgetEntries.add(new com.github.mikephil.charting.data.BarEntry(i, limit.floatValue()));
+            spendEntries.add(new com.github.mikephil.charting.data.BarEntry(i, spend.floatValue()));
+        }
+
+        com.github.mikephil.charting.data.BarDataSet budgetSet =
+                new com.github.mikephil.charting.data.BarDataSet(budgetEntries, "Budget");
+        budgetSet.setColor(getColor(R.color.primary));
+        com.github.mikephil.charting.data.BarDataSet spendSet =
+                new com.github.mikephil.charting.data.BarDataSet(spendEntries, "Spend");
+        spendSet.setColor(getColor(R.color.red));
+
+        com.github.mikephil.charting.data.BarData barData =
+                new com.github.mikephil.charting.data.BarData(budgetSet, spendSet);
+        barData.setBarWidth(0.35f);
+        barData.groupBars(0f, 0.15f, 0.02f);
+
+        BarChart chart = findViewById(R.id.barBudgetVsSpend);
+        chart.setData(barData);
+        chart.getXAxis().setValueFormatter(new com.github.mikephil.charting.formatter.ValueFormatter() {
+            @Override
+            public String getFormattedValue(float v) {
+                int idx = Math.round(v);
+                return idx >= 0 && idx < labels.size() ? labels.get(idx) : "";
+            }
+        });
+        chart.getXAxis().setGranularity(1f);
+        chart.getXAxis().setGranularityEnabled(true);
+        chart.getXAxis().setLabelCount(Math.max(labels.size(), 1), false);
+        chart.getXAxis().setAxisMinimum(-0.5f);
+        chart.getXAxis().setAxisMaximum(Math.max(labels.size() - 0.5f, 0.5f));
+        chart.getDescription().setEnabled(false);
+        chart.setFitBars(true);
+        chart.invalidate();
+    }
+
+    // ── Current month: over/under per category, worst first ─────────
+    private void loadCategoryStatusList() {
+        LinearLayout container = findViewById(R.id.categoryStatusContainer);
+        container.removeAllViews();
+
+        Budget current = budgetDao.currentMonthBudget(bookId);
+        if (current == null || current.getCategories().isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No budget set for this month yet.");
+            empty.setTextColor(getColor(R.color.text_muted));
+            empty.setTextSize(13);
+            container.addView(empty);
+            return;
+        }
+
+        List<BudgetCategory> cats = new ArrayList<>(current.getCategories());
+        // Worst first: most over-budget (or closest to it) at the top.
+        cats.sort((a, b) -> {
+            BigDecimal aOver = a.getSpentSafe().subtract(a.getCatLimit());
+            BigDecimal bOver = b.getSpentSafe().subtract(b.getCatLimit());
+            return bOver.compareTo(aOver);
+        });
+
+        for (BudgetCategory bc : cats) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            int padV = dp(8);
+            row.setPadding(0, padV, 0, padV);
+
+            TextView tvName = new TextView(this);
+            tvName.setText(bc.getCategoryName());
+            tvName.setTextSize(14);
+            tvName.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            row.addView(tvName);
+
+            TextView tvStatus = new TextView(this);
+            tvStatus.setTextSize(13);
+            tvStatus.setTypeface(null, android.graphics.Typeface.BOLD);
+            if (bc.isExceeded()) {
+                BigDecimal over = bc.getSpentSafe().subtract(bc.getCatLimit());
+                tvStatus.setText("🔴 Over by ₹" + over.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+                tvStatus.setTextColor(getColor(R.color.red));
+            } else {
+                BigDecimal left = bc.getCatLimit().subtract(bc.getSpentSafe());
+                tvStatus.setText("🟢 ₹" + left.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + " left");
+                tvStatus.setTextColor(getColor(R.color.green));
+            }
+            row.addView(tvStatus);
+
+            container.addView(row);
+        }
+    }
+
+    // ── "X of Y months within budget" + average spend vs current budget ──
+    private void loadAdherenceSummary(int months) {
+        List<Map<String, Object>> expenseData = budgetDao.monthlyTrend(bookId, months);
+        List<Map<String, Object>> limitData = budgetDao.budgetLimitTrend(bookId, months);
+
+        Map<String, BigDecimal> limitByKey = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> row : limitData) {
+            limitByKey.put(row.get("yr") + "-" + row.get("mo"), (BigDecimal) row.get("limit"));
+        }
+
+        int monthsWithBudget = 0, monthsWithinBudget = 0;
+        BigDecimal totalSpend = BigDecimal.ZERO;
+        int monthsWithSpend = 0;
+
+        for (Map<String, Object> row : expenseData) {
+            String key = row.get("yr") + "-" + row.get("mo");
+            BigDecimal spend = (BigDecimal) row.get("expense");
+            if (spend.compareTo(BigDecimal.ZERO) > 0) {
+                totalSpend = totalSpend.add(spend);
+                monthsWithSpend++;
+            }
+            BigDecimal limit = limitByKey.get(key);
+            if (limit != null && limit.compareTo(BigDecimal.ZERO) > 0) {
+                monthsWithBudget++;
+                if (spend.compareTo(limit) <= 0) monthsWithinBudget++;
+            }
+        }
+
+        TextView tvAdherence = findViewById(R.id.tvAdherenceSummary);
+        if (monthsWithBudget == 0) {
+            tvAdherence.setText("No budget history yet for this period.");
+        } else {
+            tvAdherence.setText(monthsWithinBudget + " of " + monthsWithBudget + " months stayed within budget");
+        }
+
+        TextView tvAvgVsCurrent = findViewById(R.id.tvAvgSpendVsCurrent);
+        Budget current = budgetDao.currentMonthBudget(bookId);
+        if (monthsWithSpend > 0 && current != null) {
+            BigDecimal avg = totalSpend.divide(BigDecimal.valueOf(monthsWithSpend), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal diff = avg.subtract(current.getOverallLimit());
+            String cmp = diff.compareTo(BigDecimal.ZERO) > 0
+                    ? "₹" + diff.abs().setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + " above"
+                    : "₹" + diff.abs().setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + " below";
+            tvAvgVsCurrent.setText("Avg monthly spend: ₹" + avg.toPlainString() + " (" + cmp + " current budget of ₹" + current.getOverallLimit().toPlainString() + ")");
+        } else {
+            tvAvgVsCurrent.setText("");
+        }
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
     }
 
     private void loadMonthlyTrendChart(int months) {

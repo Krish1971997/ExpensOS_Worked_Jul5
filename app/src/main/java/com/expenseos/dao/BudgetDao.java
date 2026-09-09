@@ -319,4 +319,56 @@ public class BudgetDao {
             return c.moveToFirst() ? BigDecimal.valueOf(c.getDouble(0)) : BigDecimal.ZERO;
         }
     }
+
+    /**
+     * Adds any category from the shared template that this budget doesn't
+     * already have a row for — self-heals the common case where a category
+     * gets added to the template AFTER a month's budget was already
+     * created (the scheduler's "already exists — skip" check means it
+     * never revisits an existing month). Never touches an existing row's
+     * amount, only fills in what's missing.
+     */
+    public void syncMissingCategoriesFromTemplate(int budgetId, Map<Integer, BigDecimal> templateAmounts) {
+        if (budgetId <= 0 || templateAmounts == null || templateAmounts.isEmpty()) return;
+
+        java.util.Set<Integer> existing = new java.util.HashSet<>();
+        try (Cursor c = db.rawQuery(
+                "SELECT category_id FROM budget_categories WHERE budget_id=?",
+                new String[]{String.valueOf(budgetId)})) {
+            while (c.moveToNext()) existing.add(c.getInt(0));
+        }
+
+        for (Map.Entry<Integer, BigDecimal> e : templateAmounts.entrySet()) {
+            if (existing.contains(e.getKey()))
+                continue; // already has its own row — don't overwrite
+            BudgetCategory bc = new BudgetCategory();
+            bc.setBudgetId(budgetId);
+            bc.setCategoryId(e.getKey());
+            bc.setCatLimit(e.getValue());
+            bc.setAlertPct(80);
+            upsertCategory(bc);
+        }
+    }
+
+    // ── Budget limit per month (paired with monthlyTrend's expense for
+    // Budget vs Spend comparisons) ────────────────────────────────────
+    public List<Map<String, Object>> budgetLimitTrend(int bookId, int months) {
+        String sql = "SELECT year AS yr, month AS mo, overall_limit " +
+                "FROM budgets WHERE book_id = ? " +
+                "ORDER BY year DESC, month DESC LIMIT ?";
+        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(bookId), String.valueOf(months)})) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (c.moveToNext()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                int yr = c.getInt(c.getColumnIndexOrThrow("yr"));
+                int mo = c.getInt(c.getColumnIndexOrThrow("mo"));
+                row.put("yr", yr);
+                row.put("mo", mo);
+                row.put("limit", BigDecimal.valueOf(c.getDouble(c.getColumnIndexOrThrow("overall_limit"))));
+                rows.add(row);
+            }
+            java.util.Collections.reverse(rows); // oldest -> newest, matching monthlyTrend's order
+            return rows;
+        }
+    }
 }

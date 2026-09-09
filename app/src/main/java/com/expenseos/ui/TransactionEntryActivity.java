@@ -22,7 +22,6 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -104,18 +103,21 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private LocalTime selectedTime = LocalTime.now();
 
     private List<Category> currentCategories = new ArrayList<>();
-    private List<SubCategory> currentSubCategories = new ArrayList<>();
+    private final List<SubCategory> currentSubCategories = new ArrayList<>();
 
     // col_key -> input, for whichever custom fields are currently on screen
     private final Map<String, EditText> customFieldInputs = new LinkedHashMap<>();
     private final List<PendingAttachment> pendingAttachments = new ArrayList<>();
     private Uri pendingCameraUri; // set right before launching the camera intent, consumed in onActivityResult
 
-    private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, tvSubCategoryLabel, btnMic, tvKwSuggestion;
+    private TextView tvTitle, btnBack, btnFieldSettings, tabIncome, tabExpense, tvDate, tvTime, btnMic, tvKwSuggestion;
     private LinearLayout boxDate, boxTime, boxAmount, btnAttach, attachmentList, customFieldsContainer;
     private EditText etAmount, etNote;
     private View btnCalculator;
-    private Spinner spCategory, spSubCategory, spPaymentType;
+    private TextView tvCategoryField;
+    private Category selectedCategory;
+    private SubCategory selectedSubCategory;
+    private Spinner spPaymentType;
     private Button btnSaveAddNew, btnSave;
     private KeywordMapping pendingSuggestion;
     private Integer pendingSubCategoryId;
@@ -186,10 +188,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
         btnMic = findViewById(R.id.btnMic);
         btnAttach = findViewById(R.id.btnAttach);
         attachmentList = findViewById(R.id.attachmentList);
-        spCategory = findViewById(R.id.spCategory);
-        spSubCategory = findViewById(R.id.spSubCategory);
-        tvSubCategoryLabel = findViewById(R.id.tvSubCategoryLabel);
-        tvKwSuggestion = findViewById(R.id.tvKwSuggestion);   // <-- இது missing
+        tvCategoryField = findViewById(R.id.tvCategoryField);
+        tvKwSuggestion = findViewById(R.id.tvKwSuggestion);
         customFieldsContainer = findViewById(R.id.customFieldsContainer);
         btnSaveAddNew = findViewById(R.id.btnSaveAddNew);
         btnSave = findViewById(R.id.btnSave);
@@ -231,13 +231,32 @@ public class TransactionEntryActivity extends AppCompatActivity {
         btnSaveAddNew.setOnClickListener(v -> save(true));
         btnSave.setOnClickListener(v -> save(false));
 
-        // Category / Sub-category / Payment-type dropdowns — Spinner-ku
-        // "before it opens" click callback illa, adhunala ACTION_DOWN
-        // touch-la hideKeyboard() pannitu (return false) — dropdown
-        // eppovum pola thaan open aagum, keyboard mattum hide aagum.
-        dismissKeyboardOnTouch(spCategory);
-        dismissKeyboardOnTouch(spSubCategory);
+        // Payment-type Spinner has no "before it opens" click callback,
+        // so ACTION_DOWN touch hides the keyboard first (return false —
+        // the dropdown still opens as normal after).
         dismissKeyboardOnTouch(spPaymentType);
+
+        tvCategoryField.setOnClickListener(v -> {
+            hideKeyboard();
+            CategoryPickerSheet.show(this, currentCategories, subCatDao,
+                    selectedCategory != null ? selectedCategory.getId() : null,
+                    (category, subCategory) -> {
+                        selectedCategory = category;
+                        selectedSubCategory = subCategory;
+                        updateCategoryFieldText();
+                    });
+        });
+    }
+
+    private void updateCategoryFieldText() {
+        if (selectedCategory == null) {
+            tvCategoryField.setText("Select Category");
+            tvCategoryField.setTextColor(getColor(R.color.text_muted));
+        } else {
+            tvCategoryField.setText(selectedCategory.getName() +
+                    (selectedSubCategory != null ? " ▸ " + selectedSubCategory.getName() : ""));
+            tvCategoryField.setTextColor(getColor(R.color.text_primary));
+        }
     }
 
     private void dismissKeyboardOnTouch(View v) {
@@ -320,78 +339,13 @@ public class TransactionEntryActivity extends AppCompatActivity {
     }
 
     // ── Category -> Sub-category cascade ───────────────────
+    //no Spinner cascade needed anymore; CategoryPickerSheet queries
+    // sub-categories itself (per-category, on demand) when it builds its list.
     private void loadCategoriesForType() {
         currentCategories = catDao.findByType(currentType.name(), bookId);
-        // Placeholder first item (id=0) so the Spinner doesn't silently
-        // default to a real category — nothing is pre-selected until the
-        // user actually picks one. save() rejects id==0 as "not selected".
-        List<Category> withPlaceholder = new ArrayList<>();
-        withPlaceholder.add(new Category(0, "Select Category", currentType.name(), null));
-        withPlaceholder.addAll(currentCategories);
-        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, withPlaceholder);
-        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spCategory.setAdapter(adp);
-        spCategory.setSelection(0);
-
-        spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (pos == 0) {
-                    // Placeholder selected — no real category yet, hide sub-category field.
-                    spSubCategory.setVisibility(View.GONE);
-                    tvSubCategoryLabel.setVisibility(View.GONE);
-                } else if (pos - 1 < currentCategories.size()) {
-                    loadSubCategoriesFor(currentCategories.get(pos - 1).getId());
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {
-            }
-        });
-
-        if (!currentCategories.isEmpty())
-            loadSubCategoriesFor(currentCategories.get(0).getId());
-        else {
-            spSubCategory.setVisibility(View.GONE);
-            tvSubCategoryLabel.setVisibility(View.GONE);
-        }
-    }
-
-    // Only shows the sub-category field when the chosen category actually
-    // has sub-categories — some categories have none, some have several.
-    private void loadSubCategoriesFor(int catId) {
-        currentSubCategories = subCatDao.findByCategoryId(catId);
-        if (currentSubCategories.isEmpty()) {
-            spSubCategory.setVisibility(View.GONE);
-            tvSubCategoryLabel.setVisibility(View.GONE);
-        } else {
-            spSubCategory.setVisibility(View.VISIBLE);
-            tvSubCategoryLabel.setVisibility(View.VISIBLE);
-
-            // Exactly one → fine to auto-select it. More than one → must
-            // not auto-pick the first one; prepend a placeholder (id=0,
-            // already this codebase's "no subcategory" convention) so the
-            // default selection is "none" and the user has to choose.
-            if (currentSubCategories.size() > 1) {
-                currentSubCategories.add(0, new SubCategory(0, "Select Sub Category", catId));
-            }
-
-// NEW
-            ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentSubCategories);
-            adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            spSubCategory.setAdapter(adp);
-
-            if (pendingSubCategoryId != null) {
-                for (int i = 0; i < currentSubCategories.size(); i++) {
-                    if (currentSubCategories.get(i).getId() == pendingSubCategoryId) {
-                        spSubCategory.setSelection(i);
-                        break;
-                    }
-                }
-                pendingSubCategoryId = null;
-            }
-        }
+        selectedCategory = null;
+        selectedSubCategory = null;
+        updateCategoryFieldText();
     }
 
     // ── Description -> Category/Sub-category auto-pickup ──────────────
@@ -412,6 +366,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private Runnable noteSuggestRunnable;
     private ListPopupWindow noteSuggestPopup;
     private NoteSuggestionAdapter noteSuggestAdapter;
+    private boolean suppressNoteSuggestion = false;
 
     private void wireDescriptionAutoSuggest() {
         etNote.addTextChangedListener(new TextWatcher() {
@@ -425,10 +380,15 @@ public class TransactionEntryActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable e) {
-                if (suggestRunnable != null) suggestHandler.removeCallbacks(suggestRunnable);
+                if (suppressNoteSuggestion) {
+                    suppressNoteSuggestion = false;
+                    return;
+                }
+                if (noteSuggestRunnable != null)
+                    noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
                 String text = e.toString();
-                suggestRunnable = () -> showKeywordSuggestion(text);
-                suggestHandler.postDelayed(suggestRunnable, 350);
+                noteSuggestRunnable = () -> showNoteSuggestions(text);
+                noteSuggestHandler.postDelayed(noteSuggestRunnable, 250);
             }
         });
 
@@ -443,17 +403,9 @@ public class TransactionEntryActivity extends AppCompatActivity {
 // surface (e.g. "Snacks ▸ Tea" already picked, note edited to mention
 // "bus" → offer "Transport ▸ Bus" instead).
     private boolean suggestionMatchesCurrentSelection(KeywordMapping match) {
-        int catPos = spCategory.getSelectedItemPosition();
-        if (catPos <= 0) return false; // "Select Category" placeholder — nothing to match yet
-        Category selCat = currentCategories.get(catPos - 1);
-        if (selCat.getId() != match.getCategoryId()) return false;
-
-        Integer selSubId = null;
-        if (spSubCategory.getVisibility() == View.VISIBLE) {
-            Object sel = spSubCategory.getSelectedItem();
-            if (sel instanceof SubCategory && ((SubCategory) sel).getId() > 0)
-                selSubId = ((SubCategory) sel).getId();
-        }
+        if (selectedCategory == null) return false; // nothing picked yet — nothing to match
+        if (selectedCategory.getId() != match.getCategoryId()) return false;
+        Integer selSubId = selectedSubCategory != null ? selectedSubCategory.getId() : null;
         return java.util.Objects.equals(selSubId, match.getSubCategoryId());
     }
 
@@ -479,13 +431,23 @@ public class TransactionEntryActivity extends AppCompatActivity {
     // NEW
     private void applyPendingSuggestion() {
         if (pendingSuggestion == null) return;
-        pendingSubCategoryId = pendingSuggestion.getSubCategoryId(); // picked up by the cascade above
-        for (int i = 0; i < currentCategories.size(); i++) {
-            if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
-                spCategory.setSelection(i + 1);
+        selectedCategory = null;
+        for (Category c : currentCategories) {
+            if (c.getId() == pendingSuggestion.getCategoryId()) {
+                selectedCategory = c;
                 break;
             }
         }
+        selectedSubCategory = null;
+        if (selectedCategory != null && pendingSuggestion.getSubCategoryId() != null) {
+            for (SubCategory sc : subCatDao.findByCategoryId(selectedCategory.getId())) {
+                if (sc.getId() == pendingSuggestion.getSubCategoryId()) {
+                    selectedSubCategory = sc;
+                    break;
+                }
+            }
+        }
+        updateCategoryFieldText();
         tvKwSuggestion.setVisibility(View.GONE);
         pendingSuggestion = null;
     }
@@ -778,63 +740,23 @@ public class TransactionEntryActivity extends AppCompatActivity {
         loadPaymentTypes(editingOriginal.getPaymentType());
 
         currentCategories = catDao.findByType(currentType.name(), bookId);
-        ArrayAdapter<Category> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currentCategories);
-        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spCategory.setAdapter(adp);
-
-        int catPos = 0;
-        for (int i = 0; i < currentCategories.size(); i++) {
-            if (currentCategories.get(i).getId() == editingOriginal.getCategoryId()) {
-                catPos = i;
+        selectedCategory = null;
+        for (Category c : currentCategories) {
+            if (c.getId() == editingOriginal.getCategoryId()) {
+                selectedCategory = c;
                 break;
             }
         }
-        spCategory.setSelection(catPos, false);
-
-        if (!currentCategories.isEmpty()) {
-            loadSubCategoriesFor(currentCategories.get(catPos).getId());
-        }
-
-//        spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-//            @Override
-//            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-//                if (pos >= 0 && pos < currentCategories.size())
-//                    loadSubCategoriesFor(currentCategories.get(pos).getId());
-//            }
-//
-//            @Override
-//            public void onNothingSelected(AdapterView<?> p) {
-//            }
-//        });
-
-        if (editingOriginal.getSubCategoryId() > 0 && !currentSubCategories.isEmpty()) {
-            for (int i = 0; i < currentSubCategories.size(); i++) {
-                if (currentSubCategories.get(i).getId() == editingOriginal.getSubCategoryId()) {
-                    spSubCategory.setSelection(i);
+        selectedSubCategory = null;
+        if (selectedCategory != null && editingOriginal.getSubCategoryId() > 0) {
+            for (SubCategory sc : subCatDao.findByCategoryId(selectedCategory.getId())) {
+                if (sc.getId() == editingOriginal.getSubCategoryId()) {
+                    selectedSubCategory = sc;
                     break;
                 }
             }
         }
-
-        // 5. Attach OnItemSelectedListener LAST (User manually Category change pannum podhu mattum load aaga)
-        spCategory.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            private boolean isInitial = true;
-
-            @Override
-            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                if (isInitial) {
-                    isInitial = false; // Initial programmatic trigger-ஐ skip பண்ணும்
-                    return;
-                }
-                if (pos >= 0 && pos < currentCategories.size()) {
-                    loadSubCategoriesFor(currentCategories.get(pos).getId());
-                }
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {
-            }
-        });
+        updateCategoryFieldText();
 
         // Show every field defined for this type — pre-filled where the
         // transaction already has a saved value for it.
@@ -853,19 +775,17 @@ public class TransactionEntryActivity extends AppCompatActivity {
             Toast.makeText(this, "Enter amount", Toast.LENGTH_SHORT).show();
             return;
         }
-        // Category validation
-        if (spCategory.getSelectedItem() == null || ((Category) spCategory.getSelectedItem()).getId() == 0) {
+// NEW — sub-category "required" is now checked against the real data
+// (does this category have any?), not a Spinner's visibility state.
+        if (selectedCategory == null) {
             Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Subcategory validation - Mandatory if visible and has placeholder (id == 0)
-        if (spSubCategory.getVisibility() == View.VISIBLE) {
-            SubCategory selectedSub = (SubCategory) spSubCategory.getSelectedItem();
-            if (selectedSub == null || selectedSub.getId() == 0) {
-                Toast.makeText(this, "Please select a subcategory", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        List<SubCategory> subsForSelected = subCatDao.findByCategoryId(selectedCategory.getId());
+        if (!subsForSelected.isEmpty() && selectedSubCategory == null) {
+            Toast.makeText(this, "Please select a subcategory", Toast.LENGTH_SHORT).show();
+            return;
         }
 
         if (spPaymentType.getSelectedItem() == null) {
@@ -881,16 +801,12 @@ public class TransactionEntryActivity extends AppCompatActivity {
             return;
         }
 
-        Category cat = (Category) spCategory.getSelectedItem();
-        SubCategory sub = (spSubCategory.getVisibility() == View.VISIBLE && spSubCategory.getSelectedItem() != null)
-                ? (SubCategory) spSubCategory.getSelectedItem() : null;
-
         Transaction t = new Transaction();
         t.setType(currentType);
         t.setDateTime(LocalDateTime.of(selectedDate, selectedTime));
         t.setAmount(amount);
-        t.setCategoryId(cat.getId());
-        t.setSubCategoryId(sub != null ? sub.getId() : 0);
+        t.setCategoryId(selectedCategory.getId());
+        t.setSubCategoryId(selectedSubCategory != null ? selectedSubCategory.getId() : 0);
         t.setNote(etNote.getText().toString().trim());
         t.setBookId(bookId);
         t.setPaymentType(((PaymentType) spPaymentType.getSelectedItem()).getName());
@@ -1021,7 +937,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
         noteSuggestPopup.setOnItemClickListener((parent, view, position, id) -> {
             String picked = noteSuggestAdapter.getItem(position);
             if (picked != null) {
-                etNote.removeTextChangedListener(null); // no-op guard, safe to skip
+                suppressNoteSuggestion = true;
                 etNote.setText(picked);
                 etNote.setSelection(picked.length());
             }

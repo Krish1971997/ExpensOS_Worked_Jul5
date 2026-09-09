@@ -59,11 +59,7 @@ public class BudgetConfigActivity extends AppCompatActivity {
         rowsContainer = findViewById(R.id.configRowsContainer);
         findViewById(R.id.btnConfigSave).setOnClickListener(v -> saveConfig());
 
-        // Total is derived from the category amounts below — read-only.
-        etTotalBudget.setFocusable(false);
-        etTotalBudget.setClickable(false);
-        etTotalBudget.setCursorVisible(false);
-        etTotalBudget.setHint("Sum of category amounts below");
+        etTotalBudget.addTextChangedListener(simpleWatcher(this::recalcAllRowsFromTotal));
 
         loadCategoriesAndBuildTable();
     }
@@ -75,6 +71,15 @@ public class BudgetConfigActivity extends AppCompatActivity {
         categories.addAll(catDao.findByType("EXPENSE"));
 
         Map<Integer, BigDecimal> savedAmounts = templateDao.loadGlobalAmounts();
+        BigDecimal savedTotal = BigDecimal.ZERO;
+        for (BigDecimal amt : savedAmounts.values()) savedTotal = savedTotal.add(amt);
+
+        // Guard the initial setText — it fires the TextWatcher immediately,
+        // but the per-row EditTexts don't exist yet at this point.
+        suppressSync = true;
+        etTotalBudget.setText(savedTotal.compareTo(BigDecimal.ZERO) > 0
+                ? savedTotal.stripTrailingZeros().toPlainString() : "");
+        suppressSync = false;
 
         rowsContainer.removeAllViews();
         pctFields.clear();
@@ -95,11 +100,15 @@ public class BudgetConfigActivity extends AppCompatActivity {
 
             EditText etPct = new EditText(this);
             etPct.setHint("%");
-            etPct.setFocusable(false);
-            etPct.setClickable(false);
-            etPct.setCursorVisible(false);
             etPct.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
             etPct.setLayoutParams(new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
+
+            BigDecimal savedAmt = savedAmounts.get(c.getId());
+            if (savedAmt != null && savedTotal.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal pct = savedAmt.multiply(BigDecimal.valueOf(100))
+                        .divide(savedTotal, 2, RoundingMode.HALF_UP);
+                etPct.setText(pct.stripTrailingZeros().toPlainString());
+            }
             row.addView(etPct);
 
             EditText etAmt = new EditText(this);
@@ -108,59 +117,98 @@ public class BudgetConfigActivity extends AppCompatActivity {
             LinearLayout.LayoutParams amtLp = new LinearLayout.LayoutParams(dp(90), LinearLayout.LayoutParams.WRAP_CONTENT);
             amtLp.setMarginStart(dp(8));
             etAmt.setLayoutParams(amtLp);
-
-            BigDecimal savedAmt = savedAmounts.get(c.getId());
             if (savedAmt != null) etAmt.setText(savedAmt.stripTrailingZeros().toPlainString());
             row.addView(etAmt);
 
             pctFields.put(c.getId(), etPct);
             amtFields.put(c.getId(), etAmt);
 
-            etAmt.addTextChangedListener(simpleWatcher(this::recalcFromAmounts));
+            etPct.addTextChangedListener(simpleWatcher(() -> onPctChanged(c.getId())));
+            etAmt.addTextChangedListener(simpleWatcher(() -> onAmtChanged(c.getId())));
 
             rowsContainer.addView(row);
         }
 
-        recalcFromAmounts();
+        recalcAllRowsFromTotal();
     }
 
-    private BigDecimal sumOfAmounts() {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (EditText et : amtFields.values()) sum = sum.add(parse(et.getText().toString()));
-        return sum;
+    private BigDecimal totalBudget() {
+        String s = etTotalBudget.getText().toString().trim();
+        try {
+            return s.isEmpty() ? BigDecimal.ZERO : new BigDecimal(s);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
     }
 
-    private void recalcFromAmounts() {
+    // Amount typed by hand -> recompute that row's % against the total, then refresh totals.
+    private void onAmtChanged(int categoryId) {
         if (suppressSync) return;
+        BigDecimal total = totalBudget();
+        EditText etAmt = amtFields.get(categoryId);
+        EditText etPct = pctFields.get(categoryId);
+        BigDecimal amt = parse(etAmt.getText().toString());
         suppressSync = true;
+        if (total.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal pct = amt.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
+            etPct.setText(pct.stripTrailingZeros().toPlainString());
+        }
+        suppressSync = false;
+        refreshTotals();
+    }
 
-        BigDecimal total = sumOfAmounts();
-        etTotalBudget.setText(total.stripTrailingZeros().toPlainString());
+    // % typed by hand -> recompute that row's amount against the total, then refresh totals.
+    private void onPctChanged(int categoryId) {
+        if (suppressSync) return;
+        BigDecimal total = totalBudget();
+        EditText etAmt = amtFields.get(categoryId);
+        EditText etPct = pctFields.get(categoryId);
+        BigDecimal pct = parse(etPct.getText().toString());
+        suppressSync = true;
+        BigDecimal amt = total.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        etAmt.setText(amt.stripTrailingZeros().toPlainString());
+        suppressSync = false;
+        refreshTotals();
+    }
 
+    // Total typed by hand -> keep each row's % fixed, recompute amounts from it.
+    private void recalcAllRowsFromTotal() {
+        if (suppressSync) return;
+        BigDecimal total = totalBudget();
+        suppressSync = true;
         for (Category c : categories) {
-            EditText etAmt = amtFields.get(c.getId());
             EditText etPct = pctFields.get(c.getId());
-            if (etAmt == null || etPct == null) continue;
-            BigDecimal amt = parse(etAmt.getText().toString());
-            if (total.compareTo(BigDecimal.ZERO) > 0) {
-                BigDecimal pct = amt.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
-                etPct.setText(pct.stripTrailingZeros().toPlainString());
-            } else {
-                etPct.setText("");
+            EditText etAmt = amtFields.get(c.getId());
+            if (etPct == null || etAmt == null) continue;
+            BigDecimal pct = parse(etPct.getText().toString());
+            if (pct.compareTo(BigDecimal.ZERO) > 0 && total.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal amt = total.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                etAmt.setText(amt.stripTrailingZeros().toPlainString());
             }
         }
-
         suppressSync = false;
-        refreshTotals(total);
+        refreshTotals();
     }
 
-    private void refreshTotals(BigDecimal total) {
-        tvAllocated.setText("Allocated: ₹" + total.setScale(2, RoundingMode.HALF_UP).toPlainString());
-        tvRemaining.setText("Remaining: ₹0.00");
-        tvRemaining.setTextColor(getColor(R.color.green));
+    private void refreshTotals() {
+        BigDecimal total = totalBudget();
+        BigDecimal allocated = BigDecimal.ZERO;
+        for (EditText et : amtFields.values())
+            allocated = allocated.add(parse(et.getText().toString()));
+        BigDecimal remaining = total.subtract(allocated);
+
+        tvAllocated.setText("Allocated: ₹" + allocated.setScale(2, RoundingMode.HALF_UP).toPlainString());
+        tvRemaining.setText("Remaining: ₹" + remaining.setScale(2, RoundingMode.HALF_UP).toPlainString());
+        tvRemaining.setTextColor(getColor(remaining.compareTo(BigDecimal.ZERO) < 0 ? R.color.red : R.color.green));
     }
 
     private void saveConfig() {
+        BigDecimal total = totalBudget();
+        if (total.compareTo(BigDecimal.ZERO) <= 0) {
+            Toast.makeText(this, "Enter a total monthly budget first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         Map<Integer, BigDecimal> amounts = new HashMap<>();
         for (Category c : categories) {
             BigDecimal amt = parse(amtFields.get(c.getId()).getText().toString());

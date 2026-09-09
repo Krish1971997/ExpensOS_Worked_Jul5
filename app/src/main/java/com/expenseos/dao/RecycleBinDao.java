@@ -3,10 +3,14 @@ package com.expenseos.dao;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.CursorWindow;
+import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Base64;
 
 import com.expenseos.db.LocalDB;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -69,27 +73,38 @@ public class RecycleBinDao {
         RecycledItemSummary itemSummary = null;
         String recordJsonStr = null;
 
-        // Restore செய்யும்போது மட்டும் குறிப்பிட்ட 1 row-ன் record_json-ஐ எடுக்கிறோம்
+        CursorWindow window = new CursorWindow("recycle_bin_restore", 10 * 1024 * 1024); // 10 MB
+
         try (Cursor c = db.rawQuery(
                 "SELECT id, table_name, record_id, record_json, deleted_at FROM recycle_bin WHERE id=?",
                 new String[]{String.valueOf(binId)})) {
+
+            if (c instanceof SQLiteCursor) {
+                ((SQLiteCursor) c).setWindow(window);
+            }
+
             if (c.moveToFirst()) {
                 itemSummary = new RecycledItemSummary(c.getInt(0), c.getString(1), c.getInt(2), c.getString(4));
                 recordJsonStr = c.getString(3);
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            window.close(); // Memory leak illamal window-a close panrom
         }
+
         if (itemSummary == null || recordJsonStr == null) return false;
 
         db.beginTransaction();
         try {
             JSONObject obj = new JSONObject(recordJsonStr);
 
-            org.json.JSONArray receiptsArr = obj.optJSONArray("receipts_data");
-            org.json.JSONArray auditArr = obj.optJSONArray("audit_data");
-            org.json.JSONArray customValuesArr = obj.optJSONArray("custom_values_data");
-            org.json.JSONArray subCategoriesArr = obj.optJSONArray("sub_categories_data");
-            org.json.JSONArray unlinkedTxnIds = obj.optJSONArray("unlinked_transaction_ids");
-            org.json.JSONArray budgetCategoriesArr = obj.optJSONArray("budget_categories_data");
+            JSONArray receiptsArr = obj.optJSONArray("receipts_data");
+            JSONArray auditArr = obj.optJSONArray("audit_data");
+            JSONArray customValuesArr = obj.optJSONArray("custom_values_data");
+            JSONArray subCategoriesArr = obj.optJSONArray("sub_categories_data");
+            JSONArray unlinkedTxnIds = obj.optJSONArray("unlinked_transaction_ids");
+            JSONArray budgetCategoriesArr = obj.optJSONArray("budget_categories_data");
 
             obj.remove("receipts_data");
             obj.remove("audit_data");
@@ -106,7 +121,7 @@ public class RecycleBinDao {
                 Object val = obj.get(key);
                 if (val == JSONObject.NULL) cv.putNull(key);
                 else if ("file_data".equals(key) && val instanceof String)
-                    cv.put(key, android.util.Base64.decode((String) val, android.util.Base64.NO_WRAP));
+                    cv.put(key, Base64.decode((String) val, Base64.NO_WRAP));
                 else if (val instanceof Integer) cv.put(key, (Integer) val);
                 else if (val instanceof Long) cv.put(key, (Long) val);
                 else if (val instanceof Double) cv.put(key, (Double) val);
@@ -129,7 +144,7 @@ public class RecycleBinDao {
                     rCv.put("file_type", rObj.optString("file_type"));
                     rCv.put("file_size", rObj.optInt("file_size"));
                     if (!rObj.isNull("file_data"))
-                        rCv.put("file_data", android.util.Base64.decode(rObj.getString("file_data"), android.util.Base64.NO_WRAP));
+                        rCv.put("file_data", Base64.decode(rObj.getString("file_data"), Base64.NO_WRAP));
                     db.insertWithOnConflict("transaction_receipts", null, rCv, SQLiteDatabase.CONFLICT_REPLACE);
                 }
             }

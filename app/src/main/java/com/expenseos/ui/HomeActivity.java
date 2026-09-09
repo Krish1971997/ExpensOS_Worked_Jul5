@@ -118,12 +118,21 @@ public class HomeActivity extends AppCompatActivity {
                 lbl.setTextColor(getResources().getColor(set[1] == tab ? R.color.primary : R.color.text_muted, null));
         }
 
-        int[][] navIconSets = {{R.id.navHomeIcon, NAV_HOME}, {R.id.navLogIcon, NAV_LOG},
-                {R.id.navBackupIcon, NAV_BACKUP}, {R.id.navConfigIcon, NAV_CONFIG}};
-        for (int[] set : navIconSets) {
+        // Home — plain single-color line icon, colorFilter tint pannalam.
+        android.widget.ImageView homeIcon = findViewById(R.id.navHomeIcon);
+        if (homeIcon != null)
+            homeIcon.setColorFilter(getResources().getColor(tab == NAV_HOME ? R.color.primary : R.color.text_muted, null));
+
+        // Log/Scheduler/Config — full-color gradient icons, colorFilter apply
+        // pannina gradient mறைந்து poidum. Selection-ah alpha vachi kaatunga.
+        int[][] gradientIconSets = {{R.id.navLogIcon, NAV_LOG}, {R.id.navBackupIcon, NAV_BACKUP},
+                {R.id.navConfigIcon, NAV_CONFIG}};
+        for (int[] set : gradientIconSets) {
             android.widget.ImageView icon = findViewById(set[0]);
-            if (icon != null)
-                icon.setColorFilter(getResources().getColor(set[1] == tab ? R.color.primary : R.color.text_muted, null));
+            if (icon != null) {
+                icon.clearColorFilter();
+                icon.setAlpha(set[1] == tab ? 1f : 0.55f);
+            }
         }
     }
 

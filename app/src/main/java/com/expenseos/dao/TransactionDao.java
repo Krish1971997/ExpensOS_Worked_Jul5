@@ -1151,10 +1151,10 @@ public class TransactionDao {
 
 //        SQLiteDatabase db = getReadableDatabase(); // ⚠️ ungal DAO base class-la idhu evvaru access pannuranga nu adjust pannunga
         String sql = "SELECT note, MAX(txn_datetime) AS last_used FROM transactions " +
-                "WHERE book_id = ? AND note IS NOT NULL AND note != '' AND LOWER(note) LIKE ? " +
+                "WHERE  note IS NOT NULL AND note != '' AND LOWER(note) LIKE ? " + //book_id = ? AND
                 "GROUP BY LOWER(note) ORDER BY last_used DESC LIMIT ?";
         try (Cursor c = db.rawQuery(sql, new String[]{
-                String.valueOf(bookId),
+//                String.valueOf(bookId),
                 "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%",
                 String.valueOf(limit)})) {
             while (c.moveToNext()) result.add(c.getString(0));
