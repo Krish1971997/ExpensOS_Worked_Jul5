@@ -50,22 +50,29 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         void onLongClick(Transaction t);
     }
 
-    // Sealed-ish row model: either a date header (CharSequence) or a Transaction
+    // Sealed-ish row model: either a date header (CharSequence + that day's
+    // income/expense totals) or a Transaction
     private static class Row {
         final int type;
         final CharSequence headerText;
         final Transaction txn;
+        final java.math.BigDecimal headerIncome;
+        final java.math.BigDecimal headerExpense;
 
-        Row(CharSequence headerText) {
+        Row(CharSequence headerText, java.math.BigDecimal income, java.math.BigDecimal expense) {
             this.type = TYPE_HEADER;
             this.headerText = headerText;
             this.txn = null;
+            this.headerIncome = income;
+            this.headerExpense = expense;
         }
 
         Row(Transaction txn) {
             this.type = TYPE_TXN;
             this.headerText = null;
             this.txn = txn;
+            this.headerIncome = null;
+            this.headerExpense = null;
         }
     }
 
@@ -150,21 +157,40 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
     /**
      * Rebuilds the grouped row list (header + transactions) from a flat list.
+     * Each date header also carries that day's income/expense totals.
      */
     public void setData(List<Transaction> list) {
         rows.clear();
+        if (list == null) {
+            notifyDataSetChanged();
+            return;
+        }
+
+        // First pass: sum income/expense per date — headers need each day's
+        // total, not a running total, so this has to be computed up front
+        // rather than accumulated while walking the (already date-sorted) list.
+        java.util.Map<LocalDate, java.math.BigDecimal[]> totalsByDate = new java.util.HashMap<>();
+        for (Transaction t : list) {
+            LocalDateTime dt = t.getDateTime();
+            if (dt == null) continue;
+            LocalDate d = dt.toLocalDate();
+            java.math.BigDecimal[] totals = totalsByDate.computeIfAbsent(d,
+                    k -> new java.math.BigDecimal[]{java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO});
+            java.math.BigDecimal amt = t.getAmount() != null ? t.getAmount() : java.math.BigDecimal.ZERO;
+            if (t.getType() == Transaction.Type.INCOME) totals[0] = totals[0].add(amt);
+            else totals[1] = totals[1].add(amt);
+        }
+
         LocalDate lastDate = null;
-        if (list != null) {
-            for (Transaction t : list) {
-                LocalDateTime dt = t.getDateTime();
-                LocalDate d = dt != null ? dt.toLocalDate() : null;
-                if (d != null && !d.equals(lastDate)) {
-                    // 🔥 NEW: formatHeaderDate method மூலம் "19 Tue 05.2026" Style-ல் Header உருவாக்கப்படுகிறது
-                    rows.add(new Row(formatHeaderDate(dt)));
-                    lastDate = d;
-                }
-                rows.add(new Row(t));
+        for (Transaction t : list) {
+            LocalDateTime dt = t.getDateTime();
+            LocalDate d = dt != null ? dt.toLocalDate() : null;
+            if (d != null && !d.equals(lastDate)) {
+                java.math.BigDecimal[] totals = totalsByDate.get(d);
+                rows.add(new Row(formatHeaderDate(dt), totals[0], totals[1]));
+                lastDate = d;
             }
+            rows.add(new Row(t));
         }
         notifyDataSetChanged();
     }
@@ -175,11 +201,12 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class HeaderVH extends RecyclerView.ViewHolder {
-        TextView tvHeader;
+        TextView tvHeader, tvTotals;
 
         HeaderVH(View v) {
             super(v);
-            tvHeader = (TextView) v;
+            tvHeader = v.findViewById(R.id.tvHeaderDate);
+            tvTotals = v.findViewById(R.id.tvHeaderTotals);
         }
     }
 
@@ -218,7 +245,9 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         Row row = rows.get(pos);
 
         if (row.type == TYPE_HEADER) {
-            ((HeaderVH) holder).tvHeader.setText(row.headerText);
+            HeaderVH hh = (HeaderVH) holder;
+            hh.tvHeader.setText(row.headerText);
+            hh.tvTotals.setText(buildHeaderTotalsText(row.headerIncome, row.headerExpense));
             return;
         }
 
@@ -320,12 +349,19 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     // ── Header Date Formatting: "19 Tue 05.2026" ─────────────────────
+    // Day badge is colored by weekend day: Saturday = blue, Sunday = red,
+    // every other day keeps the neutral gray.
     public CharSequence formatHeaderDate(LocalDateTime dateTime) {
         if (dateTime == null) return "";
 
         String dayNumber = dateTime.format(DateTimeFormatter.ofPattern("dd"));       // e.g., "19"
         String dayName = " " + dateTime.format(DateTimeFormatter.ofPattern("EEE")) + " "; // e.g., " Tue "
         String monthYear = " " + dateTime.format(DateTimeFormatter.ofPattern("MM.yyyy")); // e.g., " 05.2026"
+
+        java.time.DayOfWeek dow = dateTime.getDayOfWeek();
+        String badgeColor = dow == java.time.DayOfWeek.SATURDAY ? "#1565C0"
+                : dow == java.time.DayOfWeek.SUNDAY ? "#D32F2F"
+                  : "#808080";
 
         SpannableStringBuilder builder = new SpannableStringBuilder();
 
@@ -336,11 +372,11 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new ForegroundColorSpan(Color.BLACK), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
-        // 2. Day Badge ( Tue ) - Highlight Background
+        // 2. Day Badge ( Tue ) - Highlight Background, colored by weekend day
         builder.append(" ");
         start = builder.length();
         builder.append(dayName);
-        builder.setSpan(new BackgroundColorSpan(Color.parseColor("#808080")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new BackgroundColorSpan(Color.parseColor(badgeColor)), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new ForegroundColorSpan(Color.WHITE), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new AbsoluteSizeSpan(12, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         builder.setSpan(new StyleSpan(Typeface.BOLD), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -352,6 +388,26 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         builder.setSpan(new ForegroundColorSpan(Color.parseColor("#6B7280")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         return builder;
+    }
+
+    // ── Per-day income/expense totals shown at the right of the header ──
+    private CharSequence buildHeaderTotalsText(java.math.BigDecimal income, java.math.BigDecimal expense) {
+        String incStr = "₹" + (income != null ? income.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "0.00");
+        String expStr = "₹" + (expense != null ? expense.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() : "0.00");
+
+        SpannableStringBuilder sb = new SpannableStringBuilder();
+
+        int start = sb.length();
+        sb.append(incStr);
+        sb.setSpan(new ForegroundColorSpan(Color.parseColor("#1565C0")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        sb.append("   ");
+
+        start = sb.length();
+        sb.append(expStr);
+        sb.setSpan(new ForegroundColorSpan(Color.parseColor("#D32F2F")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+        return sb;
     }
 
     private void loadBookNames() {

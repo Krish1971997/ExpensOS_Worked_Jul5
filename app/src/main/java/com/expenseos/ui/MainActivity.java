@@ -72,8 +72,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        findViewById(R.id.navSettings).setOnClickListener(v ->
-                startActivity(new Intent(this, SettingsActivity.class)));
+//        findViewById(R.id.navSettings).setOnClickListener(v ->
+//                startActivity(new Intent(this, SettingsActivity.class)));
+
+        findViewById(R.id.navFoodTracker).setOnClickListener(v ->
+                startActivity(new Intent(this, com.expenseos.ui.FoodTrackerActivity.class)));
 
         findViewById(R.id.navIntegrations).setOnClickListener(v ->
                 startActivity(new Intent(this, IntegrationsActivity.class)));

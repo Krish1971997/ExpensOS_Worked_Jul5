@@ -303,7 +303,8 @@ public class SchedulerWorker extends Worker {
         String[] namesToCreate = {
                 thisMonthName,                          // e.g. "August 2026"
                 thisMonthName + " Expense",              // e.g. "August 2026 Expense"
-                nextMonthName + " Credit Card"           // e.g. "September 2026 Credit Card"
+                nextMonthName + " Credit Card",          // e.g. "September 2026 Credit Card"
+                thisMonthName + " Food"                  // e.g. "August 2026 Food" — FoodTrackerActivity idha use pannudhu
         };
 
         com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);

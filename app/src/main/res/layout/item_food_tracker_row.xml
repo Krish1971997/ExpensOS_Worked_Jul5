@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="6dp">
+
+    <TextView
+        android:id="@+id/tvFtSNo"
+        android:layout_width="24dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_muted"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/tvFtDate"
+        android:layout_width="70dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/tvFtDay"
+        android:layout_width="60dp"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/text_muted"
+        android:textSize="11sp" />
+
+    <EditText
+        android:id="@+id/etFtBreakfast"
+        android:layout_width="0dp"
+        android:layout_height="36dp"
+        android:layout_weight="1"
+        android:layout_marginHorizontal="2dp"
+        android:background="@drawable/bg_input_box"
+        android:gravity="center"
+        android:inputType="numberDecimal"
+        android:selectAllOnFocus="true"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/etFtLunch"
+        android:layout_width="0dp"
+        android:layout_height="36dp"
+        android:layout_weight="1"
+        android:layout_marginHorizontal="2dp"
+        android:background="@drawable/bg_input_box"
+        android:gravity="center"
+        android:inputType="numberDecimal"
+        android:selectAllOnFocus="true"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/etFtDinner"
+        android:layout_width="0dp"
+        android:layout_height="36dp"
+        android:layout_weight="1"
+        android:layout_marginHorizontal="2dp"
+        android:background="@drawable/bg_input_box"
+        android:gravity="center"
+        android:inputType="numberDecimal"
+        android:selectAllOnFocus="true"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tvFtTotal"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="₹0"
+        android:textColor="@color/primary"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+</LinearLayout>

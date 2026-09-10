@@ -1145,6 +1145,7 @@ public class TransactionDao {
      * kudukkum — TransactionEntryActivity/TransactionDetailActivity-oda Note
      * autocomplete dropdown-ku.
      */
+
     public List<String> findDistinctNotesContaining(String query, int bookId, int limit) {
         List<String> result = new ArrayList<>();
         if (query == null || query.trim().isEmpty()) return result;
@@ -1158,6 +1159,30 @@ public class TransactionDao {
                 "%" + query.trim().toLowerCase(java.util.Locale.ROOT) + "%",
                 String.valueOf(limit)})) {
             while (c.moveToNext()) result.add(c.getString(0));
+        }
+        return result;
+    }
+
+    /**
+     * FoodTrackerActivity-ku — andha "<Month> Food" book-oda ella Food-
+     * category transactions-ayும், date + sub-category name vachi oru Map-ah
+     * kudukkum (key: "yyyy-MM-dd|BREAKFAST"/"LUNCH"/"DINNER" — uppercase).
+     * Grid load/refresh idha use pannudhu — direct-ah andha cashbook-ku
+     * poi manual-ah add pannina entries-um idhula automatic-ah varum.
+     */
+    public Map<String, Transaction> findFoodEntriesForBook(int bookId, int foodCategoryId) {
+        Map<String, Transaction> result = new LinkedHashMap<>();
+        String sql = baseSelect() + " WHERE t.book_id=? AND t.category_id=?";
+        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(bookId), String.valueOf(foodCategoryId)})) {
+            List<Transaction> rowsList = new ArrayList<>();
+            while (c.moveToNext()) rowsList.add(mapRow(c));
+            loadCustomValues(rowsList);
+            for (Transaction t : rowsList) {
+                if (t.getSubCategoryName() == null) continue;
+                String key = t.getDateTime().toLocalDate() + "|" +
+                        t.getSubCategoryName().trim().toUpperCase(java.util.Locale.ROOT);
+                result.put(key, t);
+            }
         }
         return result;
     }

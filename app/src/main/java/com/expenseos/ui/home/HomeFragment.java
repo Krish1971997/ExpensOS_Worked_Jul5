@@ -68,7 +68,7 @@ public class HomeFragment extends Fragment {
     private EditText etSearch;
     private ImageButton btnFilter;
     private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType;
-    private View rowViewReports, rowStats;
+    private View rowViewReports, rowStats; //, rowFoodTracker;
     private TextView tvEntryCount, btnSortField, btnSortToggle;
     private boolean sortAscending = false;
     private String currentSortBy = "date"; // default sort field
@@ -97,6 +97,8 @@ public class HomeFragment extends Fragment {
         chipPaymentType = root.findViewById(R.id.chipPaymentType);
         rowViewReports = root.findViewById(R.id.rowViewReports);
         rowStats = root.findViewById(R.id.rowStats);
+        // rowStats bind aana adjacent line-ku apparam add pannunga
+//        rowFoodTracker = root.findViewById(R.id.rowFoodTracker);
         tvEntryCount = root.findViewById(R.id.tvEntryCount);
         btnSortField = root.findViewById(R.id.btnSortField);
         btnSortToggle = root.findViewById(R.id.btnSortToggle);
@@ -187,6 +189,9 @@ public class HomeFragment extends Fragment {
             i.putExtra("scopeBookId", AppConfig.get(requireContext()).getActiveBookId());
             startActivity(i);
         });
+
+//        rowFoodTracker.setOnClickListener(v ->
+//                startActivity(new Intent(requireContext(), com.expenseos.ui.FoodTrackerActivity.class)));
 
         Button btnIncome = root.findViewById(R.id.btn_add_income);
         Button btnExpense = root.findViewById(R.id.btn_add_expense);
