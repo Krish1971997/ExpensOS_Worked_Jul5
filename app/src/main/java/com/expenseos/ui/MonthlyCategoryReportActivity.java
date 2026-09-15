@@ -82,7 +82,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         findViewById(R.id.btnGenerateReport).setOnClickListener(v -> generateReport());
         findViewById(R.id.btnExportEmail).setOnClickListener(v -> emailReport());
         findViewById(R.id.btnExportPdf).setOnClickListener(v -> exportPdf());
-        findViewById(R.id.btnExportExcel).setOnClickListener(v -> exportExcel());
+        findViewById(R.id.btnExportExcel).setOnClickListener(v -> showExcelOptionsSheet());
     }
 
     @Override
@@ -290,6 +290,95 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
                 mainHandler.post(() -> Toast.makeText(this, "PDF export failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         });
+    }
+
+    // exportExcel() method-க்கு முன்னாடி இதை சேருங்க
+    private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    // ── Excel — Show Preview / Save to Downloads Folder ───────
+    private void showExcelOptionsSheet() {
+        if (currentResult == null) return;
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        android.widget.LinearLayout container = new android.widget.LinearLayout(this);
+        container.setOrientation(android.widget.LinearLayout.VERTICAL);
+        container.setPadding(0, dp(8), 0, dp(16));
+
+        android.widget.TextView title = new android.widget.TextView(this);
+        title.setText("Excel report");
+        title.setTextSize(16);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setPadding(dp(20), dp(12), dp(20), dp(12));
+        container.addView(title);
+
+        container.addView(sheetOption("👁", "Show Preview", () -> {
+            sheet.dismiss();
+            previewExcel();
+        }));
+        container.addView(sheetOption("⬇", "Save to Downloads Folder", () -> {
+            sheet.dismiss();
+            exportExcel();
+        }));
+
+        sheet.setContentView(container);
+        sheet.show();
+    }
+
+    private void previewExcel() {
+        exec.execute(() -> {
+            try {
+                File dir = new File(getCacheDir(), "reports");
+                if (!dir.exists()) dir.mkdirs();
+                File xlsxFile = new File(dir, "preview_" + System.currentTimeMillis() + ".xlsx");
+                try (FileOutputStream out = new FileOutputStream(xlsxFile)) {
+                    CategoryComparisonReport.writeXlsx(currentResult, cashbookName, out);
+                }
+                android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                        this, getPackageName() + ".fileprovider", xlsxFile);
+                mainHandler.post(() -> {
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                    intent.setDataAndType(uri, XLSX_MIME);
+                    intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        startActivity(intent);
+                    } catch (android.content.ActivityNotFoundException e) {
+                        Toast.makeText(this, "No app found to open Excel files", Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(this, "Couldn't generate preview: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private View sheetOption(String emoji, String label, Runnable onClick) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(this);
+        row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), dp(14), dp(20), dp(14));
+        row.setClickable(true);
+        row.setFocusable(true);
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        row.setBackgroundResource(outValue.resourceId);
+
+        android.widget.TextView tvEmoji = new android.widget.TextView(this);
+        tvEmoji.setText(emoji);
+        tvEmoji.setTextSize(18);
+        tvEmoji.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(32), android.widget.LinearLayout.LayoutParams.WRAP_CONTENT));
+        row.addView(tvEmoji);
+
+        android.widget.TextView tvLabel = new android.widget.TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(16);
+        tvLabel.setTextColor(getColor(R.color.text_primary));
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = dp(16);
+        tvLabel.setLayoutParams(lp);
+        row.addView(tvLabel);
+
+        row.setOnClickListener(v -> onClick.run());
+        return row;
     }
 
     private void exportExcel() {

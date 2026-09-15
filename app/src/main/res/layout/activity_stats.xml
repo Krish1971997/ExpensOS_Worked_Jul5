@@ -49,6 +49,14 @@
             android:layout_height="36dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_media_next" />
+
+        <ImageButton
+            android:id="@+id/btnStatsMenu"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Export"
+            android:src="@drawable/ic_more_vert" />
     </LinearLayout>
 
     <View

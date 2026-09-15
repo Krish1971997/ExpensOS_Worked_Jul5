@@ -414,23 +414,54 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- RecyclerView -->
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe_refresh"
+    <!-- Transactions content -->
+    <FrameLayout
+        android:id="@+id/transactionsContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginBottom="72dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_transactions"
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_transactions"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/white"
+                android:clipToPadding="false"
+                android:paddingHorizontal="8dp"
+                android:paddingBottom="8dp" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+        <LinearLayout
+            android:id="@+id/layoutNoTransactions"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@android:color/white"
-            android:clipToPadding="false"
-            android:paddingHorizontal="8dp"
-            android:paddingBottom="8dp" />
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_no_transactions"
+                app:tint="#C4CAD1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="No transactions"
+                android:textColor="#666666"
+                android:textSize="17sp" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Fixed Bottom Bar -->
     <LinearLayout

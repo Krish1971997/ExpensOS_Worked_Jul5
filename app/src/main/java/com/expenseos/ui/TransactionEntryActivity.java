@@ -236,10 +236,12 @@ public class TransactionEntryActivity extends AppCompatActivity {
         // the dropdown still opens as normal after).
         dismissKeyboardOnTouch(spPaymentType);
 
+        // NEW — CategoryPickerSheet.show() now takes bookId (int) as its 4th param
+// instead of a nullable pre-selected category id — used by the sheet's ✎
+// edit button to jump straight to Settings → Categories for this book.
         tvCategoryField.setOnClickListener(v -> {
             hideKeyboard();
-            CategoryPickerSheet.show(this, currentCategories, subCatDao,
-                    selectedCategory != null ? selectedCategory.getId() : null,
+            CategoryPickerSheet.show(this, currentCategories, subCatDao, bookId,
                     (category, subCategory) -> {
                         selectedCategory = category;
                         selectedSubCategory = subCategory;
@@ -378,17 +380,25 @@ public class TransactionEntryActivity extends AppCompatActivity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {
             }
 
+            // restores the keyword→category suggestion trigger, lost when the
+// note field's TextWatcher was merged with the note-autocomplete one
+// during the CategoryPickerSheet refactor. Two independent debounced
+// callbacks on the same keystroke — noteSuggestHandler for past-note
+// autocomplete, suggestHandler for the 💡 category/sub-category chip.
+
+            //this TextWatcher's only job is the 💡 keyword->category suggestion.
+            // Past-note autocomplete (the ListPopupWindow) is wireNoteSuggestions()'s
+// own, separate TextWatcher on the same etNote — it already debounces and
+// correctly respects suppressNoteSuggestion after a pick. Duplicating that
+// scheduling here meant a SECOND, suppress-blind call to
+// showNoteSuggestions() fired right after every pick, instantly reopening
+// the popup the user had just dismissed.
             @Override
             public void afterTextChanged(Editable e) {
-                if (suppressNoteSuggestion) {
-                    suppressNoteSuggestion = false;
-                    return;
-                }
-                if (noteSuggestRunnable != null)
-                    noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
                 String text = e.toString();
-                noteSuggestRunnable = () -> showNoteSuggestions(text);
-                noteSuggestHandler.postDelayed(noteSuggestRunnable, 250);
+                if (suggestRunnable != null) suggestHandler.removeCallbacks(suggestRunnable);
+                suggestRunnable = () -> showKeywordSuggestion(text);
+                suggestHandler.postDelayed(suggestRunnable, 350);
             }
         });
 
@@ -924,8 +934,16 @@ public class TransactionEntryActivity extends AppCompatActivity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {
             }
 
+            // NEW — this was the actual missing piece: suppressNoteSuggestion was being
+// SET (in the popup's item-click handler) but never CHECKED here, so the
+// text change from etNote.setText(picked) always rescheduled
+// showNoteSuggestions(), reopening the very popup the user just dismissed.
             @Override
             public void afterTextChanged(Editable e) {
+                if (suppressNoteSuggestion) {
+                    suppressNoteSuggestion = false;
+                    return;
+                }
                 if (noteSuggestRunnable != null)
                     noteSuggestHandler.removeCallbacks(noteSuggestRunnable);
                 String text = e.toString();

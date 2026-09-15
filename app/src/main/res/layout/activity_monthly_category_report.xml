@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
@@ -46,7 +47,7 @@
             android:padding="14dp">
 
             <!-- Dynamic filter -->
-            <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
@@ -99,9 +100,6 @@
                 android:textSize="12sp"
                 android:visibility="gone" />
 
-            <!-- Header + rows ஒரே HorizontalScrollView-ku ulla — months count
-                 romba adhigama irundha table screen width vida wide aagum,
-                 appo header-um rows-um automatic-ah sync-ah horizontal-ah scroll aagum. -->
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -112,8 +110,6 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <!-- Table header — Category / month labels / % Chg cells ellam
-                         MonthlyCategoryReportActivity.buildHeaderRow() runtime-la add pannudhu. -->
                     <LinearLayout
                         android:id="@+id/rowMcrHeader"
                         android:layout_width="wrap_content"
@@ -131,7 +127,6 @@
                         android:background="@android:color/white"
                         android:nestedScrollingEnabled="false" />
 
-                    <!-- Total row — MonthlyCategoryReportActivity.buildTotalRow() runtime-la fill pannudhu -->
                     <LinearLayout
                         android:id="@+id/rowMcrTotal"
                         android:layout_width="wrap_content"
@@ -156,43 +151,75 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- Export bar -->
+    <!-- Export bar (Horizontal Layout with 3 equal buttons) -->
     <LinearLayout
         android:id="@+id/exportBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/nav_bg"
+        android:background="@color/surface"
         android:orientation="horizontal"
-        android:padding="10dp"
+        android:padding="8dp"
         android:visibility="gone">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnExportEmail"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:text="✉ Email"
-            android:textSize="12sp" />
+            android:layout_marginEnd="4dp"
+            android:padding="0dp"
+            android:text="EMAIL"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            app:backgroundTint="@color/surface"
+            app:icon="@drawable/ic_email"
+            app:iconGravity="textStart"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@null"
+            app:strokeColor="@color/border"
+            app:strokeWidth="1dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnExportPdf"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:text="📄 PDF"
-            android:textSize="12sp" />
+            android:layout_marginHorizontal="2dp"
+            android:padding="0dp"
+            android:text="PDF"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            app:backgroundTint="@color/surface"
+            app:icon="@drawable/ic_pdf"
+            app:iconGravity="textStart"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@null"
+            app:strokeColor="@color/border"
+            app:strokeWidth="1dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnExportExcel"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
             android:layout_weight="1"
-            android:text="📊 Excel"
-            android:textSize="12sp" />
+            android:layout_marginStart="4dp"
+            android:padding="0dp"
+            android:text="EXCEL"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            app:backgroundTint="@color/surface"
+            app:icon="@drawable/ic_excel"
+            app:iconGravity="textStart"
+            app:iconPadding="4dp"
+            app:iconSize="18dp"
+            app:iconTint="@null"
+            app:strokeColor="@color/border"
+            app:strokeWidth="1dp" />
     </LinearLayout>
+
 </LinearLayout>

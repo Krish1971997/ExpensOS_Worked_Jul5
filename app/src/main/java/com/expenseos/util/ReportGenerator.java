@@ -17,6 +17,14 @@ import com.itextpdf.text.pdf.PdfPageEventHelper;
 import com.itextpdf.text.pdf.PdfTemplate;
 import com.itextpdf.text.pdf.PdfWriter;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
@@ -50,6 +58,126 @@ public class ReportGenerator {
             default -> writeAllEntriesCsv(txns, w);
         }
         w.flush();
+    }
+
+    // writeCsv() method-க்கு கீழே (before "── PDF (iText 5)" section) இதை முழுசா சேருங்க
+    // ── Excel (.xlsx via Apache POI) ─────────────────────────
+    public static void writeXlsx(List<Transaction> txns, String reportType, OutputStream out) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Report");
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFillForegroundColor(IndexedColors.BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            org.apache.poi.ss.usermodel.Font headerFont = wb.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+
+            switch (reportType) {
+                case TYPE_DAYWISE -> writeDaywiseXlsx(txns, sheet, headerStyle);
+                case TYPE_CATEGORYWISE -> writeCategorywiseXlsx(txns, sheet, headerStyle);
+                case TYPE_SUBCATEGORYWISE -> writeSubcategorywiseXlsx(txns, sheet, headerStyle);
+                case TYPE_PAYMENTTYPEWISE -> writePaymentTypewiseXlsx(txns, sheet, headerStyle);
+                default -> writeAllEntriesXlsx(txns, sheet, headerStyle);
+            }
+            // autoSizeColumn() needs java.awt.font.FontRenderContext for text
+            // measurement — AWT isn't available on Android, so it crashes
+            // with NoClassDefFoundError. Set reasonable fixed widths instead
+            // (POI widths are in 1/256 of a character width). 8 columns
+            // covers the widest report type (All Entries); narrower report
+            // types simply leave the extra columns unused.
+            int[] colWidths = {14, 10, 8, 20, 20, 14, 12, 28}; // Date,Time,Type,Category,SubCat,PaymentType,Amount,Note
+            for (int i = 0; i < colWidths.length; i++) {
+                sheet.setColumnWidth(i, colWidths[i] * 256);
+            }
+            wb.write(out);
+        }
+    }
+
+    private static void writeAllEntriesXlsx(List<Transaction> txns, Sheet sheet, CellStyle headerStyle) {
+        Row header = sheet.createRow(0);
+        String[] cols = {"Date", "Time", "Type", "Category", "Sub Category", "Payment Type", "Amount", "Note"};
+        for (int i = 0; i < cols.length; i++) setHeader(header, i, cols[i], headerStyle);
+        int r = 1;
+        for (Transaction t : txns) {
+            Row row = sheet.createRow(r++);
+            row.createCell(0).setCellValue(t.getDateTime() != null ? t.getDateTime().format(DATE_FMT) : "");
+            row.createCell(1).setCellValue(t.getDateTime() != null ? t.getDateTime().format(TIME_FMT) : "");
+            row.createCell(2).setCellValue(t.getType().name());
+            row.createCell(3).setCellValue(t.getCategoryName() != null ? t.getCategoryName() : "");
+            row.createCell(4).setCellValue(t.getSubCategoryName() != null ? t.getSubCategoryName() : "");
+            row.createCell(5).setCellValue(t.getPaymentTypeName() != null ? t.getPaymentTypeName() : "");
+            row.createCell(6).setCellValue(t.getAmount() != null ? t.getAmount().doubleValue() : 0);
+            row.createCell(7).setCellValue(t.getNote() != null ? t.getNote() : "");
+        }
+    }
+
+    private static void writeDaywiseXlsx(List<Transaction> txns, Sheet sheet, CellStyle headerStyle) {
+        Row header = sheet.createRow(0);
+        String[] cols = {"Date", "Total In", "Total Out", "Balance"};
+        for (int i = 0; i < cols.length; i++) setHeader(header, i, cols[i], headerStyle);
+        int r = 1;
+        BigDecimal running = BigDecimal.ZERO;
+        for (Map.Entry<String, BigDecimal[]> e : dayTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            running = running.add(in).subtract(out);
+            Row row = sheet.createRow(r++);
+            row.createCell(0).setCellValue(e.getKey());
+            row.createCell(1).setCellValue(in.doubleValue());
+            row.createCell(2).setCellValue(out.doubleValue());
+            row.createCell(3).setCellValue(running.doubleValue());
+        }
+    }
+
+    private static void writeCategorywiseXlsx(List<Transaction> txns, Sheet sheet, CellStyle headerStyle) {
+        Row header = sheet.createRow(0);
+        String[] cols = {"Category", "Income", "Expense", "Net"};
+        for (int i = 0; i < cols.length; i++) setHeader(header, i, cols[i], headerStyle);
+        int r = 1;
+        for (Map.Entry<String, BigDecimal[]> e : categoryTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            Row row = sheet.createRow(r++);
+            row.createCell(0).setCellValue(e.getKey());
+            row.createCell(1).setCellValue(in.doubleValue());
+            row.createCell(2).setCellValue(out.doubleValue());
+            row.createCell(3).setCellValue(in.subtract(out).doubleValue());
+        }
+    }
+
+    private static void writeSubcategorywiseXlsx(List<Transaction> txns, Sheet sheet, CellStyle headerStyle) {
+        Row header = sheet.createRow(0);
+        String[] cols = {"Sub Category", "Income", "Expense", "Net"};
+        for (int i = 0; i < cols.length; i++) setHeader(header, i, cols[i], headerStyle);
+        int r = 1;
+        for (Map.Entry<String, BigDecimal[]> e : subCategoryTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            Row row = sheet.createRow(r++);
+            row.createCell(0).setCellValue(e.getKey());
+            row.createCell(1).setCellValue(in.doubleValue());
+            row.createCell(2).setCellValue(out.doubleValue());
+            row.createCell(3).setCellValue(in.subtract(out).doubleValue());
+        }
+    }
+
+    private static void writePaymentTypewiseXlsx(List<Transaction> txns, Sheet sheet, CellStyle headerStyle) {
+        Row header = sheet.createRow(0);
+        String[] cols = {"Payment Type", "Income", "Expense", "Net"};
+        for (int i = 0; i < cols.length; i++) setHeader(header, i, cols[i], headerStyle);
+        int r = 1;
+        for (Map.Entry<String, BigDecimal[]> e : paymentTypeTotals(txns).entrySet()) {
+            BigDecimal in = e.getValue()[0], out = e.getValue()[1];
+            Row row = sheet.createRow(r++);
+            row.createCell(0).setCellValue(e.getKey());
+            row.createCell(1).setCellValue(in.doubleValue());
+            row.createCell(2).setCellValue(out.doubleValue());
+            row.createCell(3).setCellValue(in.subtract(out).doubleValue());
+        }
+    }
+
+    private static void setHeader(Row row, int col, String text, CellStyle style) {
+        Cell cell = row.createCell(col);
+        cell.setCellValue(text);
+        cell.setCellStyle(style);
     }
 
     private static void writeAllEntriesCsv(List<Transaction> txns, Writer w) throws Exception {

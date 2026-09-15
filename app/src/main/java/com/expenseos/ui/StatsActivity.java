@@ -1,15 +1,20 @@
 package com.expenseos.ui;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -18,17 +23,42 @@ import com.expenseos.adapter.StatsCategoryAdapter;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.CashBook;
+import com.expenseos.util.GmailSender;
 import com.expenseos.util.MonthBookResolver;
 import com.github.mikephil.charting.charts.PieChart;
 import com.github.mikephil.charting.data.PieData;
 import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.Image;
+import com.itextpdf.text.PageSize;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class StatsActivity extends AppCompatActivity {
 
@@ -57,6 +87,10 @@ public class StatsActivity extends AppCompatActivity {
     private Spinner spSeriesFilter, spBookFilter;
     private boolean isHomeEntry;
     private boolean suppressBookFilterCallback; // guards Android's async auto-fire on setAdapter
+    private final ExecutorService exec = Executors.newSingleThreadExecutor();
+    private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    // Last-rendered category breakdown, kept for export — set inside refresh()
+    private final List<StatsCategoryRow> lastCategoryRows = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle s) {
@@ -64,6 +98,7 @@ public class StatsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_stats);
 
         findViewById(R.id.btnStatsBack).setOnClickListener(v -> finish());
+        findViewById(R.id.btnStatsMenu).setOnClickListener(this::showExportMenu);
 
         btnPrevMonth = findViewById(R.id.btnPrevMonth);
         btnNextMonth = findViewById(R.id.btnNextMonth);
@@ -293,6 +328,7 @@ public class StatsActivity extends AppCompatActivity {
         }
 
         if (book == null) {
+            lastCategoryRows.clear();
             pieChart.setVisibility(View.GONE);
             rvCategories.setVisibility(View.GONE);
             tvEmpty.setVisibility(View.VISIBLE);
@@ -313,6 +349,8 @@ public class StatsActivity extends AppCompatActivity {
         for (Map<String, Object> r : rows) total = total.add((BigDecimal) r.get("total"));
         tvTotalBalance.setText("₹" + total.toPlainString());
 
+        lastCategoryRows.clear();
+
         if (rows.isEmpty()) {
             pieChart.setVisibility(View.GONE);
             rvCategories.setVisibility(View.GONE);
@@ -324,11 +362,22 @@ public class StatsActivity extends AppCompatActivity {
         pieChart.setVisibility(View.VISIBLE);
         rvCategories.setVisibility(View.VISIBLE);
 
-        // Pie
+        // Pie + export snapshot (lastCategoryRows) — same loop, same %
+        // formula StatsCategoryAdapter uses, so on-screen list and
+        // PDF/Excel export ellame ஒரே data-ah kaatum.
         List<PieEntry> entries = new ArrayList<>();
         int[] colors = {0xFFF59E0B, 0xFF16A34A, 0xFFDC2626, 0xFF2563EB, 0xFF7C3AED, 0xFF0891B2};
         for (Map<String, Object> r : rows) {
-            entries.add(new PieEntry(((BigDecimal) r.get("total")).floatValue(), (String) r.get("name")));
+            BigDecimal amount = (BigDecimal) r.get("total");
+            entries.add(new PieEntry(amount.floatValue(), (String) r.get("name")));
+
+            StatsCategoryRow row = new StatsCategoryRow();
+            row.name = (String) r.get("name");
+            row.amount = amount;
+            row.percent = amount.multiply(BigDecimal.valueOf(100))
+                    .divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP)
+                    .doubleValue();
+            lastCategoryRows.add(row);
         }
         PieDataSet ds = new PieDataSet(entries, "");
         ds.setColors(colors, 255);
@@ -355,5 +404,307 @@ public class StatsActivity extends AppCompatActivity {
             i.putExtra("seriesSuffix", directBook != null ? "" : seriesSuffix);
             startActivity(i);
         }));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        exec.shutdown();
+    }
+
+    // Plain data holder for export — filled from whatever populates
+    // rvCategories/StatsCategoryAdapter today. Wire the 3 setters below
+    // into refresh()'s existing category-loop so exports stay in sync
+    // with what's on screen.
+    private static class StatsCategoryRow {
+        String name;
+        double percent;
+        BigDecimal amount;
+    }
+
+    // ══════════════════════════════════════════════════════
+    // Export — Email / PDF (with chart image) / Excel
+    // ══════════════════════════════════════════════════════
+// NEW — same three actions, icon-capable bottom sheet instead of PopupMenu
+    private void showExportMenu(View anchor) {
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        android.widget.LinearLayout container = new android.widget.LinearLayout(this);
+        container.setOrientation(android.widget.LinearLayout.VERTICAL);
+        container.setPadding(0, dp(8), 0, dp(16));
+
+        container.addView(iconRow(R.drawable.ic_email, "Email", () -> {
+            sheet.dismiss();
+            showEmailDialog();
+        }));
+        container.addView(iconRow(R.drawable.ic_pdf, "PDF", () -> {
+            sheet.dismiss();
+            exportPdf();
+        }));
+        container.addView(iconRow(R.drawable.ic_excel, "Excel", () -> {
+            sheet.dismiss();
+            exportExcel();
+        }));
+
+        sheet.setContentView(container);
+        sheet.show();
+    }
+
+    private View iconRow(int iconRes, String label, Runnable onClick) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(this);
+        row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), dp(14), dp(20), dp(14));
+        row.setClickable(true);
+        row.setFocusable(true);
+        android.util.TypedValue outValue = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        row.setBackgroundResource(outValue.resourceId);
+
+        android.widget.ImageView icon = new android.widget.ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setLayoutParams(new android.widget.LinearLayout.LayoutParams(dp(28), dp(28)));
+        row.addView(icon);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(16);
+        tvLabel.setTextColor(getColor(R.color.text_primary));
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
+                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = dp(16);
+        tvLabel.setLayoutParams(lp);
+        row.addView(tvLabel);
+
+        row.setOnClickListener(v -> onClick.run());
+        return row;
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
+    private String reportTitle() {
+        return (showExpense ? "Expense" : "Income") + " — " + tvMonth.getText();
+    }
+
+    // Renders the live PieChart view into a Bitmap for the PDF.
+    private Bitmap capturePieChart() {
+        Bitmap bmp = Bitmap.createBitmap(pieChart.getWidth(), pieChart.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bmp);
+        canvas.drawColor(Color.WHITE);
+        pieChart.draw(canvas);
+        return bmp;
+    }
+
+    private void exportPdf() {
+        Bitmap chartBmp = capturePieChart();
+        exec.execute(() -> {
+            try {
+                File dir = new File(getCacheDir(), "reports");
+                if (!dir.exists()) dir.mkdirs();
+                File pdfFile = new File(dir, "stats_" + System.currentTimeMillis() + ".pdf");
+                try (FileOutputStream out = new FileOutputStream(pdfFile)) {
+                    writeStatsPdf(out, chartBmp);
+                }
+                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
+                runOnUiThread(() -> {
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setDataAndType(uri, "application/pdf");
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(intent);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "PDF failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void exportExcel() {
+        // Preview, not a silent save — writes to the app's cache and opens
+        // it via ACTION_VIEW so the user's spreadsheet app (Sheets, Excel,
+        // WPS, etc.) shows it first; they choose to save/share from there.
+        // Mirrors exportPdf()'s pattern rather than DownloadsSaver's
+        // straight-to-Downloads write.
+        exec.execute(() -> {
+            try {
+                File dir = new File(getCacheDir(), "reports");
+                if (!dir.exists()) dir.mkdirs();
+                File xlsxFile = new File(dir, "stats_" + System.currentTimeMillis() + ".xlsx");
+                try (FileOutputStream out = new FileOutputStream(xlsxFile)) {
+                    writeStatsXlsx(out);
+                }
+                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", xlsxFile);
+                runOnUiThread(() -> {
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setDataAndType(uri, XLSX_MIME);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    try {
+                        startActivity(intent);
+                    } catch (android.content.ActivityNotFoundException e) {
+                        Toast.makeText(this, "No app found to preview Excel files — install Google Sheets, Excel, or WPS Office.", Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Excel failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private void showEmailDialog() {
+        // Sends straight to the address configured in Config
+        // (scheduler.alert.email) — no confirm dialog, no manual typing.
+        String configuredEmail = com.expenseos.util.AppConfig.get(this).getSchedulerAlertEmail();
+        if (configuredEmail == null || configuredEmail.isBlank()) {
+            Toast.makeText(this,
+                    "No email configured — set it under Config first.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        sendEmail(configuredEmail);
+    }
+
+    private void sendEmail(String toAddress) {
+        Toast.makeText(this, "Sending…", Toast.LENGTH_SHORT).show();
+        Bitmap chartBmp = capturePieChart();
+        exec.execute(() -> {
+            try {
+                ByteArrayOutputStream pdfBytes = new ByteArrayOutputStream();
+                writeStatsPdf(pdfBytes, chartBmp);
+
+                String subject = reportTitle();
+                String html = buildStatsEmailHtml(subject);
+                GmailSender.Attachment attachment = new GmailSender.Attachment(
+                        "stats.pdf", pdfBytes.toByteArray(), "application/pdf");
+                GmailSender.send(this, toAddress, subject, html, attachment);
+                runOnUiThread(() -> Toast.makeText(this, "✔ Email sent!", Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+                runOnUiThread(() -> Toast.makeText(this, "✘ Send failed: " + msg, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    // Full stats data rendered directly in the email body (not just a
+    // "see attached" note) — the PDF is still attached separately for
+    // anyone who wants the formatted/printable version.
+    private String buildStatsEmailHtml(String subject) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><body style='font-family:Arial,sans-serif;'>");
+        sb.append("<h2>").append(subject).append("</h2>");
+        sb.append("<p style='color:#555;'>Total Balance: <b>").append(tvTotalBalance.getText()).append("</b></p>");
+
+        sb.append("<table style='border-collapse:collapse;width:100%;max-width:480px;'>");
+        sb.append("<tr style='background:#2563EB;color:#fff;'>")
+                .append("<th style='padding:6px;text-align:left;'>Category</th>")
+                .append("<th style='padding:6px;text-align:right;'>%</th>")
+                .append("<th style='padding:6px;text-align:right;'>Amount</th>")
+                .append("</tr>");
+
+        for (StatsCategoryRow row : lastCategoryRows) {
+            sb.append("<tr style='border-bottom:1px solid #eee;'>")
+                    .append("<td style='padding:6px;'>").append(row.name).append("</td>")
+                    .append("<td style='padding:6px;text-align:right;'>")
+                    .append(String.format(java.util.Locale.US, "%.0f%%", row.percent)).append("</td>")
+                    .append("<td style='padding:6px;text-align:right;'>₹")
+                    .append(row.amount.toPlainString()).append("</td>")
+                    .append("</tr>");
+        }
+        sb.append("</table>");
+        sb.append("<p style='color:#888;font-size:12px;margin-top:16px;'>A PDF copy of this report is attached.</p>");
+        sb.append("</body></html>");
+        return sb.toString();
+    }
+
+    private void writeStatsPdf(OutputStream out, Bitmap chartBmp) throws Exception {
+        Document doc = new Document(PageSize.A4, 24, 24, 32, 32);
+        PdfWriter.getInstance(doc, out);
+        doc.open();
+
+        Font titleFont = new Font(Font.FontFamily.HELVETICA, 16, Font.BOLD);
+        Font headFont = new Font(Font.FontFamily.HELVETICA, 10, Font.BOLD, BaseColor.WHITE);
+        Font cellFont = new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL);
+
+        Paragraph title = new Paragraph(reportTitle(), titleFont);
+        title.setAlignment(Element.ALIGN_CENTER);
+        title.setSpacingAfter(4);
+        doc.add(title);
+
+        Paragraph balance = new Paragraph("Total Balance: " + tvTotalBalance.getText(),
+                new Font(Font.FontFamily.HELVETICA, 11, Font.NORMAL, BaseColor.GRAY));
+        balance.setAlignment(Element.ALIGN_CENTER);
+        balance.setSpacingAfter(16);
+        doc.add(balance);
+
+        // Chart image
+        ByteArrayOutputStream chartBytes = new ByteArrayOutputStream();
+        chartBmp.compress(Bitmap.CompressFormat.PNG, 100, chartBytes);
+        Image chartImg = Image.getInstance(chartBytes.toByteArray());
+        chartImg.scaleToFit(300, 300);
+        chartImg.setAlignment(Element.ALIGN_CENTER);
+        doc.add(chartImg);
+        doc.add(new Paragraph(" "));
+
+        // Category table
+        PdfPTable table = new PdfPTable(new float[]{2f, 1f, 1.5f});
+        table.setWidthPercentage(100);
+        for (String h : new String[]{"Category", "%", "Amount"}) {
+            PdfPCell cell = new PdfPCell(new Paragraph(h, headFont));
+            cell.setBackgroundColor(new BaseColor(37, 99, 235));
+            cell.setPadding(6);
+            table.addCell(cell);
+        }
+        for (StatsCategoryRow row : lastCategoryRows) {
+            addPdfCell(table, row.name, cellFont);
+            addPdfCell(table, String.format(java.util.Locale.US, "%.0f%%", row.percent), cellFont);
+            addPdfCell(table, "₹" + row.amount.toPlainString(), cellFont);
+        }
+        doc.add(table);
+        doc.close();
+    }
+
+    private void addPdfCell(PdfPTable table, String text, Font font) {
+        PdfPCell cell = new PdfPCell(new Paragraph(text, font));
+        cell.setPadding(5);
+        table.addCell(cell);
+    }
+
+    private void writeStatsXlsx(OutputStream out) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("Stats");
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFillForegroundColor(IndexedColors.BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            org.apache.poi.ss.usermodel.Font headerFont = wb.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+
+            sheet.createRow(0).createCell(0).setCellValue(reportTitle());
+            sheet.createRow(1).createCell(0).setCellValue("Total Balance: " + tvTotalBalance.getText());
+
+            Row header = sheet.createRow(3);
+            String[] cols = {"Category", "%", "Amount"};
+            for (int i = 0; i < cols.length; i++) {
+                Cell c = header.createCell(i);
+                c.setCellValue(cols[i]);
+                c.setCellStyle(headerStyle);
+            }
+            int r = 4;
+            for (StatsCategoryRow row : lastCategoryRows) {
+                Row xr = sheet.createRow(r++);
+                xr.createCell(0).setCellValue(row.name);
+                xr.createCell(1).setCellValue(row.percent);
+                xr.createCell(2).setCellValue(row.amount.doubleValue());
+            }
+            // autoSizeColumn() needs java.awt.font.FontRenderContext for text
+            // measurement — AWT isn't available on Android, so it crashes with
+            // NoClassDefFoundError. Set reasonable fixed widths instead
+            // (POI widths are in 1/256 of a character width).
+            sheet.setColumnWidth(0, 28 * 256); // Category
+            sheet.setColumnWidth(1, 10 * 256); // %
+            sheet.setColumnWidth(2, 16 * 256); // Amount
+            wb.write(out);
+        }
     }
 }

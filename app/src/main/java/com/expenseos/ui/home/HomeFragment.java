@@ -62,6 +62,7 @@ public class HomeFragment extends Fragment {
     private TextView tvTotalIncome, tvTotalExpense, tvNetBalance;
     private RecyclerView rvTransactions;
     private SwipeRefreshLayout swipeRefresh;
+    private View layoutNoTransactions;
     private TransactionAdapter adapter;
     private final List<Transaction> transactions = new ArrayList<>();
 
@@ -88,6 +89,7 @@ public class HomeFragment extends Fragment {
         tvNetBalance = root.findViewById(R.id.tv_net_balance);
         swipeRefresh = root.findViewById(R.id.swipe_refresh);
         rvTransactions = root.findViewById(R.id.rv_transactions);
+        layoutNoTransactions = root.findViewById(R.id.layoutNoTransactions);
         etSearch = root.findViewById(R.id.etTxnSearch);
         btnFilter = root.findViewById(R.id.btnTxnFilter);
         chipDate = root.findViewById(R.id.chipDate);
@@ -267,6 +269,7 @@ public class HomeFragment extends Fragment {
         adapter.setData(transactions);
         refreshFilterChips();
         tvEntryCount.setText("Showing " + all.size() + " entries");
+        layoutNoTransactions.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
 
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
     }

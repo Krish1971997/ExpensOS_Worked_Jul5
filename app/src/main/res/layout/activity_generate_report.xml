@@ -370,27 +370,75 @@
 
             </RadioGroup>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnGenerateExcel"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="52dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="⊞  GENERATE EXCEL"
-                android:textColor="@color/primary"
-                app:backgroundTint="@color/surface"
-                app:strokeColor="@color/primary"
-                app:strokeWidth="1dp" />
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnGeneratePdf"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="12dp"
-                android:backgroundTint="@color/primary"
-                android:text="📄  GENERATE PDF"
-                android:textColor="#FFFFFF" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGenerateEmail"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="EMAIL"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    app:backgroundTint="@color/surface"
+                    app:icon="@drawable/ic_email"
+                    app:iconGravity="top"
+                    app:iconPadding="4dp"
+                    app:iconSize="20dp"
+                    app:iconTint="@null"
+                    app:strokeColor="@color/text_secondary"
+                    app:strokeWidth="1dp" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGeneratePdf"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginHorizontal="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="PDF"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    app:backgroundTint="@color/surface"
+                    app:icon="@drawable/ic_pdf"
+                    app:iconGravity="top"
+                    app:iconPadding="4dp"
+                    app:iconSize="20dp"
+                    app:iconTint="@null"
+                    app:strokeColor="@color/primary"
+                    app:strokeWidth="1dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGenerateExcel"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="EXCEL"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    app:backgroundTint="@color/surface"
+                    app:icon="@drawable/ic_excel"
+                    app:iconGravity="top"
+                    app:iconPadding="4dp"
+                    app:iconSize="20dp"
+                    app:iconTint="@null"
+                    app:strokeColor="@color/primary"
+                    app:strokeWidth="1dp" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
