@@ -75,6 +75,7 @@ public class StatsActivity extends AppCompatActivity {
     private CashBook directBook = null;
 
     private TextView tvMonth, tvTotalBalance, tvEmpty;
+    private android.widget.CheckBox cbNetSettlements;
     private PieChart pieChart;
     private RecyclerView rvCategories;
     private TextView tabIncome, tabExpense;
@@ -119,6 +120,9 @@ public class StatsActivity extends AppCompatActivity {
         pieChart = findViewById(R.id.pieStats);
         rvCategories = findViewById(R.id.rvStatsCategories);
         rvCategories.setLayoutManager(new LinearLayoutManager(this));
+
+        cbNetSettlements = findViewById(R.id.cbNetSettlements);
+        cbNetSettlements.setOnCheckedChangeListener((btn, checked) -> refresh());
 
         spSeriesFilter = findViewById(R.id.spSeriesFilter);
         spBookFilter = findViewById(R.id.spBookFilter);
@@ -340,7 +344,25 @@ public class StatsActivity extends AppCompatActivity {
         if (isHomeEntry) syncBookDropdownSelection(book);
 
         TransactionDao dao = new TransactionDao(this);
-        List<Map<String, Object>> rows = showExpense ? dao.categoryBreakdownWithId("EXPENSE", book.getId()) : dao.categoryBreakdownWithId("INCOME", book.getId());
+        String currentType = showExpense ? "EXPENSE" : "INCOME";
+        List<Map<String, Object>> rows = dao.categoryBreakdownWithId(currentType, book.getId());
+
+        // "Net Settlements" ON pannirundha, ovvoru category-oda total-la
+        // irundhu, andha category-oda transactions-la SettlementLinkActivity
+        // vazhi link pannirukura amount-ah kழி pannunga (e.g. Snacks/Fuel/
+        // Food expense-ah oru single "Others" income settle pannirundha,
+        // andha 3 categories-um correspondingly reduce aagum — category
+        // matching venaam, transaction-level link mattum podhum).
+        if (cbNetSettlements.isChecked()) {
+            com.expenseos.dao.SettlementLinkDao settleDao = new com.expenseos.dao.SettlementLinkDao(this);
+            Map<Integer, BigDecimal> linkedByCategory = settleDao.sumLinkedByCategory(book.getId(), currentType);
+            for (Map<String, Object> r : rows) {
+                int catId = (int) r.get("id");
+                BigDecimal linked = linkedByCategory.getOrDefault(catId, BigDecimal.ZERO);
+                BigDecimal netTotal = ((BigDecimal) r.get("total")).subtract(linked).max(BigDecimal.ZERO);
+                r.put("total", netTotal);
+            }
+        }
 
         // Sort descending by amount — screenshot shows highest first
         rows.sort((a, b) -> ((BigDecimal) b.get("total")).compareTo((BigDecimal) a.get("total")));

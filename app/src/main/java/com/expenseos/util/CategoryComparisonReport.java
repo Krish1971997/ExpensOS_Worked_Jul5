@@ -426,7 +426,12 @@ public class CategoryComparisonReport {
             pctDash.setCellValue("—");
             pctDash.setCellStyle(totalStyle);
 
-            for (int i = 0; i <= result.months.size() + 2; i++) sheet.autoSizeColumn(i);
+// NEW (fixed widths, StatsActivity.java pattern போலவே):
+            sheet.setColumnWidth(0, 28 * 256); // Category
+            for (int i = 1; i <= result.months.size(); i++)
+                sheet.setColumnWidth(i, 14 * 256); // each month amount
+            sheet.setColumnWidth(result.months.size() + 1, 14 * 256); // Diff
+            sheet.setColumnWidth(result.months.size() + 2, 12 * 256); // % Change
             wb.write(out);
         }
     }

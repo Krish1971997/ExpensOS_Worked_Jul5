@@ -111,6 +111,16 @@
                 android:text="Payment Type"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tabAttachment"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="14dp"
+                android:text="Attachment"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <View
@@ -454,6 +464,44 @@
                         android:textColor="@color/text_muted"
                         android:textSize="11sp" />
                 </LinearLayout>
+            </ScrollView>
+
+            <!-- ── ATTACHMENT panel ─────────────────────── -->
+            <ScrollView
+                android:id="@+id/panelAttachment"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <RadioGroup
+                    android:id="@+id/rgAttachment"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <RadioButton
+                        android:id="@+id/rbAttachmentAll"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:checked="true"
+                        android:paddingVertical="10dp"
+                        android:text="All" />
+
+                    <RadioButton
+                        android:id="@+id/rbAttachmentYes"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingVertical="10dp"
+                        android:text="With attachment" />
+
+                    <RadioButton
+                        android:id="@+id/rbAttachmentNo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingVertical="10dp"
+                        android:text="Without attachment" />
+                </RadioGroup>
             </ScrollView>
         </FrameLayout>
     </LinearLayout>

@@ -806,6 +806,14 @@ public class TransactionDao {
             sql.append(" AND t.amount ").append(TransactionFilter.safeOp(f.getAmountOp2())).append(" ?");
             params.add(f.getAmount2().toString());
         }
+        // Attachment presence (transaction_receipts is joined nowhere else
+        // in this query, so EXISTS/NOT EXISTS is cheaper than a real JOIN
+        // that would need DISTINCT to avoid row duplication for txns with
+        // multiple receipts).
+        if (f.getHasAttachment() != null) {
+            sql.append(f.getHasAttachment() ? " AND EXISTS (" : " AND NOT EXISTS (")
+                    .append("SELECT 1 FROM transaction_receipts r WHERE r.transaction_id = t.id)");
+        }
         // Note + amount +custom field LIKE (SQLite LIKE is case-insensitive for ASCII, standing in for ILIKE)
         if (f.getNoteSearch() != null && !f.getNoteSearch().isBlank()) {
             String[] split = f.getNoteSearch().split(";");

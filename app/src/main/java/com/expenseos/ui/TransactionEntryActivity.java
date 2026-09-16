@@ -241,7 +241,8 @@ public class TransactionEntryActivity extends AppCompatActivity {
 // edit button to jump straight to Settings → Categories for this book.
         tvCategoryField.setOnClickListener(v -> {
             hideKeyboard();
-            CategoryPickerSheet.show(this, currentCategories, subCatDao, bookId,
+            CategoryPickerSheet.show(this, currentCategories, subCatDao,
+                    selectedCategory != null ? selectedCategory.getId() : null, bookId,
                     (category, subCategory) -> {
                         selectedCategory = category;
                         selectedSubCategory = subCategory;

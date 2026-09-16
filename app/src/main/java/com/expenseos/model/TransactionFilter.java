@@ -23,12 +23,23 @@ public class TransactionFilter {
     private String sortDir = "desc"; // asc | desc
     private List<String> paymentTypes; // multi-select by name
     private List<Integer> bookIds; // Multi-select CashBooks for All Transactions page[cite: 20]
+    private Boolean hasAttachment; // null = all, true = only with attachment, false = only without
+
 
     public boolean isFiltered() {
         return dateFrom != null || dateTo != null || (categoryIds != null && !categoryIds.isEmpty())
                 || (subCategoryIds != null && !subCategoryIds.isEmpty()) || amount1 != null
                 || (noteSearch != null && !noteSearch.isBlank())
-                || (paymentTypes != null && !paymentTypes.isEmpty());
+                || (paymentTypes != null && !paymentTypes.isEmpty())
+                || hasAttachment != null;
+    }
+
+    public Boolean getHasAttachment() {
+        return hasAttachment;
+    }
+
+    public void setHasAttachment(Boolean hasAttachment) {
+        this.hasAttachment = hasAttachment;
     }
 
     public List<String> getPaymentTypes() {

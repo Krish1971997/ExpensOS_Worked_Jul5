@@ -366,7 +366,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
-                android:layout_marginBottom="8dp"
                 android:orientation="horizontal">
 
                 <TextView
@@ -404,6 +403,19 @@
                     android:textColor="@color/red"
                     android:textSize="12sp" />
             </LinearLayout>
+
+            <!-- Settle/link this entry against opposite-type entries -->
+            <TextView
+                android:id="@+id/btnDetailSettle"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_input_box"
+                android:gravity="center"
+                android:text="🔗 Link Settlement"
+                android:textColor="@color/primary"
+                android:textSize="12sp" />
 
         </LinearLayout>
     </ScrollView>

@@ -147,6 +147,15 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
+            <CheckBox
+                android:id="@+id/cbNetSettlements"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="Net settlements (offset linked income/expense)"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp" />
+
             <TextView
                 android:id="@+id/tvStatsEmpty"
                 android:layout_width="match_parent"

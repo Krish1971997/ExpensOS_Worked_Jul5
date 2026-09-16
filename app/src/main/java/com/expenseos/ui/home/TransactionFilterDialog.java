@@ -47,8 +47,9 @@ public class TransactionFilterDialog extends Dialog {
     private final int initialTab;
     private final boolean singleFieldMode;
 
-    private TextView tabCashBook, tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType;
-    private View panelCashBook, panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType;
+    private TextView tabCashBook, tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType, tabAttachment;
+    private View panelCashBook, panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType, panelAttachment;
+    private RadioGroup rgAttachment;
     private LinearLayout cashBookContainer, categoryContainer, subCategoryContainer, paymentTypeContainer;
 
     private RadioGroup rgDatePreset;
@@ -103,6 +104,10 @@ public class TransactionFilterDialog extends Dialog {
         c.setAmount2(f.getAmount2());
         c.setNoteSearch(f.getNoteSearch());
         c.setPaymentTypes(f.getPaymentTypes() != null ? new ArrayList<>(f.getPaymentTypes()) : null);
+
+        // 🟢 ADD THIS LINE:
+        c.setHasAttachment(f.getHasAttachment());
+
         c.setPage(f.getPage());
         c.setPageSize(f.getPageSize());
         c.setSortBy(f.getSortBy());
@@ -131,7 +136,7 @@ public class TransactionFilterDialog extends Dialog {
         if (singleFieldMode) {
             findViewById(R.id.tabListContainer).setVisibility(View.GONE);
             findViewById(R.id.dividerTabs).setVisibility(View.GONE);
-            String[] titles = {"Cash Book", "Date", "Category", "Sub Category", "Amount", "Payment Type"};
+            String[] titles = {"Cash Book", "Date", "Category", "Sub Category", "Amount", "Payment Type", "Attachment"};
             if (initialTab >= 0 && initialTab < titles.length) {
                 ((TextView) findViewById(R.id.dialogTitle)).setText(titles[initialTab]);
             }
@@ -150,10 +155,18 @@ public class TransactionFilterDialog extends Dialog {
             applyCategorySelection();
             applyPaymentTypeSelection();
             applyAmountSelection();
+            applyAttachmentSelection();
             filter.setBookId(bookId);
             if (onApply != null) onApply.onApply(filter);
             dismiss();
         });
+    }
+
+    private void applyAttachmentSelection() {
+        int checkedId = rgAttachment.getCheckedRadioButtonId();
+        if (checkedId == R.id.rbAttachmentYes) filter.setHasAttachment(true);
+        else if (checkedId == R.id.rbAttachmentNo) filter.setHasAttachment(false);
+        else filter.setHasAttachment(null);
     }
 
     private void bindViews() {
@@ -170,6 +183,7 @@ public class TransactionFilterDialog extends Dialog {
         panelSubCategory = findViewById(R.id.panelSubCategory);
         panelAmount = findViewById(R.id.panelAmount);
         panelPaymentType = findViewById(R.id.panelPaymentType);
+        panelAttachment = findViewById(R.id.panelAttachment);
 
         cashBookContainer = findViewById(R.id.cashBookContainer);
         categoryContainer = findViewById(R.id.categoryContainer);
@@ -191,6 +205,9 @@ public class TransactionFilterDialog extends Dialog {
         cbSelectAllCategory = findViewById(R.id.cbSelectAllCategory);
         cbSelectAllSubCategory = findViewById(R.id.cbSelectAllSubCategory);
         cbSelectAllPaymentType = findViewById(R.id.cbSelectAllPaymentType);
+
+        tabAttachment = findViewById(R.id.tabAttachment);
+        rgAttachment = findViewById(R.id.rgAttachment);
     }
 
     // NEW — Cash Book only makes sense when this dialog is filtering across
@@ -217,12 +234,13 @@ public class TransactionFilterDialog extends Dialog {
         tabSubCategory.setOnClickListener(v -> selectTab(3));
         tabAmount.setOnClickListener(v -> selectTab(4));
         tabPaymentType.setOnClickListener(v -> selectTab(5));
+        tabAttachment.setOnClickListener(v -> selectTab(6));
         selectTab(isSingleBookContext() && initialTab == 0 ? 1 : initialTab);
     }
 
     private void selectTab(int index) {
-        TextView[] tabs = {tabCashBook, tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType};
-        View[] panels = {panelCashBook, panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType};
+        TextView[] tabs = {tabCashBook, tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType, tabAttachment};
+        View[] panels = {panelCashBook, panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType, panelAttachment};
 
         int selColor = getContext().getResources().getColor(R.color.primary);
         int normColor = getContext().getResources().getColor(R.color.text);
@@ -556,5 +574,10 @@ public class TransactionFilterDialog extends Dialog {
         } else {
             rgDatePreset.check(R.id.rbAllTime);
         }
+        if (Boolean.TRUE.equals(filter.getHasAttachment()))
+            rgAttachment.check(R.id.rbAttachmentYes);
+        else if (Boolean.FALSE.equals(filter.getHasAttachment()))
+            rgAttachment.check(R.id.rbAttachmentNo);
+        else rgAttachment.check(R.id.rbAttachmentAll);
     }
 }

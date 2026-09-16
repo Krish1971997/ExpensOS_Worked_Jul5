@@ -199,6 +199,11 @@
                 android:id="@+id/chipPaymentType"
                 style="@style/FilterChip"
                 android:text="Payment Type ▾" />
+
+            <TextView
+                android:id="@+id/chipAttachment"
+                style="@style/FilterChip"
+                android:text="Attachment ▾" />
         </LinearLayout>
     </HorizontalScrollView>
 

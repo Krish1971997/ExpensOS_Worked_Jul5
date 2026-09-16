@@ -95,6 +95,7 @@
         <activity android:name=".ui.SqlConsoleActivity" />
         <activity android:name=".ui.ReportPdfPreviewActivity" />
         <activity android:name=".ui.FoodTrackerActivity" />
+        <activity android:name=".ui.SettlementLinkActivity" />
         <activity
             android:name=".ui.ChatActivity"
             android:label="AI Assistant"

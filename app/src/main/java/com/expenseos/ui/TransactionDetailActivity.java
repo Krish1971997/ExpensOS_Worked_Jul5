@@ -206,6 +206,12 @@ public class TransactionDetailActivity extends AppCompatActivity {
             pickAttachment();
         });
 
+        findViewById(R.id.btnDetailSettle).setOnClickListener(v -> {
+            Intent i = new Intent(this, SettlementLinkActivity.class);
+            i.putExtra("txnId", txnId);
+            startActivity(i);
+        });
+
         findViewById(R.id.btnDetailCalc).setOnClickListener(v ->
                 CalculatorDialog.show(this, etAmount.getText().toString(), resultText -> {
                     etAmount.setText(resultText);

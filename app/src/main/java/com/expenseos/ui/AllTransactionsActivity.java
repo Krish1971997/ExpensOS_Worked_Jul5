@@ -33,7 +33,7 @@ public class AllTransactionsActivity extends AppCompatActivity {
 
     private EditText etSearch;
     private ImageButton btnFilter;
-    private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType;
+    private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType, chipAttachment;
     private TextView btnSortToggle;
     private boolean sortAscending = false;
 
@@ -58,6 +58,7 @@ public class AllTransactionsActivity extends AppCompatActivity {
         chipSubCategory = findViewById(R.id.chipSubCategory);
         chipAmount = findViewById(R.id.chipAmount);
         chipPaymentType = findViewById(R.id.chipPaymentType);
+        chipAttachment = findViewById(R.id.chipAttachment);
         tvEntryCount = findViewById(R.id.tvEntryCount);
         btnSortToggle = findViewById(R.id.btnSortToggle);
 
@@ -99,6 +100,7 @@ public class AllTransactionsActivity extends AppCompatActivity {
         chipSubCategory.setOnClickListener(v -> openFilterDialog(3, true));
         chipAmount.setOnClickListener(v -> openFilterDialog(4, true));
         chipPaymentType.setOnClickListener(v -> openFilterDialog(5, true));
+        chipAttachment.setOnClickListener(v -> openFilterDialog(6, true));
 
         btnSortToggle.setOnClickListener(v -> {
             sortAscending = !sortAscending;
@@ -153,6 +155,10 @@ public class AllTransactionsActivity extends AppCompatActivity {
             currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
             currentFilter.setAmount2(appliedFilter.getAmount2());
             currentFilter.setPaymentTypes(appliedFilter.getPaymentTypes());
+
+            // 🟢 ADD THIS LINE:
+            currentFilter.setHasAttachment(appliedFilter.getHasAttachment());
+
             currentFilter.setBookIds(appliedFilter.getBookIds());
             currentFilter.setBookId(null);
 
@@ -187,6 +193,9 @@ public class AllTransactionsActivity extends AppCompatActivity {
         int ptCount = currentFilter.getPaymentTypes() != null ? currentFilter.getPaymentTypes().size() : 0;
         chipPaymentType.setText(ptCount == 0 ? "Payment Type ▾" : "Payment Type (" + ptCount + ") ▾");
 
+        Boolean hasAtt = currentFilter.getHasAttachment();
+        chipAttachment.setText(hasAtt == null ? "Attachment ▾" : (hasAtt ? "Attachment: Yes ▾" : "Attachment: No ▾"));
+
         int cbCount = currentFilter.getBookIds() != null ? currentFilter.getBookIds().size() : 0;
         chipCashBook.setText(cbCount == 0 ? "Cashbook ▾" : "Cashbook (" + cbCount + ") ▾");
 
@@ -200,6 +209,7 @@ public class AllTransactionsActivity extends AppCompatActivity {
         setChipActive(chipSubCategory, subCount > 0, normalColor, activeColor);
         setChipActive(chipAmount, currentFilter.getAmount1() != null, normalColor, activeColor);
         setChipActive(chipPaymentType, ptCount > 0, normalColor, activeColor);
+        setChipActive(chipAttachment, hasAtt != null, normalColor, activeColor);
     }
 
     private void setChipActive(TextView chip, boolean active, int normalColor, int activeColor) {

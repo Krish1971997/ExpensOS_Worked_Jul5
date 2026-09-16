@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 43; // bumped: added created_at/updated_at to event_reminders, task_events, task_alarms
+    private static final int DB_VERSION = 44; // bumped: added settlement_links (link an income entry to the expense(s) it reimburses, partial amounts)
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -22,13 +22,15 @@ public class LocalDB extends SQLiteOpenHelper {
     // Every table that has a manually-assigned "id" column now gets a row
     // here so its next id can be reserved before insert. Keep this list in
     // sync with the id-bearing tables created below.
+
     private static final String[] ID_TABLES = {
             "cash_books", "categories", "sub_categories", "column_definitions",
             "transactions", "transaction_custom_values", "deleted_records",
             "transaction_audit_log", "transaction_receipts", "schedulers",
             "scheduler_log", "budgets", "budget_categories", "payment_types",
             "keyword_mappings", "events", "reminders", "event_reminders", "tasks",
-            "task_events", "task_alarms", "recycle_bin", "budget_allocation_template"
+            "task_events", "task_alarms", "recycle_bin", "budget_allocation_template",
+            "settlement_links"
     };
 
     public static synchronized LocalDB getInstance(Context ctx) {
@@ -373,6 +375,21 @@ public class LocalDB extends SQLiteOpenHelper {
                 "chart_path TEXT, " +               // assistant-rendered chart image, if any
                 "provider TEXT, " +                 // which AI provider answered (assistant rows only)
                 "created_at TEXT NOT NULL)");
+
+        // settlement_links — links a transaction to another transaction it
+        // (fully or partially) settles/reimburses, e.g. an INCOME entry
+        // that pays back 1+ EXPENSE entries. "amount" is the portion of
+        // the link (partial settlement support) — same value counts
+        // against both sides' remaining-to-settle balance. Undirected in
+        // meaning: settlement_txn_id is just "whichever side the link was
+        // created from", queries check both columns.
+        db.execSQL("CREATE TABLE IF NOT EXISTS settlement_links (" +
+                "id                INTEGER PRIMARY KEY," +
+                "settlement_txn_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                "linked_txn_id     INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                "amount            REAL NOT NULL," +
+                "created_at        TEXT DEFAULT (datetime('now'))," +
+                "UNIQUE(settlement_txn_id, linked_txn_id))");
 
 
         // Seed default categories
@@ -895,6 +912,17 @@ public class LocalDB extends SQLiteOpenHelper {
             }
         }
 
+        if (oldV < 44) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS settlement_links (" +
+                    "id                INTEGER PRIMARY KEY," +
+                    "settlement_txn_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                    "linked_txn_id     INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                    "amount            REAL NOT NULL," +
+                    "created_at        TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(settlement_txn_id, linked_txn_id))");
+            initSequences(db);
+        }
+
     }
 
     @Override
@@ -991,6 +1019,16 @@ public class LocalDB extends SQLiteOpenHelper {
 
         if (tableExists(db, "schedulers") && !isColumnExists(db, "schedulers", "consecutive_failures")) {
             db.execSQL("ALTER TABLE schedulers ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0");
+        }
+
+        if (!tableExists(db, "settlement_links")) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS settlement_links (" +
+                    "id                INTEGER PRIMARY KEY," +
+                    "settlement_txn_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                    "linked_txn_id     INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE," +
+                    "amount            REAL NOT NULL," +
+                    "created_at        TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(settlement_txn_id, linked_txn_id))");
         }
 
         db.execSQL("UPDATE events SET created_at = datetime('now') WHERE created_at = 'datetime(''now'')' OR created_at IS NULL");
