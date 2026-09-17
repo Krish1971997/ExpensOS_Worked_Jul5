@@ -287,6 +287,7 @@ public class HomeFragment extends Fragment {
             currentFilter.setAmountOp2(appliedFilter.getAmountOp2());
             currentFilter.setAmount2(appliedFilter.getAmount2());
             currentFilter.setPaymentTypes(appliedFilter.getPaymentTypes());
+            currentFilter.setHasAttachment(appliedFilter.getHasAttachment());
             loadTransactions();
         }).show();
     }

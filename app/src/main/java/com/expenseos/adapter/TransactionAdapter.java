@@ -211,7 +211,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TxnVH extends RecyclerView.ViewHolder {
-        TextView tvDate, tvCat, tvSubCat, tvPaymentType, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments;
+        TextView tvDate, tvCat, tvSubCat, tvPaymentType, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments, tvSettleStatus;
         View typeBadge;
 
         TxnVH(View v) {
@@ -225,6 +225,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvBalance = v.findViewById(R.id.tvTxnBalance);
             tvSyncDot = v.findViewById(R.id.tvTxnSyncDot);
             tvAttachments = v.findViewById(R.id.tvTxnAttachments);
+            tvSettleStatus = v.findViewById(R.id.tvTxnSettleStatus);
             typeBadge = v.findViewById(R.id.viewTypeBadge);
         }
     }
@@ -309,6 +310,16 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             h.tvAttachments.setVisibility(View.GONE);
         }
 
+        String settleStatus = getSettlementStatus(t);
+        if (settleStatus != null) {
+            h.tvSettleStatus.setText(settleStatus);
+            h.tvSettleStatus.setTextColor(ContextCompat.getColor(ctx,
+                    settleStatus.startsWith("✓") ? R.color.green : R.color.amber));
+            h.tvSettleStatus.setVisibility(View.VISIBLE);
+        } else {
+            h.tvSettleStatus.setVisibility(View.GONE);
+        }
+
         boolean selected = selectedIds.contains(t.getId());
         h.itemView.setBackgroundColor(selected ? Color.parseColor("#E3F2FD") : Color.TRANSPARENT);
 
@@ -346,6 +357,19 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                 new String[]{String.valueOf(transactionId)})) {
             return c.moveToFirst() ? c.getInt(0) : 0;
         }
+    }
+
+    // "✓ Fully settled" / "◐ Partially settled" / null (edhும் link aagalai)
+    private String getSettlementStatus(Transaction t) {
+        double linked = 0;
+        try (Cursor c = readDb.rawQuery(
+                "SELECT SUM(amount) FROM settlement_links WHERE settlement_txn_id=? OR linked_txn_id=?",
+                new String[]{String.valueOf(t.getId()), String.valueOf(t.getId())})) {
+            if (c.moveToFirst() && !c.isNull(0)) linked = c.getDouble(0);
+        }
+        if (linked <= 0) return null;
+        double remaining = t.getAmount().doubleValue() - linked;
+        return remaining <= 0.005 ? "✓ Fully settled" : "◐ Partially settled";
     }
 
     // ── Header Date Formatting: "19 Tue 05.2026" ─────────────────────

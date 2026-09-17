@@ -107,6 +107,16 @@
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
+            <EditText
+                android:id="@+id/etSettleFilter"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_margin="10dp"
+                android:background="@drawable/bg_input_box"
+                android:hint="Filter by category or note…"
+                android:paddingHorizontal="12dp"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:id="@+id/containerAvailable"
                 android:layout_width="match_parent"
@@ -125,4 +135,13 @@
                 android:textSize="13sp" />
         </LinearLayout>
     </ScrollView>
+
+    <Button
+        android:id="@+id/btnSaveLinks"
+        style="@style/BtnPrimary"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_margin="12dp"
+        android:enabled="false"
+        android:text="💾 Save Links" />
 </LinearLayout>

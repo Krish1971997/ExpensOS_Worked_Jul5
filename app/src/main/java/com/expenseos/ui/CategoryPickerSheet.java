@@ -1,6 +1,7 @@
 package com.expenseos.ui;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
@@ -32,7 +33,6 @@ public class CategoryPickerSheet {
         void onPicked(Category category, SubCategory subCategory); // subCategory null = none
     }
 
-    // NEW — edit icon-ஐ SettingsActivity-க்கு send பண்ண bookId கூட வேணும்
     public static void show(Activity activity, List<Category> categories, SubCategoryDao subCatDao,
                             Integer preselectCategoryId, int bookId, OnPicked callback) {
         BottomSheetDialog sheet = new BottomSheetDialog(activity);
@@ -40,10 +40,8 @@ public class CategoryPickerSheet {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFFFFFFFF);
 
-        // NEW — background app-ன் primary blue-க்கு மாறியிருக்கு, title/close இப்போவும்
-// white text (blue background-ல white readable-ஆ இருக்கும், அதனால அவை மாறல),
-// title-க்கும் close-க்கும் நடுவுல ஒரு ✎ edit icon சேர்ந்திருக்கு
-        // Header
+        // Header — app's primary blue instead of black, + a ✎ edit icon
+        // that jumps to Settings > Categories for this book.
         LinearLayout header = new LinearLayout(activity);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -65,7 +63,7 @@ public class CategoryPickerSheet {
         edit.setPadding(dp(activity, 12), 0, dp(activity, 12), 0);
         edit.setOnClickListener(v -> {
             sheet.dismiss();
-            android.content.Intent i = new android.content.Intent(activity, SettingsActivity.class);
+            Intent i = new Intent(activity, SettingsActivity.class);
             i.putExtra("bookScoped", true);
             i.putExtra("bookId", bookId);
             i.putExtra("startTab", 0); // Categories tab

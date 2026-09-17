@@ -123,6 +123,17 @@
                 android:visibility="gone"
                 tools:text="📎 2 Attachments" />
 
+            <!-- Row 2c: Settlement status (✓ Settled / ◐ Partial) — hidden when untouched -->
+            <TextView
+                android:id="@+id/tvTxnSettleStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:text="✓ Settled" />
+
             <!-- Row 3: Time (left) .......... sync dot -->
             <LinearLayout
                 android:layout_width="match_parent"

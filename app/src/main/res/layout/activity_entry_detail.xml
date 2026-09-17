@@ -163,6 +163,39 @@
                         </HorizontalScrollView>
                     </LinearLayout>
 
+                    <!-- Settlement status — tap to manage links; hidden if untouched -->
+                    <LinearLayout
+                        android:id="@+id/rowSettleStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:padding="14dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🔗 "
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tvSettleStatus"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="›"
+                            android:textColor="@color/text_muted"
+                            android:textSize="16sp" />
+                    </LinearLayout>
+
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"

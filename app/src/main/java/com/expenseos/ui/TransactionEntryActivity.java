@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -125,6 +126,18 @@ public class TransactionEntryActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+        // Bottom-sheet style entrance/exit — slides up over the previous
+        // screen instead of the default hard-cut/slide-right transition.
+        // overrideActivityTransition() (API 34+) registers both directions
+        // up front; overridePendingTransition() (older) is called per-call
+        // (entry here, exit in finish() below) since it has no "register
+        // once" form.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_OPEN, R.anim.slide_up_in, R.anim.slide_up_out);
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, R.anim.slide_down_in, R.anim.slide_down_out);
+        } else {
+            overridePendingTransition(R.anim.slide_up_in, R.anim.slide_up_out);
+        }
         setContentView(R.layout.activity_transaction_entry);
 
 //        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
@@ -168,6 +181,16 @@ public class TransactionEntryActivity extends AppCompatActivity {
             if (imm != null)
                 imm.showSoftInput(etAmount, InputMethodManager.SHOW_IMPLICIT);
         });
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        // API 34+ already has the close transition registered in onCreate()
+        // — only pre-34 devices need this per-call trigger.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overridePendingTransition(R.anim.slide_down_in, R.anim.slide_down_out);
+        }
     }
 
     private void bindViews() {

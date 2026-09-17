@@ -20,6 +20,7 @@ import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.ReceiptDao;
+import com.expenseos.dao.SettlementLinkDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.AuditLog;
 import com.expenseos.model.CashBook;
@@ -127,6 +128,35 @@ public class EntryDetailActivity extends AppCompatActivity {
         loadChips();
         loadSyncStatus();
         loadCreatedEditedInfo();
+        loadSettlementStatus();
+    }
+
+    // Settlement — hidden if this entry has never been linked to anything.
+    private void loadSettlementStatus() {
+        View row = findViewById(R.id.rowSettleStatus);
+        TextView tv = findViewById(R.id.tvSettleStatus);
+
+        java.math.BigDecimal linked = new SettlementLinkDao(this).sumLinkedFor(txnId);
+        if (linked.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            row.setVisibility(View.GONE);
+            return;
+        }
+
+        row.setVisibility(View.VISIBLE);
+        java.math.BigDecimal remaining = txn.getAmount().subtract(linked).max(java.math.BigDecimal.ZERO);
+        if (remaining.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            tv.setText("✓ Fully settled");
+            tv.setTextColor(getColor(R.color.green));
+        } else {
+            tv.setText("◐ Partially settled — ₹" + remaining.toPlainString() + " remaining");
+            tv.setTextColor(getColor(R.color.amber));
+        }
+
+        row.setOnClickListener(v -> {
+            Intent i = new Intent(this, SettlementLinkActivity.class);
+            i.putExtra("txnId", txnId);
+            startActivity(i);
+        });
     }
 
     // ── Attachments ─────────────────────────────────────────
