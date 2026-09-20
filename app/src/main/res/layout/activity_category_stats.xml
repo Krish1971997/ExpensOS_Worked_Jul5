@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FFFFFF"
+    android:background="@color/bg_card"
     android:orientation="vertical">
 
     <!-- Header Toolbar with Month Navigation -->
@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:paddingStart="8dp"
-            android:textColor="#111827"
+            android:textColor="@color/text"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -44,7 +44,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
                 android:text="〈"
-                android:textColor="#374151"
+                android:textColor="@color/text"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -53,7 +53,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="6dp"
-                android:textColor="#111827"
+                android:textColor="@color/text"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -64,7 +64,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:gravity="center"
                 android:text="〉"
-                android:textColor="#374151"
+                android:textColor="@color/text"
                 android:textSize="18sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -73,7 +73,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#E5E7EB" />
+        android:background="@color/border" />
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
@@ -97,7 +97,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Total Balance"
-                    android:textColor="#6B7280"
+                    android:textColor="@color/text_muted"
                     android:textSize="13sp" />
 
                 <TextView
@@ -105,7 +105,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:textColor="#111827"
+                    android:textColor="@color/text"
                     android:textSize="26sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -121,7 +121,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="#FFF5F5"
+                    android:background="@color/danger_bg"
                     android:orientation="horizontal"
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="12dp">
@@ -131,7 +131,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="All"
-                        android:textColor="#374151"
+                        android:textColor="@color/text"
                         android:textSize="15sp" />
 
                     <TextView
@@ -139,14 +139,14 @@
                         android:layout_height="wrap_content"
                         android:paddingEnd="24dp"
                         android:text="100%"
-                        android:textColor="#6B7280"
+                        android:textColor="@color/text_muted"
                         android:textSize="14sp" />
 
                     <TextView
                         android:id="@+id/tvAllAmount"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="#111827"
+                        android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -170,7 +170,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="8dp"
-                android:background="#F3F4F6" />
+                android:background="@color/surface_2" />
 
             <!-- Category Transactions List -->
             <androidx.recyclerview.widget.RecyclerView

@@ -1,26 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- item_date_header.xml — day group header with per-day totals.
+     IDs preserved: tvHeaderDate, tvHeaderTotals -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#EEF1F5"
-    android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingHorizontal="12dp"
-    android:paddingVertical="8dp">
+    android:orientation="horizontal"
+    android:paddingHorizontal="@dimen/space_2"
+    android:paddingTop="@dimen/space_4"
+    android:paddingBottom="@dimen/space_2">
 
     <TextView
         android:id="@+id/tvHeaderDate"
-        android:layout_width="0dp"
+        style="@style/Text.Caption"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_stat_pill"
+        android:paddingHorizontal="@dimen/space_3"
+        android:paddingVertical="@dimen/space_1"
+        android:textStyle="bold"
+        tools:text="Today" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_marginHorizontal="@dimen/space_2"
         android:layout_weight="1"
-        android:textColor="@color/text_muted"
-        android:textSize="12sp"
-        android:textStyle="bold" />
+        android:background="@color/divider" />
 
     <TextView
         android:id="@+id/tvHeaderTotals"
+        style="@style/Text.Caption"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="end"
-        android:textSize="12sp" />
+        android:textStyle="bold"
+        tools:text="+₹500 · −₹1,250" />
 </LinearLayout>

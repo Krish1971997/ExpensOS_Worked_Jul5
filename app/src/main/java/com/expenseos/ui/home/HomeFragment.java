@@ -212,7 +212,7 @@ public class HomeFragment extends Fragment {
 
                 btnSyncCloud.setEnabled(true);
                 btnSyncCloud.setText("↑ Sync to Cloud");
-                Toast.makeText(getContext(), ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
+                com.expenseos.util.UiUtils.toast(getContext(), ok ? "✔ " + summary : "✘ " + summary);
                 loadTransactions();
             });
         });
@@ -226,7 +226,7 @@ public class HomeFragment extends Fragment {
 
                 btnFetchCloud.setEnabled(true);
                 btnFetchCloud.setText("↓ Fetch from Cloud");
-                Toast.makeText(getContext(), ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
+                com.expenseos.util.UiUtils.toast(getContext(), ok ? "✔ " + summary : "✘ " + summary);
                 loadTransactions();
             });
         });
@@ -260,15 +260,15 @@ public class HomeFragment extends Fragment {
         }
         BigDecimal balance = income.subtract(expense);
 
-        tvTotalIncome.setText("₹" + income.toPlainString());
-        tvTotalExpense.setText("₹" + expense.toPlainString());
-        tvNetBalance.setText("₹" + balance.toPlainString());
+        com.expenseos.util.UiUtils.animateAmount(tvTotalIncome, income);
+        com.expenseos.util.UiUtils.animateAmount(tvTotalExpense, expense);
+        com.expenseos.util.UiUtils.animateAmount(tvNetBalance, balance);
 
         transactions.clear();
         transactions.addAll(all);
         adapter.setData(transactions);
         refreshFilterChips();
-        tvEntryCount.setText("Showing " + all.size() + " entries");
+        com.expenseos.util.UiUtils.animateCount(tvEntryCount, all.size(), "Showing %d entries");
         layoutNoTransactions.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
 
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
@@ -475,7 +475,7 @@ public class HomeFragment extends Fragment {
                         .setPositiveButton("Yes, delete", (d2, w2) -> {
                             TransactionDao dao = new TransactionDao(requireContext());
                             for (Transaction t : selected) dao.delete(t.getId());
-                            Toast.makeText(requireContext(), selected.size() + " deleted", Toast.LENGTH_SHORT).show();
+                            com.expenseos.util.UiUtils.toast(requireContext(), selected.size() + " deleted");
                             if (actionMode != null) actionMode.finish();
                             loadTransactions();
                         })
@@ -589,7 +589,7 @@ public class HomeFragment extends Fragment {
                     String newPaymentType = spPay.getSelectedItemPosition() > 0 ? payNames.get(spPay.getSelectedItemPosition()) : null;
 
                     if (newCat == null && newPaymentType == null) {
-                        Toast.makeText(requireContext(), "Nothing to change", Toast.LENGTH_SHORT).show();
+                        com.expenseos.util.UiUtils.toast(requireContext(), "Nothing to change");
                         return;
                     }
                     confirmBulkEdit(selected, newCat, subTouched, newSubId, newPaymentType);
@@ -646,8 +646,8 @@ public class HomeFragment extends Fragment {
             newT.setPaymentType(newPaymentType != null ? newPaymentType : oldT.getPaymentType());
             dao.update(oldT, newT);
         }
-        Toast.makeText(requireContext(), selected.size() + " transaction" +
-                (selected.size() > 1 ? "s" : "") + " updated", Toast.LENGTH_SHORT).show();
+        com.expenseos.util.UiUtils.toast(requireContext(), selected.size() + " transaction" +
+                (selected.size() > 1 ? "s" : "") + " updated");
         if (actionMode != null) actionMode.finish();
         loadTransactions();
     }
@@ -662,7 +662,7 @@ public class HomeFragment extends Fragment {
             if (b.getId() != currentBookId) targets.add(b);
 
         if (targets.isEmpty()) {
-            Toast.makeText(requireContext(), "No other cashbook to move to", Toast.LENGTH_SHORT).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "No other cashbook to move to");
             return;
         }
 
@@ -684,7 +684,7 @@ public class HomeFragment extends Fragment {
                 .setPositiveButton("Move", (d, w) -> {
                     TransactionDao dao = new TransactionDao(requireContext());
                     for (Transaction t : selected) dao.updateBookId(t.getId(), target.getId());
-                    Toast.makeText(requireContext(), selected.size() + " moved to " + target.getName(), Toast.LENGTH_SHORT).show();
+                    com.expenseos.util.UiUtils.toast(requireContext(), selected.size() + " moved to " + target.getName());
                     if (actionMode != null) actionMode.finish();
                     loadTransactions();
                 })
@@ -777,7 +777,7 @@ public class HomeFragment extends Fragment {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(intent);
         } catch (Exception e) {
-            Toast.makeText(requireContext(), "Couldn't generate preview: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Couldn't generate preview: " + e.getMessage());
         }
     }
 
@@ -786,10 +786,10 @@ public class HomeFragment extends Fragment {
         try {
             DownloadsSaver.Result result = DownloadsSaver.save(requireContext(), fileName, "application/pdf",
                     out -> ReportGenerator.writePdf(txns, ReportGenerator.TYPE_ALL, out));
-            Toast.makeText(requireContext(), "Saved to " + result.displayLocation, Toast.LENGTH_LONG).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Saved to " + result.displayLocation);
             if (actionMode != null) actionMode.finish();
         } catch (Exception e) {
-            Toast.makeText(requireContext(), "Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Failed: " + e.getMessage());
         }
     }
 
@@ -798,10 +798,10 @@ public class HomeFragment extends Fragment {
         try {
             DownloadsSaver.Result result = DownloadsSaver.save(requireContext(), fileName, "text/csv",
                     out -> ReportGenerator.writeCsv(txns, ReportGenerator.TYPE_ALL, out));
-            Toast.makeText(requireContext(), "Saved to " + result.displayLocation, Toast.LENGTH_LONG).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Saved to " + result.displayLocation);
             if (actionMode != null) actionMode.finish();
         } catch (Exception e) {
-            Toast.makeText(requireContext(), "Failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Failed: " + e.getMessage());
         }
     }
 
@@ -824,7 +824,7 @@ public class HomeFragment extends Fragment {
             if ("csv".equals(pendingExportAction)) saveCsvToDownloads(selected);
             else if ("pdf-save".equals(pendingExportAction)) savePdfToDownloads(selected);
         } else {
-            Toast.makeText(requireContext(), "Storage permission needed to save to Downloads", Toast.LENGTH_SHORT).show();
+            com.expenseos.util.UiUtils.toast(requireContext(), "Storage permission needed to save to Downloads");
         }
         pendingExportAction = null;
     }

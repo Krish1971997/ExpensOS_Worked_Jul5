@@ -7,7 +7,7 @@
     android:layout_marginHorizontal="14dp"
     android:layout_marginTop="10dp"
     app:cardBackgroundColor="@color/bg_card"
-    app:cardCornerRadius="10dp"
+    app:cardCornerRadius="16dp"
     app:cardElevation="1dp">
 
     <LinearLayout
@@ -82,7 +82,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:background="#F1F5F9"
+                android:background="@color/surface_2"
                 android:paddingHorizontal="6dp"
                 android:paddingVertical="2dp"
                 android:textColor="@color/text_muted"

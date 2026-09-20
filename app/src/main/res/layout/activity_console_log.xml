@@ -7,7 +7,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="@android:color/white"
+        android:background="@color/bg_card"
         android:elevation="4dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"

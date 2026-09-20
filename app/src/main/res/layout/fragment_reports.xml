@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7FA">
+    android:background="@color/bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -16,7 +16,7 @@
             android:text="Reports &amp; Analytics"
             android:textSize="20sp"
             android:textStyle="bold"
-            android:textColor="#222"
+            android:textColor="@color/text"
             android:layout_marginBottom="12dp" />
 
         <!-- ═══ All-time summary cards ═══ -->
@@ -31,7 +31,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -45,14 +45,14 @@
                         android:layout_height="wrap_content"
                         android:text="TOTAL INCOME"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <TextView
                         android:id="@+id/tv_report_income"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="₹0.00"
-                        android:textColor="#1B8A1B"
+                        android:textColor="@color/green"
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -63,7 +63,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -77,14 +77,14 @@
                         android:layout_height="wrap_content"
                         android:text="TOTAL EXPENSES"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <TextView
                         android:id="@+id/tv_report_expense"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="₹0.00"
-                        android:textColor="#C0392B"
+                        android:textColor="@color/red"
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -102,7 +102,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -116,14 +116,14 @@
                         android:layout_height="wrap_content"
                         android:text="NET BALANCE"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <TextView
                         android:id="@+id/tv_report_balance"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="₹0.00"
-                        android:textColor="#1565C0"
+                        android:textColor="@color/primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -134,7 +134,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -148,14 +148,14 @@
                         android:layout_height="wrap_content"
                         android:text="SAVINGS RATE"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <TextView
                         android:id="@+id/tv_savings_rate"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0.0%"
-                        android:textColor="#7B1FA2"
+                        android:textColor="@color/accent"
                         android:textSize="15sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -168,7 +168,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
             xmlns:app="http://schemas.android.com/apk/res-auto"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="3dp">
 
             <LinearLayout
@@ -215,7 +215,7 @@
             android:text="Selected Month"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:textColor="#444"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="6dp" />
 
         <androidx.cardview.widget.CardView
@@ -223,7 +223,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             xmlns:app="http://schemas.android.com/apk/res-auto"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="3dp">
 
             <LinearLayout
@@ -240,10 +240,10 @@
                     android:orientation="vertical"
                     android:gravity="center">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="INCOME" android:textSize="9sp" android:textColor="#666" />
+                        android:text="INCOME" android:textSize="9sp" android:textColor="@color/text_muted" />
                     <TextView android:id="@+id/tv_month_income" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
-                        android:textStyle="bold" android:textColor="#1B8A1B" />
+                        android:textStyle="bold" android:textColor="@color/green" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -253,10 +253,10 @@
                     android:orientation="vertical"
                     android:gravity="center">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="EXPENSE" android:textSize="9sp" android:textColor="#666" />
+                        android:text="EXPENSE" android:textSize="9sp" android:textColor="@color/text_muted" />
                     <TextView android:id="@+id/tv_month_expense" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
-                        android:textStyle="bold" android:textColor="#C0392B" />
+                        android:textStyle="bold" android:textColor="@color/red" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -266,10 +266,10 @@
                     android:orientation="vertical"
                     android:gravity="center">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="NET" android:textSize="9sp" android:textColor="#666" />
+                        android:text="NET" android:textSize="9sp" android:textColor="@color/text_muted" />
                     <TextView android:id="@+id/tv_month_net" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="₹0" android:textSize="13sp"
-                        android:textStyle="bold" android:textColor="#1565C0" />
+                        android:textStyle="bold" android:textColor="@color/primary" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -279,10 +279,10 @@
                     android:orientation="vertical"
                     android:gravity="center">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="TXNS" android:textSize="9sp" android:textColor="#666" />
+                        android:text="TXNS" android:textSize="9sp" android:textColor="@color/text_muted" />
                     <TextView android:id="@+id/tv_month_count" android:layout_width="wrap_content"
                         android:layout_height="wrap_content" android:text="0" android:textSize="13sp"
-                        android:textStyle="bold" android:textColor="#7B1FA2" />
+                        android:textStyle="bold" android:textColor="@color/accent" />
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -292,7 +292,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
             xmlns:app="http://schemas.android.com/apk/res-auto"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="3dp">
 
             <LinearLayout
@@ -306,7 +306,7 @@
                     android:layout_height="wrap_content"
                     android:text="MONTHLY INCOME VS EXPENSE"
                     android:textSize="11sp"
-                    android:textColor="#666"
+                    android:textColor="@color/text_muted"
                     android:layout_marginBottom="8dp" />
 
                 <com.github.mikephil.charting.charts.BarChart
@@ -327,7 +327,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -341,7 +341,7 @@
                         android:layout_height="wrap_content"
                         android:text="EXPENSE BY CATEGORY"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <com.github.mikephil.charting.charts.PieChart
                         android:id="@+id/pie_expense"
@@ -355,7 +355,7 @@
                 android:layout_weight="1"
                 android:layout_margin="4dp"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="3dp">
 
                 <LinearLayout
@@ -369,7 +369,7 @@
                         android:layout_height="wrap_content"
                         android:text="INCOME BY CATEGORY"
                         android:textSize="10sp"
-                        android:textColor="#666" />
+                        android:textColor="@color/text_muted" />
 
                     <com.github.mikephil.charting.charts.PieChart
                         android:id="@+id/pie_income"

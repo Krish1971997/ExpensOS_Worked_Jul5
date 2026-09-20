@@ -1,153 +1,140 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- item_transaction.xml — premium list row.
+     IDs preserved: viewTypeBadge, tvTxnCat, tvTxnSubCat, tvTxnPaymentType,
+     tvTxnAmount, tvTxnNote, tvTxnBalance, tvTxnAttachments,
+     tvTxnSettleStatus, tvTxnDate, tvTxnSyncDot -->
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginHorizontal="4dp"
-    android:layout_marginVertical="3dp"
-    app:cardBackgroundColor="@android:color/white"
-    app:cardCornerRadius="8dp"
-    app:cardElevation="1dp">
+    android:layout_marginHorizontal="@dimen/space_1"
+    android:layout_marginVertical="@dimen/space_1"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="@color/bg_card"
+    app:cardCornerRadius="@dimen/radius_md"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/border"
+    app:strokeWidth="1dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:paddingStart="@dimen/space_3"
+        android:paddingTop="@dimen/space_3"
+        android:paddingEnd="@dimen/space_3"
+        android:paddingBottom="@dimen/space_3">
 
-        <!-- Color strip (income=green / expense=red) -->
+        <!-- Type accent capsule (colour set in TransactionAdapter) -->
         <View
             android:id="@+id/viewTypeBadge"
             android:layout_width="4dp"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="10dp" />
+            android:layout_height="44dp"
+            android:layout_marginEnd="@dimen/space_3" />
 
-        <!-- Main info -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- Row 1: Category chip + Sub-category chip .......... Amount -->
+            <!-- Row 1: amount (leading, scannable) .......... balance -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="3dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvTxnCat"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="4dp"
-                    android:background="#EFF6FF"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="3dp"
-                    android:textColor="@color/primary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/tvTxnSubCat"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@color/amber_bg"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="3dp"
-                    android:textColor="@color/amber"
-                    android:textSize="11sp"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/tvTxnPaymentType"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:background="#F1F5F9"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="3dp"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp" />
-
-                <!-- spacer pushes amount to the far right -->
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
 
                 <TextView
                     android:id="@+id/tvTxnAmount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Row 2: Note .......... Balance -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvTxnNote"
+                    style="@style/Text.Amount"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:textColor="@color/text"
-                    android:textSize="12sp" />
+                    tools:text="−₹1,250.00" />
 
                 <TextView
                     android:id="@+id/tvTxnBalance"
+                    style="@style/Text.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Balance: "
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp" />
+                    android:layout_marginStart="@dimen/space_2"
+                    android:text="Balance: " />
             </LinearLayout>
 
-            <!-- Row 2b: Attachment count (📎 N Attachments) — hidden when none -->
-            <TextView
-                android:id="@+id/tvTxnAttachments"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/text_muted"
-                android:textSize="11sp"
-                android:visibility="gone"
-                tools:text="📎 2 Attachments" />
-
-            <!-- Row 2c: Settlement status (✓ Settled / ◐ Partial) — hidden when untouched -->
-            <TextView
-                android:id="@+id/tvTxnSettleStatus"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone"
-                tools:text="✓ Settled" />
-
-            <!-- Row 3: Time (left) .......... sync dot -->
+            <!-- Row 2: category badges -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="@dimen/space_2"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvTxnCat"
+                    style="@style/Badge.Primary"
+                    android:text="" />
+
+                <TextView
+                    android:id="@+id/tvTxnSubCat"
+                    style="@style/Badge.Warning"
+                    android:layout_marginStart="@dimen/space_1"
+                    android:visibility="gone"
+                    tools:text="Fuel" />
+
+                <TextView
+                    android:id="@+id/tvTxnPaymentType"
+                    style="@style/Badge"
+                    android:layout_marginStart="@dimen/space_1"
+                    tools:text="UPI" />
+            </LinearLayout>
+
+            <!-- Row 3: remark -->
+            <TextView
+                android:id="@+id/tvTxnNote"
+                style="@style/Text.BodyMuted"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_2"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <!-- Row 4: meta strip -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_1"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvTxnDate"
+                    style="@style/Text.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/tvTxnAttachments"
+                    style="@style/Text.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/text_muted"
-                    android:textSize="11sp" />
+                    android:layout_marginStart="@dimen/space_3"
+                    android:visibility="gone"
+                    tools:text="📎 2" />
+
+                <TextView
+                    android:id="@+id/tvTxnSettleStatus"
+                    style="@style/Text.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_3"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="✓ Settled" />
 
                 <View
                     android:layout_width="0dp"
@@ -156,13 +143,13 @@
 
                 <TextView
                     android:id="@+id/tvTxnSyncDot"
+                    style="@style/Text.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="● sync"
-                    android:textColor="@color/amber"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
-</androidx.cardview.widget.CardView>
+</com.google.android.material.card.MaterialCardView>

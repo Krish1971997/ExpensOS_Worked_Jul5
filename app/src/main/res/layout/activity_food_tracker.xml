@@ -53,7 +53,7 @@
         android:id="@+id/tvFoodTrackerMonth"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
+        android:background="@color/bg_card"
         android:gravity="center"
         android:paddingVertical="8dp"
         android:textColor="@color/primary"
@@ -63,7 +63,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
+        android:background="@color/bg_card"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="14dp"

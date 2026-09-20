@@ -104,7 +104,7 @@
                 android:layout_height="match_parent"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:background="#F8FAFC"
+                android:background="@color/bg"
                 android:hint="Search books…"
                 android:paddingHorizontal="10dp"
                 android:textSize="12sp" />
@@ -133,7 +133,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="60dp"
-        android:background="@android:color/white"
+        android:background="@color/bg_card"
         android:elevation="8dp"
         android:orientation="horizontal">
 

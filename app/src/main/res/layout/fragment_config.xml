@@ -34,7 +34,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="2dp">
 
             <LinearLayout
@@ -115,7 +115,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="12sp"
                     android:padding="8dp"
-                    android:background="#F8FAFC"
+                    android:background="@color/bg"
                     android:visibility="gone"
                     android:layout_marginBottom="8dp" />
 
@@ -133,7 +133,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="2dp">
 
             <LinearLayout
@@ -216,7 +216,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="3dp">
 
             <LinearLayout
@@ -230,7 +230,7 @@
                     android:layout_height="wrap_content"
                     android:text="ZOHO WORKDRIVE (CLOUD BACKUP)"
                     android:textSize="11sp"
-                    android:textColor="#666"
+                    android:textColor="@color/text_muted"
                     android:layout_marginBottom="8dp" />
 
                 <EditText
@@ -278,9 +278,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="#EFF6FF">
+            app:cardBackgroundColor="@color/primary_soft">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -318,7 +318,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="12sp"
                     android:padding="8dp"
-                    android:background="#FFFFFF"
+                    android:background="@color/bg_card"
                     android:visibility="gone"
                     android:layout_marginTop="8dp" />
             </LinearLayout>
@@ -329,7 +329,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardCornerRadius="10dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="1dp">
 
             <LinearLayout

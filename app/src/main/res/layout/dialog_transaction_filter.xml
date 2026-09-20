@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
+    android:background="@color/bg_card"
     android:orientation="vertical">
 
     <!-- Header -->
@@ -34,7 +34,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#E5E7EB" />
+        android:background="@color/border" />
 
     <!-- Tabs (left) + Panels (right) -->
     <LinearLayout
@@ -48,7 +48,7 @@
             android:id="@+id/tabListContainer"
             android:layout_width="92dp"
             android:layout_height="match_parent"
-            android:background="#F5F7FA"
+            android:background="@color/bg"
             android:orientation="vertical">
 
             <TextView
@@ -127,7 +127,7 @@
             android:id="@+id/dividerTabs"
             android:layout_width="1dp"
             android:layout_height="match_parent"
-            android:background="#E5E7EB" />
+            android:background="@color/border" />
 
         <!-- Right content panels -->
         <FrameLayout
@@ -292,7 +292,7 @@
                         android:layout_height="1dp"
                         android:layout_marginHorizontal="12dp"
                         android:layout_marginBottom="4dp"
-                        android:background="#E5E7EB" />
+                        android:background="@color/border" />
 
                     <LinearLayout
                         android:id="@+id/categoryContainer"
@@ -332,7 +332,7 @@
                         android:layout_height="1dp"
                         android:layout_marginHorizontal="12dp"
                         android:layout_marginBottom="4dp"
-                        android:background="#E5E7EB" />
+                        android:background="@color/border" />
 
                     <LinearLayout
                         android:id="@+id/subCategoryContainer"
@@ -372,7 +372,7 @@
                         android:layout_height="1dp"
                         android:layout_marginHorizontal="12dp"
                         android:layout_marginBottom="4dp"
-                        android:background="#E5E7EB" />
+                        android:background="@color/border" />
 
                     <LinearLayout
                         android:id="@+id/paymentTypeContainer"
@@ -509,7 +509,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#E5E7EB" />
+        android:background="@color/border" />
 
     <!-- Footer -->
     <LinearLayout

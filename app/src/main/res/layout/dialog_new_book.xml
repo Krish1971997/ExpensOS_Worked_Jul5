@@ -10,7 +10,7 @@
         android:layout_height="wrap_content"
         android:text="BOOK NAME *"
         android:textSize="11sp"
-        android:textColor="#666"
+        android:textColor="@color/text_muted"
         android:layout_marginBottom="4dp" />
 
     <EditText
@@ -26,7 +26,7 @@
         android:layout_height="wrap_content"
         android:text="DESCRIPTION"
         android:textSize="11sp"
-        android:textColor="#666"
+        android:textColor="@color/text_muted"
         android:layout_marginBottom="4dp" />
 
     <EditText

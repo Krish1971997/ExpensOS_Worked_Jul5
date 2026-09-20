@@ -27,7 +27,7 @@
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_default_badge"
             android:text="Default"
-            android:textColor="#0284C7"
+            android:textColor="@color/primary"
             android:textSize="11sp"
             android:textStyle="bold"
             android:visibility="gone" />

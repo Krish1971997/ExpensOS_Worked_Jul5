@@ -131,7 +131,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="10dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
@@ -181,7 +181,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    android:background="#FEF9C3"
+                    android:background="@color/warning_bg"
                     android:padding="10dp"
                     android:text="No budget set for this month yet — set an overall limit above to get started."
                     android:textColor="@color/amber"
@@ -194,7 +194,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="10dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
@@ -368,7 +368,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="10dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
@@ -397,7 +397,7 @@
                 <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardCornerRadius="10dp"
+                    app:cardCornerRadius="16dp"
                     app:cardElevation="2dp">
 
                     <LinearLayout
@@ -429,7 +429,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="1dp">
 
                 <LinearLayout
@@ -475,7 +475,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                app:cardCornerRadius="10dp"
+                app:cardCornerRadius="16dp"
                 app:cardElevation="1dp">
 
                 <LinearLayout

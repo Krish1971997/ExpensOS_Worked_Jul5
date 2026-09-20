@@ -49,7 +49,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:background="#EFF6FF"
+                android:background="@color/primary_soft"
                 android:padding="8dp"
                 android:text="⚠ SELECT runs immediately. INSERT/UPDATE/DELETE execute right away but stay uncommitted until you tap Commit — Rollback (or a 60s timeout) discards them. No schema/pragma statements allowed."
                 android:textColor="@color/primary"
@@ -111,7 +111,7 @@
                     android:layout_weight="1"
                     android:backgroundTint="@color/primary"
                     android:text="RUN"
-                    android:textColor="#FFFFFF" />
+                    android:textColor="@color/white" />
 
                 <Button
                     android:id="@+id/btnSqlCommit"
@@ -121,7 +121,7 @@
                     android:layout_weight="1"
                     android:backgroundTint="@color/green"
                     android:text="COMMIT"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:visibility="gone" />
 
                 <Button
@@ -132,7 +132,7 @@
                     android:layout_weight="1"
                     android:backgroundTint="@color/red"
                     android:text="ROLLBACK"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/white"
                     android:visibility="gone" />
             </LinearLayout>
 

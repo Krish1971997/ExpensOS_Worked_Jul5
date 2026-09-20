@@ -34,7 +34,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
-        android:background="#F1F5F9"
+        android:background="@color/surface_2"
         android:paddingHorizontal="6dp"
         android:paddingVertical="2dp"
         android:textSize="10sp"

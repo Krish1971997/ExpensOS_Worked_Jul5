@@ -405,7 +405,7 @@
             android:layout_weight="1"
             android:backgroundTint="@color/primary"
             android:text="SAVE"
-            android:textColor="#FFFFFF" />
+            android:textColor="@color/white" />
     </LinearLayout>
 
 </LinearLayout>

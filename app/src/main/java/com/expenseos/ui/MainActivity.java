@@ -47,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_main);
+        com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
         dao = new CashBookDao(this);
 
         com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
@@ -136,6 +137,7 @@ public class MainActivity extends AppCompatActivity {
     private void loadBooks() {
         books = dao.findAll(search, sort);
         RecyclerView rv = findViewById(R.id.rvBooks);
+        rv.setItemAnimator(new androidx.recyclerview.widget.DefaultItemAnimator());
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setAdapter(new BookAdapter());
     }

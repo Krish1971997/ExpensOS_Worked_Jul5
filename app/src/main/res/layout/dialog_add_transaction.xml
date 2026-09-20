@@ -14,7 +14,7 @@
             android:layout_height="wrap_content"
             android:text="DATE &amp; TIME *"
             android:textSize="11sp"
-            android:textColor="#666"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="4dp" />
 
         <EditText
@@ -30,7 +30,7 @@
             android:layout_height="wrap_content"
             android:text="AMOUNT (₹) *"
             android:textSize="11sp"
-            android:textColor="#666"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="4dp" />
 
         <EditText
@@ -46,7 +46,7 @@
             android:layout_height="wrap_content"
             android:text="CATEGORY *"
             android:textSize="11sp"
-            android:textColor="#666"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="4dp" />
 
         <Spinner
@@ -60,7 +60,7 @@
             android:layout_height="wrap_content"
             android:text="SUB CATEGORY"
             android:textSize="11sp"
-            android:textColor="#666"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="4dp" />
 
         <Spinner
@@ -74,7 +74,7 @@
             android:layout_height="wrap_content"
             android:text="NOTE"
             android:textSize="11sp"
-            android:textColor="#666"
+            android:textColor="@color/text_muted"
             android:layout_marginBottom="4dp" />
 
         <EditText

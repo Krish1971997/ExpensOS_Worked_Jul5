@@ -5,6 +5,6 @@
     android:layout_height="wrap_content"
     android:paddingVertical="12dp"
     android:paddingHorizontal="16dp"
-    android:textColor="#222222"
-    android:background="#FFFFFF"
+    android:textColor="@color/text"
+    android:background="@color/bg_card"
     android:textSize="14sp" />

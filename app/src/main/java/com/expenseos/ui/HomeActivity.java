@@ -36,6 +36,7 @@ public class HomeActivity extends AppCompatActivity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_home);
+        com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
 
 //        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
 //        bookId = prefs.getInt("active_book_id", 0);
@@ -106,7 +107,10 @@ public class HomeActivity extends AppCompatActivity {
                 break; // ← HomeFragment (not DashboardFragment)
         }
 
-        getSupportFragmentManager().beginTransaction().replace(R.id.fragmentContainer, frag).commit();
+        getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(R.anim.fragment_fade_in, R.anim.fragment_fade_out)
+                .replace(R.id.fragmentContainer, frag)
+                .commit();
     }
 
     private void updateNavHighlight(int tab) {
@@ -244,7 +248,7 @@ public class HomeActivity extends AppCompatActivity {
                         mainHandler.post(() -> {
                             btnSync.setEnabled(true);
                             btnSync.setText("⟳ Sync");
-                            Toast.makeText(HomeActivity.this, "Sync failed: " + pushSummary, Toast.LENGTH_LONG).show();
+                            com.expenseos.util.UiUtils.toast(HomeActivity.this, "Sync failed: " + pushSummary);
                         });
                         return;
                     }
@@ -256,13 +260,13 @@ public class HomeActivity extends AppCompatActivity {
                                 btnSync.setEnabled(true);
                                 btnSync.setText("⟳ Sync");
                                 if (pullOk) {
-                                    Toast.makeText(HomeActivity.this, pushSummary + " | " + pullSummary, Toast.LENGTH_SHORT).show();
+                                    com.expenseos.util.UiUtils.toast(HomeActivity.this, pushSummary + " | " + pullSummary);
                                     // Refresh current fragment — do NOT call loadTab() — causes page jump
                                     Fragment cur = getSupportFragmentManager().findFragmentById(R.id.fragmentContainer);
                                     if (cur instanceof HomeFragment)
                                         ((HomeFragment) cur).refreshData();
                                 } else {
-                                    Toast.makeText(HomeActivity.this, "Sync failed: " + pullSummary, Toast.LENGTH_LONG).show();
+                                    com.expenseos.util.UiUtils.toast(HomeActivity.this, "Sync failed: " + pullSummary);
                                 }
                             });
                         }

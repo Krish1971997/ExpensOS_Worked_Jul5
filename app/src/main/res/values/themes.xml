@@ -1,49 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Main theme -->
-    <style name="Theme.ExpenseOS" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <!-- ==========================================================
+         Theme.ExpenseOS — premium fintech theme (DayNight = dark
+         mode support with zero extra wiring; system setting wins).
+         ========================================================== -->
+    <style name="Theme.ExpenseOS" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryVariant">@color/secondary_dark</item>
+        <item name="colorOnSecondary">@color/on_primary</item>
         <item name="colorAccent">@color/primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="colorOnBackground">@color/text</item>
+        <item name="colorError">@color/danger</item>
+        <item name="android:colorBackground">@color/bg</item>
         <item name="android:windowBackground">@color/bg</item>
+
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_muted</item>
+        <item name="android:textColorHint">@color/text_hint</item>
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="fontFamily">sans-serif</item>
+
+        <!-- System bars -->
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/nav_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+
+        <!-- Global component defaults → consistent UI without touching every layout -->
+        <item name="editTextStyle">@style/Widget.ExpenseOS.EditText</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ExpenseOS.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ExpenseOS.BottomSheet</item>
+        <item name="android:windowAnimationStyle">@style/Animation.ExpenseOS.Window</item>
+        <item name="android:windowActivityTransitions">true</item>
+        <item name="android:windowContentTransitions">true</item>
     </style>
 
-    <!-- Night / dark mode variant — prevents crash -->
+    <!-- Window / screen transitions -->
+    <style name="Animation.ExpenseOS.Window" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/screen_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/screen_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/screen_pop_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/screen_pop_exit</item>
+    </style>
+
+    <style name="ShapeAppearance.ExpenseOS.Dialog" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">26dp</item>
+    </style>
+
+    <style name="ThemeOverlay.ExpenseOS.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.ExpenseOS.Dialog</item>
+        <item name="android:windowMinWidthMajor">84%</item>
+        <item name="android:windowMinWidthMinor">84%</item>
+    </style>
+
+    <style name="ThemeOverlay.ExpenseOS.BottomSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.ExpenseOS.BottomSheet</item>
+    </style>
+
+    <style name="Widget.ExpenseOS.BottomSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.ExpenseOS.Sheet</item>
+        <item name="backgroundTint">@color/surface</item>
+    </style>
+
+    <style name="ShapeAppearance.ExpenseOS.Sheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">26dp</item>
+        <item name="cornerSizeTopRight">26dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <!-- Kept for backward compatibility -->
     <style name="Theme.ExpenseOS.Night" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/primary</item>
-    </style>
-
-    <!-- Button styles -->
-    <style name="BtnPrimary" parent="Widget.MaterialComponents.Button">
-        <item name="backgroundTint">@color/primary</item>
-        <item name="android:textColor">@color/white</item>
-        <item name="cornerRadius">8dp</item>
-        <item name="android:letterSpacing">0</item>
-    </style>
-
-    <style name="BtnSuccess" parent="Widget.MaterialComponents.Button">
-        <item name="backgroundTint">@color/green</item>
-        <item name="android:textColor">@color/white</item>
-        <item name="cornerRadius">8dp</item>
-        <item name="android:letterSpacing">0</item>
-    </style>
-
-    <style name="BtnDanger" parent="Widget.MaterialComponents.Button.OutlinedButton">
-        <item name="strokeColor">@color/red</item>
-        <item name="android:textColor">@color/red</item>
-        <item name="cornerRadius">8dp</item>
-        <item name="android:letterSpacing">0</item>
-    </style>
-
-    <!-- Card style -->
-    <style name="StatCard" parent="Widget.MaterialComponents.CardView">
-        <item name="cardBackgroundColor">@color/bg_card</item>
-        <item name="cardElevation">2dp</item>
-        <item name="cardCornerRadius">10dp</item>
     </style>
 </resources>

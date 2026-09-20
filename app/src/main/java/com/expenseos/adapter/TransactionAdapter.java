@@ -259,8 +259,8 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         LocalDateTime dt = t.getDateTime();
         h.tvDate.setText(dt != null ? dt.format(TIME_FMT) : "");
 
-        int badgeBg = isIncome ? R.color.income_badge_bg : R.color.expense_badge_bg;
-        h.typeBadge.setBackgroundColor(ContextCompat.getColor(ctx, badgeBg));
+        h.typeBadge.setBackgroundResource(isIncome
+                ? R.drawable.bg_badge_income : R.drawable.bg_badge_expense);
 
         h.tvCat.setText(t.getCategoryName() != null ? t.getCategoryName() : "");
         h.tvCat.setOnLongClickListener(v -> {
@@ -321,7 +321,15 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
 
         boolean selected = selectedIds.contains(t.getId());
-        h.itemView.setBackgroundColor(selected ? Color.parseColor("#E3F2FD") : Color.TRANSPARENT);
+        if (h.itemView instanceof com.google.android.material.card.MaterialCardView) {
+            com.google.android.material.card.MaterialCardView card =
+                    (com.google.android.material.card.MaterialCardView) h.itemView;
+            float d = ctx.getResources().getDisplayMetrics().density;
+            card.setStrokeWidth(selected ? (int) (2 * d + 0.5f) : (int) (1 * d + 0.5f));
+            card.setStrokeColor(selected
+                    ? ContextCompat.getColor(ctx, R.color.primary)
+                    : ContextCompat.getColor(ctx, R.color.border));
+        }
 
         h.itemView.setOnClickListener(v -> {
             if (selectionMode) {

@@ -14,7 +14,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="#374151"
+        android:textColor="@color/text"
         android:textSize="14sp" />
 
     <TextView
@@ -22,14 +22,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:paddingEnd="16dp"
-        android:textColor="#6B7280"
+        android:textColor="@color/text_muted"
         android:textSize="13sp" />
 
     <TextView
         android:id="@+id/tvSubCategoryAmount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#111827"
+        android:textColor="@color/text"
         android:textSize="14sp"
         android:textStyle="bold" />
 </LinearLayout>

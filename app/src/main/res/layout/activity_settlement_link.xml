@@ -37,7 +37,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
+        android:background="@color/bg_card"
         android:orientation="vertical"
         android:padding="14dp">
 
@@ -83,14 +83,14 @@
                 android:id="@+id/containerLinked"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
+                android:background="@color/bg_card"
                 android:orientation="vertical" />
 
             <TextView
                 android:id="@+id/tvNoLinked"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
+                android:background="@color/bg_card"
                 android:padding="14dp"
                 android:text="No links yet"
                 android:textColor="@color/text_muted"
@@ -121,14 +121,14 @@
                 android:id="@+id/containerAvailable"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
+                android:background="@color/bg_card"
                 android:orientation="vertical" />
 
             <TextView
                 android:id="@+id/tvNoAvailable"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
+                android:background="@color/bg_card"
                 android:padding="14dp"
                 android:text="Nothing available to link — no opposite-type entries with a remaining balance in this book"
                 android:textColor="@color/text_muted"
