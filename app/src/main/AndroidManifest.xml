@@ -129,5 +129,9 @@
             </intent-filter>
         </receiver>
 
+            <activity
+            android:name="com.expenseos.ui.InsightsActivity"
+            android:label="Insights &amp; Reports"
+            android:parentActivityName="com.expenseos.ui.HomeActivity" />
     </application>
 </manifest>

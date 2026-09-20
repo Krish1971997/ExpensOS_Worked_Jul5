@@ -12,6 +12,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 public class GeminiClient implements AiProvider {
+    private static final String[] FALLBACK_MODELS = {"gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"};
     private static final String GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 
     private static String buildSystemPrompt() {
@@ -152,6 +153,22 @@ public class GeminiClient implements AiProvider {
     }
 
     private JSONObject callGeminiApi(JSONArray contents) throws Exception {
+        // Auto-heal a stale/renamed model id: retry the request against known-good models.
+        try {
+            return callGeminiApiOnce(contents, model);
+        } catch (Exception first) {
+            String fm = first.getMessage() == null ? "" : first.getMessage();
+            if (fm.contains("not found") || fm.contains("404") || fm.contains("not supported")) {
+                for (String alt : FALLBACK_MODELS) {
+                    if (alt.equals(model)) continue;
+                    try { return callGeminiApiOnce(contents, alt); } catch (Exception ignored) { }
+                }
+            }
+            throw first;
+        }
+    }
+
+    private JSONObject callGeminiApiOnce(JSONArray contents, String useModel) throws Exception {
         JSONObject body = new JSONObject();
 
         // System Instruction
@@ -189,7 +206,7 @@ public class GeminiClient implements AiProvider {
         toolsArray.put(new JSONObject().put("functionDeclarations", functionDeclarations));
         body.put("tools", toolsArray);
 
-        URL url = new URL(GEMINI_ENDPOINT_BASE + model + ":generateContent?key=" + apiKey);
+        URL url = new URL(GEMINI_ENDPOINT_BASE + useModel + ":generateContent?key=" + apiKey);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "application/json");

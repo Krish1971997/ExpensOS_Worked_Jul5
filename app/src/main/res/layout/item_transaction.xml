@@ -30,7 +30,7 @@
         <!-- Type accent capsule (colour set in TransactionAdapter) -->
         <View
             android:id="@+id/viewTypeBadge"
-            android:layout_width="4dp"
+            android:layout_width="6dp"
             android:layout_height="44dp"
             android:layout_marginEnd="@dimen/space_3" />
 
@@ -113,6 +113,7 @@
 
                 <TextView
                     android:id="@+id/tvTxnDate"
+                    android:textColor="@color/text"
                     style="@style/Text.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />

@@ -26,22 +26,22 @@
 
     <color name="green">#34D399</color>
     <color name="green_bg">#0E2A22</color>
-    <color name="red">#FB7185</color>
+    <color name="red">#F87171</color>
     <color name="red_bg">#3A1220</color>
     <color name="amber">#FBBF24</color>
     <color name="amber_bg">#3A2A0C</color>
 
-    <color name="bg">#0B1220</color>
+    <color name="bg">#0B111A</color>
     <color name="background">#0B1220</color>
-    <color name="bg_card">#141C2E</color>
-    <color name="surface">#141C2E</color>
+    <color name="bg_card">#121A26</color>
+    <color name="surface">#18212E</color>
     <color name="surface_2">#1B2537</color>
     <color name="surface_3">#243049</color>
     <color name="nav_bg">#101728</color>
-    <color name="border">#26324A</color>
+    <color name="border">#263143</color>
     <color name="divider">#1E293B</color>
 
-    <color name="text">#E8EEF7</color>
+    <color name="text">#E7EDF6</color>
     <color name="text_primary">#E8EEF7</color>
     <color name="text_muted">#94A3B8</color>
     <color name="text_secondary">#94A3B8</color>
@@ -80,4 +80,7 @@
     <color name="overlay">#99000000</color>
     <color name="shadow">#33000000</color>
     <color name="selection">#1E3A8A</color>
+    <color name="ft_row_bg">#131C28</color>
+    <color name="ft_row_weekend_bg">#16202E</color>
+    <color name="ft_cell_filled_bg">#3B2F12</color>
 </resources>

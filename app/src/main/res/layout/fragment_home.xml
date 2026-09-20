@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- fragment_home.xml — premium redesign.
+<?xml version="1.0" encoding="utf-8"?><!-- fragment_home.xml — premium redesign.
      ALL original view IDs preserved 1:1 so HomeFragment.java keeps working. -->
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -292,7 +291,7 @@
                     android:id="@+id/btn_sync_cloud"
                     style="@style/BtnOutline"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="30dp"
                     android:layout_marginEnd="@dimen/space_2"
                     android:layout_weight="1"
                     android:text="↑ Sync to Cloud"
@@ -302,7 +301,7 @@
                     android:id="@+id/btn_fetch_cloud"
                     style="@style/BtnOutline"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="30dp"
                     android:layout_weight="1"
                     android:text="↓ Fetch from Cloud"
                     android:textSize="@dimen/type_body_sm" />

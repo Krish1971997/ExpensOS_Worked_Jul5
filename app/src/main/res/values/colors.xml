@@ -31,11 +31,11 @@
     <color name="info_bg">#EFF6FF</color>
 
     <!-- Legacy status aliases -->
-    <color name="green">#059669</color>
+    <color name="green">#16A34A</color>
     <color name="green_bg">#ECFDF5</color>
-    <color name="red">#E11D48</color>
+    <color name="red">#DC2626</color>
     <color name="red_bg">#FFF1F2</color>
-    <color name="amber">#D97706</color>
+    <color name="amber">#F59E0B</color>
     <color name="amber_bg">#FFFBEB</color>
 
     <!-- Surfaces -->
@@ -94,4 +94,7 @@
     <color name="overlay">#80101828</color>
     <color name="shadow">#140F172A</color>
     <color name="selection">#E3F2FD</color>
+    <color name="ft_row_bg">#FFFFFF</color>
+    <color name="ft_row_weekend_bg">#E8F1FD</color>
+    <color name="ft_cell_filled_bg">#FFF6CC</color>
 </resources>

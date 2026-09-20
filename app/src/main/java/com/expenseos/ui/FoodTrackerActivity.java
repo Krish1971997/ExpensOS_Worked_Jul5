@@ -292,7 +292,7 @@ public class FoodTrackerActivity extends AppCompatActivity {
             // light background color (edit pannalam, save logic-ku idhu affect pannadhu).
             boolean isWeekend = row.date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY
                     || row.date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY;
-            h.itemView.setBackgroundColor(isWeekend ? 0xFFE3F2FD : 0xFFFFFFFF);  //0xFFFFF3E0
+            h.itemView.setBackgroundColor(androidx.core.content.ContextCompat.getColor(h.itemView.getContext(), isWeekend ? R.color.ft_row_weekend_bg : R.color.ft_row_bg));  //0xFFFFF3E0
 
             bindAmountCell(h.etBreakfast, row.breakfast, row.editedBreakfast, v -> {
                 row.editedBreakfast = v;

@@ -52,6 +52,15 @@
             android:src="@android:drawable/ic_media_next" />
 
         <ImageButton
+            android:id="@+id/btnStatsInsights"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Insights"
+            android:src="@drawable/ic_stats"
+            app:tint="@color/primary" />
+
+        <ImageButton
             android:id="@+id/btnStatsMenu"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -173,11 +182,11 @@
                 android:layout_height="260dp"
                 android:layout_marginBottom="8dp" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvStatsCategories"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" />
+            <LinearLayout
+            android:id="@+id/rvStatsCategories"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

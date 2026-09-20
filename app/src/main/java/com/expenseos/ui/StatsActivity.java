@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.LinearLayout;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -77,7 +78,7 @@ public class StatsActivity extends AppCompatActivity {
     private TextView tvMonth, tvTotalBalance, tvEmpty;
     private android.widget.CheckBox cbNetSettlements;
     private PieChart pieChart;
-    private RecyclerView rvCategories;
+    private LinearLayout rvCategories;
     private TextView tabIncome, tabExpense;
     private View btnPrevMonth, btnNextMonth;
 
@@ -97,6 +98,7 @@ public class StatsActivity extends AppCompatActivity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_stats);
+        try { findViewById(R.id.btnStatsInsights).setOnClickListener(v -> startActivity(new Intent(this, InsightsActivity.class))); } catch (Throwable ignored) {}
 
         findViewById(R.id.btnStatsBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnStatsMenu).setOnClickListener(this::showExportMenu);
@@ -119,7 +121,6 @@ public class StatsActivity extends AppCompatActivity {
         tvEmpty = findViewById(R.id.tvStatsEmpty);
         pieChart = findViewById(R.id.pieStats);
         rvCategories = findViewById(R.id.rvStatsCategories);
-        rvCategories.setLayoutManager(new LinearLayoutManager(this));
 
         cbNetSettlements = findViewById(R.id.cbNetSettlements);
         cbNetSettlements.setOnCheckedChangeListener((btn, checked) -> refresh());
@@ -415,17 +416,71 @@ public class StatsActivity extends AppCompatActivity {
 
         // Category list — tap → CategoryStatsActivity drill-down
         final CashBook resolvedBook = book;
-        rvCategories.setAdapter(new StatsCategoryAdapter(rows, total, (categoryId, categoryName) -> {
-            Intent i = new Intent(this, CategoryStatsActivity.class);
-            i.putExtra("bookId", resolvedBook.getId());
-            i.putExtra("categoryId", categoryId);
-            i.putExtra("categoryName", categoryName);
-            i.putExtra("isExpense", showExpense);
-            i.putExtra("year", currentMonth.getYear());
-            i.putExtra("month", currentMonth.getMonthValue());
-            i.putExtra("seriesSuffix", directBook != null ? "" : seriesSuffix);
-            startActivity(i);
-        }));
+                // Category list — tap → CategoryStatsActivity drill-down.
+        // Built as plain views so every category renders regardless of how
+        // the parent ScrollView measures the container.
+        rvCategories.removeAllViews();
+        int ci = 0;
+        float dens = getResources().getDisplayMetrics().density;
+        for (Map<String, Object> r : rows) {
+            final int cid = (int) r.get("id");
+            final String cname = (String) r.get("name");
+            BigDecimal amt = (BigDecimal) r.get("total");
+            int pct = amt.multiply(BigDecimal.valueOf(100))
+                    .divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+
+            LinearLayout rowV = new LinearLayout(this);
+            rowV.setOrientation(LinearLayout.HORIZONTAL);
+            rowV.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            int pad = (int) (dens * 14);
+            rowV.setPadding(pad, pad, pad, pad);
+
+            View dot = new View(this);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams((int) (dens * 12), (int) (dens * 12));
+            dlp.rightMargin = (int) (dens * 12);
+            dot.setLayoutParams(dlp);
+            android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+            gd.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            gd.setColor(colors[ci % colors.length]);
+            dot.setBackground(gd);
+            rowV.addView(dot);
+
+            TextView nm = new TextView(this);
+            nm.setText(cname);
+            nm.setTextSize(15f);
+            nm.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text));
+            rowV.addView(nm, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView pc = new TextView(this);
+            pc.setText(pct + "%");
+            pc.setTextSize(14f);
+            pc.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text_muted));
+            LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            plp.rightMargin = (int) (dens * 16);
+            rowV.addView(pc, plp);
+
+            TextView av = new TextView(this);
+            av.setText("\u20B9" + amt.toPlainString());
+            av.setTextSize(15f);
+            av.setTypeface(av.getTypeface(), android.graphics.Typeface.BOLD);
+            av.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text));
+            rowV.addView(av);
+
+            rowV.setOnClickListener(v -> {
+                Intent ii = new Intent(this, CategoryStatsActivity.class);
+                ii.putExtra("bookId", resolvedBook.getId());
+                ii.putExtra("categoryId", cid);
+                ii.putExtra("categoryName", cname);
+                ii.putExtra("isExpense", showExpense);
+                ii.putExtra("year", currentMonth.getYear());
+                ii.putExtra("month", currentMonth.getMonthValue());
+                ii.putExtra("seriesSuffix", directBook != null ? "" : seriesSuffix);
+                startActivity(ii);
+            });
+            rvCategories.addView(rowV);
+            ci++;
+        }
     }
 
     @Override

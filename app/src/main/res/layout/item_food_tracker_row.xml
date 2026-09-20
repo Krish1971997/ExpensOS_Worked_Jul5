@@ -33,6 +33,7 @@
 
     <EditText
         android:id="@+id/etFtBreakfast"
+        android:textColor="@color/text"
         android:layout_width="0dp"
         android:layout_height="36dp"
         android:layout_weight="1"
@@ -45,6 +46,7 @@
 
     <EditText
         android:id="@+id/etFtLunch"
+        android:textColor="@color/text"
         android:layout_width="0dp"
         android:layout_height="36dp"
         android:layout_weight="1"
@@ -57,6 +59,7 @@
 
     <EditText
         android:id="@+id/etFtDinner"
+        android:textColor="@color/text"
         android:layout_width="0dp"
         android:layout_height="36dp"
         android:layout_weight="1"

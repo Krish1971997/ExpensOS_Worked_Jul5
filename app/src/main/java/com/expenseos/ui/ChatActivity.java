@@ -185,6 +185,16 @@ public class ChatActivity extends AppCompatActivity {
         }
 
         btnSend.setEnabled(false);
+        // watchdog: never leave the user with a silent dead chat
+        final boolean[] answered = {false};
+        final android.os.Handler wh = new android.os.Handler(android.os.Looper.getMainLooper());
+        final Runnable watchdog = () -> {
+            if (!answered[0]) {
+                addBotBubble("\u26A0 No response after 90s. Check your AI provider + API key in Config, then resend.", null);
+                btnSend.setEnabled(true);
+            }
+        };
+        wh.postDelayed(watchdog, 90000);
         TextView typingText = new TextView(this);
         View typing = addBotBubbleView(typingText, "Thinking…");
 
@@ -193,6 +203,8 @@ public class ChatActivity extends AppCompatActivity {
         new Thread(() -> aiClient.ask(finalMessage, finalImagePath, conversation, new AiProvider.Callback() {
             @Override
             public void onResult(String answer) {
+                answered[0] = true;
+                wh.removeCallbacks(watchdog);
                 String chartPath = aiClient.getLastChartPath();
                 String imagePath = aiClient.getLastImagePath();
                 // A turn could produce a chart, a generated image, or both — the
@@ -209,6 +221,8 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
+                answered[0] = true;
+                wh.removeCallbacks(watchdog);
                 runOnUiThread(() -> {
                     messagesContainer.removeView(typing);
                     addBotBubble("⚠ " + message, null);
