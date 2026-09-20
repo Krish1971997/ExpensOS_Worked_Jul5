@@ -168,7 +168,8 @@
                 android:layout_marginBottom="@dimen/space_3"
                 android:clipToPadding="false"
                 android:paddingHorizontal="@dimen/screen_padding"
-                android:scrollbars="none">
+                android:scrollbars="none"
+                android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -221,16 +222,17 @@
                     android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="@dimen/space_3">
+                    android:paddingHorizontal="@dimen/space_2"
+                    android:paddingVertical="6dp">
 
                     <FrameLayout
-                        android:layout_width="@dimen/icon_tile_sm"
-                        android:layout_height="@dimen/icon_tile_sm"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
                         android:background="@drawable/bg_icon_tile_primary">
 
                         <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
                             android:layout_gravity="center"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_reports"
@@ -241,7 +243,8 @@
                         style="@style/Text.SectionTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/space_2"
+                        android:layout_marginStart="6dp"
+                        android:textSize="13sp"
                         android:text="Reports" />
                 </LinearLayout>
 
@@ -255,16 +258,17 @@
                     android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="@dimen/space_3">
+                    android:paddingHorizontal="@dimen/space_2"
+                    android:paddingVertical="6dp">
 
                     <FrameLayout
-                        android:layout_width="@dimen/icon_tile_sm"
-                        android:layout_height="@dimen/icon_tile_sm"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
                         android:background="@drawable/bg_icon_tile_accent">
 
                         <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
                             android:layout_gravity="center"
                             android:contentDescription="@null"
                             android:src="@drawable/ic_stats" />
@@ -274,7 +278,8 @@
                         style="@style/Text.SectionTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/space_2"
+                        android:layout_marginStart="6dp"
+                        android:textSize="13sp"
                         android:text="Stats" />
                 </LinearLayout>
             </LinearLayout>
