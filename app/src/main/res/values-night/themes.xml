@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.ExpenseOS" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorPrimaryDark">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryVariant">@color/secondary_dark</item>
+        <item name="colorOnSecondary">@color/on_primary</item>
+        <item name="colorAccent">@color/primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="colorOnBackground">@color/text</item>
+        <item name="colorError">@color/danger</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_muted</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="fontFamily">sans-serif</item>
+
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/nav_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+
+        <item name="editTextStyle">@style/Widget.ExpenseOS.EditText</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ExpenseOS.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ExpenseOS.BottomSheet</item>
+        <item name="android:windowAnimationStyle">@style/Animation.ExpenseOS.Window</item>
+        <item name="android:windowActivityTransitions">true</item>
+        <item name="android:windowContentTransitions">true</item>
+    </style>
+
+    <style name="Animation.ExpenseOS.Window" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/screen_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/screen_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/screen_pop_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/screen_pop_exit</item>
+    </style>
+
+    <style name="ShapeAppearance.ExpenseOS.Dialog" parent="ShapeAppearance.MaterialComponents.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">26dp</item>
+    </style>
+
+    <style name="ThemeOverlay.ExpenseOS.Dialog" parent="ThemeOverlay.MaterialComponents.MaterialAlertDialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.ExpenseOS.Dialog</item>
+    </style>
+
+    <style name="ThemeOverlay.ExpenseOS.BottomSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.ExpenseOS.BottomSheet</item>
+    </style>
+
+    <style name="Widget.ExpenseOS.BottomSheet" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearance.ExpenseOS.Sheet</item>
+        <item name="backgroundTint">@color/surface</item>
+    </style>
+
+    <style name="ShapeAppearance.ExpenseOS.Sheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">26dp</item>
+        <item name="cornerSizeTopRight">26dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+</resources>
