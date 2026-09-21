@@ -24,6 +24,7 @@ public class AppConfig {
     public static final String PROVIDER_GEMINI = "gemini";
     public static final String PROVIDER_GROK = "grok";
     public static final String PROVIDER_CLAUDE = "claude";
+    public static final String PROVIDER_GENSPARK = "genspark";
 
     public static final String KEY_ZOHO_CLIENT_ID = "zoho.client.id";
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
@@ -90,6 +91,7 @@ public class AppConfig {
             case PROVIDER_OPENAI -> "gpt-4o-mini";
             case PROVIDER_GROK -> "grok-2-latest";
             case PROVIDER_CLAUDE -> "claude-3-5-sonnet-20241022";
+            case PROVIDER_GENSPARK -> "genspark-instruct";
             default -> "gemini-2.0-flash";
         };
     }

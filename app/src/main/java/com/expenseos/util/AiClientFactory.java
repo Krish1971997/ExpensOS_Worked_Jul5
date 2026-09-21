@@ -9,6 +9,7 @@ public class AiClientFactory {
             case AppConfig.PROVIDER_OPENAI -> new OpenAiClient(ctx);
             case AppConfig.PROVIDER_GROK -> new GrokClient(ctx);
             case AppConfig.PROVIDER_CLAUDE -> new ClaudeClient(ctx);
+            case AppConfig.PROVIDER_GENSPARK -> new GensparkClient(ctx);
             default -> new GeminiClient(ctx);
         };
     }

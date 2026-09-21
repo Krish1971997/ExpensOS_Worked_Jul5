@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 44; // bumped: added settlement_links (link an income entry to the expense(s) it reimburses, partial amounts)
+    private static final int DB_VERSION = 45; // bumped: added session_id to ai_chat_messages (multi-chat history + new chat)
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -921,6 +921,15 @@ public class LocalDB extends SQLiteOpenHelper {
                     "created_at        TEXT DEFAULT (datetime('now'))," +
                     "UNIQUE(settlement_txn_id, linked_txn_id))");
             initSequences(db);
+        }
+
+        // v44 → v45: ai_chat_messages.session_id supports multiple chat
+        // sessions, history list, new chat button, and multi-select delete.
+        if (oldV < 45) {
+            if (!isColumnExists(db, "ai_chat_messages", "session_id")) {
+                db.execSQL("ALTER TABLE ai_chat_messages ADD COLUMN session_id TEXT NOT NULL DEFAULT 'default'");
+            }
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_chat_session ON ai_chat_messages(session_id, id)");
         }
 
     }

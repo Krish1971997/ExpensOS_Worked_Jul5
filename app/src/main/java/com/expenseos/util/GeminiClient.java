@@ -10,6 +10,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 
 public class GeminiClient implements AiProvider {
     private static final String[] FALLBACK_MODELS = {"gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"};
@@ -25,11 +27,16 @@ public class GeminiClient implements AiProvider {
                         "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
                         "You must NEVER attempt to modify data — you only have read tools available. " +
                         "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
+                        "CHART RULES: (a) If the user asks for a bar chart vs pie chart, set chart_type accordingly. " +
+                        "(b) If the user asks for BOTH day-wise AND category-wise data in one turn (e.g. \"day wise and category wise\", \"daily and category breakdown\"), " +
+                        "call render_chart TWICE — once with chart_type='bar' titled \"Day-wise\" using day/totals, then again with chart_type='pie' titled \"Category-wise\" using category totals. " +
+                        "Both will appear under the same bot bubble in that order. (c) When asked for a PDF export (\"pdf kudu\", \"send me a pdf\", \"monthly report pdf\"), use render_pdf with a title and rows array formatted as \"YYYY-MM-DD|amount|note\". " +
                         "If the user asks to visualize or chart something, call render_chart with the labels/values " +
                         "AFTER you've queried the data. Always reply in the same language and style the user wrote " +
                         "in — including Tanglish (Tamil written in English letters), plain English, or Tamil script; " +
                         "match their language rather than defaulting to English. " +
-                        "Keep answers concise and grounded only in query results.";
+                        "You CAN use markdown formatting (### headings, **bold**, *italic*, - bullet lists, --- dividers) " +
+                        "in your answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
     }
 
     private final ToolDispatcher dispatcher;
@@ -46,6 +53,11 @@ public class GeminiClient implements AiProvider {
     @Override
     public String getLastChartPath() {
         return dispatcher.getLastChartPath();
+    }
+
+    @Override
+    public List<String> getLastChartPaths() {
+        return Collections.emptyList();
     }
 
     @Override
@@ -161,7 +173,10 @@ public class GeminiClient implements AiProvider {
             if (fm.contains("not found") || fm.contains("404") || fm.contains("not supported")) {
                 for (String alt : FALLBACK_MODELS) {
                     if (alt.equals(model)) continue;
-                    try { return callGeminiApiOnce(contents, alt); } catch (Exception ignored) { }
+                    try {
+                        return callGeminiApiOnce(contents, alt);
+                    } catch (Exception ignored) {
+                    }
                 }
             }
             throw first;
@@ -191,9 +206,15 @@ public class GeminiClient implements AiProvider {
 
         JSONObject chartProps = new JSONObject();
         chartProps.put("title", new JSONObject().put("type", "STRING"));
+        chartProps.put("chart_type", new JSONObject().put("type", "STRING"));
         chartProps.put("labels", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "STRING")));
         chartProps.put("values", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "NUMBER")));
-        functionDeclarations.put(createToolDeclaration("render_chart", "Render a bar chart from labels and values, shown to the user as an image", chartProps));
+        functionDeclarations.put(createToolDeclaration("render_chart", "Render a bar OR pie chart from labels and values, shown to the user as an image. Call TWICE for \"day-wise and category-wise\" requests.", chartProps));
+
+        JSONObject pdfProps = new JSONObject();
+        pdfProps.put("title", new JSONObject().put("type", "STRING"));
+        pdfProps.put("rows", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "STRING")));
+        functionDeclarations.put(createToolDeclaration("render_pdf", "Generate a PDF file from rows of \"date|amount|note\" strings — for export / monthly report requests.", pdfProps));
 
         JSONObject imageProps = new JSONObject();
         imageProps.put("prompt", new JSONObject().put("type", "STRING"));

@@ -33,6 +33,76 @@
             android:textColor="@color/primary"
             android:textSize="16sp"
             android:textStyle="bold" />
+
+        <!-- Multi-select Delete action -->
+        <ImageButton
+            android:id="@+id/btnChatMultiDelete"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete selected"
+            android:src="@android:drawable/ic_menu_delete"
+            android:tint="@color/red"
+            android:visibility="gone" />
+
+        <!-- New chat button -->
+        <ImageButton
+            android:id="@+id/btnChatNew"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="New chat"
+            android:src="@android:drawable/ic_menu_add"
+            android:tint="@color/primary" />
+
+        <!-- History button -->
+        <ImageButton
+            android:id="@+id/btnChatHistory"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Chat history"
+            android:src="@android:drawable/ic_menu_recent_history"
+            android:tint="@color/primary" />
+    </LinearLayout>
+
+    <!-- Selection-mode header bar (slides down on long-press) -->
+    <LinearLayout
+        android:id="@+id/selectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/amber"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="0 selected"
+            android:textColor="@color/text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnSelectAll"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="All"
+            android:textColor="@color/text" />
+
+        <Button
+            android:id="@+id/btnCancelSelection"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="Cancel"
+            android:textColor="@color/text" />
     </LinearLayout>
 
     <!-- Chat Messages Container -->
@@ -51,7 +121,7 @@
             android:orientation="vertical" />
     </ScrollView>
 
-    <!-- Attachment preview strip — hidden until a file is picked -->
+    <!-- Attachment preview strip -->
     <LinearLayout
         android:id="@+id/chatAttachPreviewRow"
         android:layout_width="match_parent"

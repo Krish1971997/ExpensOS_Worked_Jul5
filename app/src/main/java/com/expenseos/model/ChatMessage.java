@@ -12,6 +12,7 @@ public class ChatMessage {
     private String chartPath;
     private String provider;
     private String createdAt;
+    private String sessionId; // groups turns into a named chat session for history / new-chat
 
     public int getId() {
         return id;
@@ -79,5 +80,13 @@ public class ChatMessage {
 
     public boolean isUser() {
         return ROLE_USER.equals(role);
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String v) {
+        this.sessionId = v;
     }
 }

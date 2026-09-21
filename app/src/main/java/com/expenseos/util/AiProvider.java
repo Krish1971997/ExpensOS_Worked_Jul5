@@ -2,6 +2,8 @@ package com.expenseos.util;
 
 import org.json.JSONArray;
 
+import java.util.List;
+
 public interface AiProvider {
     interface Callback {
         void onResult(String answer);
@@ -25,6 +27,8 @@ public interface AiProvider {
      * Non-null only if a chart was rendered during the most recent ask() call.
      */
     String getLastChartPath();
+
+    List<String> getLastChartPaths(); // Add this line
 
     /**
      * Non-null only if generate_image was called (via Grok) during the most recent ask() call.

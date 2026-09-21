@@ -10,6 +10,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 
 public class ClaudeClient implements AiProvider {
 
@@ -25,11 +27,17 @@ public class ClaudeClient implements AiProvider {
                         "You can ONLY answer questions about this app's own data using the provided tools. " +
                         "You must NEVER attempt to modify data — you only have read tools available. " +
                         "Always start by calling list_tables, then describe_table on relevant tables before " +
-                        "writing a query. If asked to visualize/chart something, call render_chart after " +
+                        "writing a query. CHART RULES: When asked for a chart, call render_chart with chart_type " +
+                        "= 'bar' or 'pie'. When the user asks for BOTH day-wise and category-wise in one turn " +
+                        "(e.g. \"day wise and category wise\"), call render_chart TWICE — once with the daily totals, " +
+                        "once with category totals. When asked for a PDF, use render_pdf with a title + rows array " +
+                        "of \"date|amount|note\" strings. " +
+                        "If asked to visualize/chart something, call render_chart after " +
                         "querying. Always reply in the same language and style the user wrote in — including " +
                         "Tanglish (Tamil written in English letters), plain English, or Tamil script; match " +
                         "their language rather than defaulting to English. " +
-                        "Keep answers concise and grounded only in query results.";
+                        "You CAN use markdown formatting (### headings, **bold**, - bullet lists, --- dividers) " +
+                        "in answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
     }
 
     private final ToolDispatcher dispatcher;
@@ -46,6 +54,11 @@ public class ClaudeClient implements AiProvider {
     @Override
     public String getLastChartPath() {
         return dispatcher.getLastChartPath();
+    }
+
+    @Override
+    public List<String> getLastChartPaths() {
+        return Collections.emptyList();
     }
 
     @Override
@@ -242,11 +255,22 @@ public class ClaudeClient implements AiProvider {
         chartSchema.put("type", "object");
         JSONObject chartProps = new JSONObject();
         chartProps.put("title", new JSONObject().put("type", "string"));
+        chartProps.put("chart_type", new JSONObject().put("type", "string").put("description", "bar (default) or pie"));
         chartProps.put("labels", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "string")));
         chartProps.put("values", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "number")));
         chartSchema.put("properties", chartProps);
         chartSchema.put("required", new JSONArray().put("labels").put("values"));
-        tools.put(tool("render_chart", "Render a bar chart from labels/values, shown to the user as an image.", chartSchema));
+        tools.put(tool("render_chart", "Render a bar or pie chart from labels/values, shown to the user as an image.", chartSchema));
+
+        // PDF tool schema
+        JSONObject pdfSchema = new JSONObject();
+        pdfSchema.put("type", "object");
+        JSONObject pdfProps = new JSONObject();
+        pdfProps.put("title", new JSONObject().put("type", "string"));
+        pdfProps.put("rows", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "string")));
+        pdfSchema.put("properties", pdfProps);
+        pdfSchema.put("required", new JSONArray().put("title").put("rows"));
+        tools.put(tool("render_pdf", "Generate a PDF file from rows of \"date|amount|note\". The user gets a download link.", pdfSchema));
 
         JSONObject imageSchema = new JSONObject();
         imageSchema.put("type", "object");

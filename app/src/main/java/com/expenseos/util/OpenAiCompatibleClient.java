@@ -28,12 +28,17 @@ public abstract class OpenAiCompatibleClient implements AiProvider {
                         "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
                         "You must NEVER attempt to modify data — you only have read tools available. " +
                         "Always start by calling list_tables, then describe_table on relevant tables before " +
-                        "writing a query — never guess column names. If the user asks to visualize or chart " +
-                        "something, call render_chart with labels/values AFTER querying the data. " +
+                        "writing a query — never guess column names. CHART RULES: render_chart supports " +
+                        "chart_type='bar' (default) or 'pie'. When the user explicitly asks for BOTH day-wise " +
+                        "AND category-wise in one turn (e.g. \"day wise and category wise\", \"daily and by category\"), " +
+                        "you MUST call render_chart TWICE — once titled \"Day-wise\" with daily totals, again titled \"Category-wise\" with category totals; both show under one bubble. " +
+                        "When the user asks for an EXPORT/PDF (\"pdf kudu\", \"send pdf\"), use render_pdf with title + a rows array of \"YYYY-MM-DD|amount|note\" strings. " +
+                        "If the user asks to visualize or chart something, call render_chart with labels/values AFTER querying the data. " +
                         "Always reply in the same language and style the user wrote in — including Tanglish " +
                         "(Tamil written in English letters), plain English, or Tamil script; match their " +
                         "language rather than defaulting to English. " +
-                        "Keep answers concise and grounded only in query results.";
+                        "You CAN use markdown formatting (### headings, **bold**, *italic*, - bullet, --- divider) " +
+                        "in your answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
     }
 
     private final ToolDispatcher dispatcher;
@@ -237,11 +242,21 @@ public abstract class OpenAiCompatibleClient implements AiProvider {
         chartParams.put("type", "object");
         JSONObject chartProps = new JSONObject();
         chartProps.put("title", new JSONObject().put("type", "string"));
+        chartProps.put("chart_type", new JSONObject().put("type", "string").put("description", "bar (default) or pie"));
         chartProps.put("labels", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "string")));
         chartProps.put("values", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "number")));
         chartParams.put("properties", chartProps);
         chartParams.put("required", new JSONArray().put("labels").put("values"));
-        tools.put(toolDef("render_chart", "Render a bar chart from labels/values and show it to the user as an image.", chartParams));
+        tools.put(toolDef("render_chart", "Render a bar OR pie chart from labels/values and show it to the user as an image. Call it TWICE if the user wants both day-wise AND category-wise in one turn.", chartParams));
+
+        JSONObject pdfParams = new JSONObject();
+        pdfParams.put("type", "object");
+        JSONObject pdfProps = new JSONObject();
+        pdfProps.put("title", new JSONObject().put("type", "string"));
+        pdfProps.put("rows", new JSONObject().put("type", "array").put("items", new JSONObject().put("type", "string")).put("description", "Array of \"YYYY-MM-DD|amount|note\" strings."));
+        pdfParams.put("properties", pdfProps);
+        pdfParams.put("required", new JSONArray().put("title").put("rows"));
+        tools.put(toolDef("render_pdf", "Generate a PDF file from rows of \"date|amount|note\". Use this when the user asks for a PDF export of expenses.", pdfParams));
 
         JSONObject imageParams = new JSONObject();
         imageParams.put("type", "object");

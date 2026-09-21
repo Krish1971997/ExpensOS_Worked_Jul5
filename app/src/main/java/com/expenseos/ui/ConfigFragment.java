@@ -86,7 +86,7 @@ public class ConfigFragment extends Fragment {
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
     }
 
-    private static final String[] AI_PROVIDERS = {"gemini", "openai", "grok", "claude"};
+    private static final String[] AI_PROVIDERS = {"gemini", "openai", "grok", "claude", "genspark"};
 
     private void setupSpinner() {
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
