@@ -19,6 +19,8 @@ import com.expenseos.R;
 import com.expenseos.dao.SettlementLinkDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Transaction;
+import com.expenseos.model.TransactionFilter;
+import com.expenseos.ui.home.TransactionFilterDialog;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -45,13 +47,17 @@ public class SettlementLinkActivity extends AppCompatActivity {
 
     private LinearLayout containerLinked, containerAvailable;
     private TextView tvNoLinked, tvNoAvailable, tvSourceSummary, tvRemaining;
-    private EditText etFilter;
+    private TextView tvFilterSummary, btnFilter, btnFilterClear;
     private View btnSaveLinks;
 
     private BigDecimal sourceRemaining = BigDecimal.ZERO;
     // candidate txnId -> amount the user has checked/entered (not yet saved)
     private final Map<Integer, BigDecimal> pendingSelections = new LinkedHashMap<>();
-    private String filterQuery = "";
+    // Reuses the app's existing filter dialog (Category/Sub Category/Amount/
+    // Date/Payment Type/Attachment) instead of a plain search box — type
+    // and bookId are forced to this screen's constraints at query time,
+    // not exposed as dialog tabs.
+    private TransactionFilter currentFilter = new TransactionFilter();
 
     @Override
     protected void onCreate(Bundle s) {
@@ -73,29 +79,42 @@ public class SettlementLinkActivity extends AppCompatActivity {
         containerAvailable = findViewById(R.id.containerAvailable);
         tvNoLinked = findViewById(R.id.tvNoLinked);
         tvNoAvailable = findViewById(R.id.tvNoAvailable);
-        etFilter = findViewById(R.id.etSettleFilter);
+        tvFilterSummary = findViewById(R.id.tvSettleFilterSummary);
+        btnFilter = findViewById(R.id.btnSettleFilter);
+        btnFilterClear = findViewById(R.id.btnSettleFilterClear);
         btnSaveLinks = findViewById(R.id.btnSaveLinks);
 
         findViewById(R.id.btnSettleBack).setOnClickListener(v -> finish());
         btnSaveLinks.setOnClickListener(v -> saveLinks());
 
-        etFilter.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
-            }
+        btnFilter.setOnClickListener(v -> new TransactionFilterDialog(this, source.getBookId(), currentFilter, filter -> {
+            currentFilter = filter;
+            updateFilterSummary();
+            renderAvailable();
+        }).show());
 
-            @Override
-            public void onTextChanged(CharSequence s, int a, int b, int c) {
-            }
-
-            @Override
-            public void afterTextChanged(Editable e) {
-                filterQuery = e.toString().trim().toLowerCase(java.util.Locale.ROOT);
-                renderAvailable();
-            }
+        btnFilterClear.setOnClickListener(v -> {
+            currentFilter = new TransactionFilter();
+            updateFilterSummary();
+            renderAvailable();
         });
 
         loadAll();
+    }
+
+    // "Filters applied ✕" pill kāтtudhu, edhavadhu field set aagirundha —
+    // Category/Sub Category/Date/Amount/Payment Type/Attachment ellame check pannuрОm.
+    private void updateFilterSummary() {
+        boolean active = (currentFilter.getCategoryIds() != null && !currentFilter.getCategoryIds().isEmpty()) ||
+                (currentFilter.getSubCategoryIds() != null && !currentFilter.getSubCategoryIds().isEmpty()) ||
+                currentFilter.getDateFrom() != null || currentFilter.getDateTo() != null ||
+                currentFilter.getAmount1() != null ||
+                (currentFilter.getPaymentTypes() != null && !currentFilter.getPaymentTypes().isEmpty()) ||
+                currentFilter.getHasAttachment() != null;
+
+        tvFilterSummary.setText(active ? "Filters applied" : "Filter by category, amount, date…");
+        tvFilterSummary.setTextColor(active ? getColor(R.color.primary) : getColor(R.color.text_muted));
+        btnFilterClear.setVisibility(active ? View.VISIBLE : View.GONE);
     }
 
     private void loadAll() {
@@ -115,6 +134,7 @@ public class SettlementLinkActivity extends AppCompatActivity {
                 (source.getNote() != null && !source.getNote().isEmpty() ? " (" + source.getNote() + ")" : ""));
 
         updateRemainingLabel();
+        updateFilterSummary();
         renderLinked();
         renderAvailable();
     }
@@ -193,7 +213,12 @@ public class SettlementLinkActivity extends AppCompatActivity {
         containerAvailable.removeAllViews();
 
         String oppositeType = source.getType() == Transaction.Type.INCOME ? "EXPENSE" : "INCOME";
-        List<Transaction> candidates = txnDao.findAll(oppositeType, 0, 1000, source.getBookId());
+        // Screen-oda fixed constraints (type + this book) force pannunga —
+        // dialog-la idhu tabs-ah expose aagalai, user-oda filter choices
+        // (Category/Amount/Date/etc.) mattum andha mேlே apply aagum.
+        currentFilter.setType(oppositeType);
+        currentFilter.setBookIds(java.util.Collections.singletonList(source.getBookId()));
+        List<Transaction> candidates = txnDao.findByFilter(currentFilter);
 
         boolean anyShown = false;
         for (Transaction t : candidates) {
@@ -201,12 +226,6 @@ public class SettlementLinkActivity extends AppCompatActivity {
 
             BigDecimal remaining = t.getAmount().subtract(linkDao.sumLinkedFor(t.getId())).max(BigDecimal.ZERO);
             if (remaining.compareTo(BigDecimal.ZERO) <= 0) continue; // fully settled already
-
-            if (!filterQuery.isEmpty()) {
-                String haystack = (t.getCategoryName() != null ? t.getCategoryName() : "") + " " +
-                        (t.getNote() != null ? t.getNote() : "");
-                if (!haystack.toLowerCase(java.util.Locale.ROOT).contains(filterQuery)) continue;
-            }
 
             anyShown = true;
             containerAvailable.addView(buildAvailableRow(t, remaining));
