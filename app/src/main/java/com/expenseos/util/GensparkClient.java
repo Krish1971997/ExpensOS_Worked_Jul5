@@ -12,14 +12,18 @@ import java.util.List;
  */
 public class GensparkClient extends OpenAiCompatibleClient {
 
-    // Public endpoint; model defaults to "genspark-instruct" in AppConfig.
     public GensparkClient(Context ctx) {
-        super(ctx, AppConfig.PROVIDER_GENSPARK, "https://api.genspark.ai/v1/chat/completions");
-    }
-
-    @Override
-    protected String providerLabel() {
-        return "Genspark";
+        super(
+                ctx,
+                new AiCandidate(
+                        AppConfig.PROVIDER_GENSPARK,
+                        AppConfig.get(ctx).getAiModel(AppConfig.PROVIDER_GENSPARK),
+                        AppConfig.get(ctx).getAiKey(AppConfig.PROVIDER_GENSPARK),
+                        "",
+                        0
+                ),
+                "https://api.genspark.ai/v1/chat/completions"
+        );
     }
 
     @Override
