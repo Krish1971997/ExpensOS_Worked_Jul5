@@ -26,6 +26,15 @@ import com.expenseos.dao.ChatHistoryDao;
 import com.expenseos.model.ChatMessage;
 import com.expenseos.util.AiClientFactory;
 import com.expenseos.util.AiProvider;
+import com.expenseos.util.AiFailoverManager;
+import com.expenseos.util.AiException;
+import com.expenseos.util.AiRequest;
+import com.expenseos.util.AiHistory;
+import com.expenseos.util.AiCandidate;
+import com.expenseos.util.AiConfigStore;
+import com.expenseos.util.AiKeyConfig;
+import com.expenseos.util.AiModelConfig;
+import java.util.ArrayList;
 import com.expenseos.util.AppConfig;
 
 import org.json.JSONArray;
@@ -77,7 +86,11 @@ public class ChatActivity extends AppCompatActivity {
 
         uiHandler = new Handler(Looper.getMainLooper());
         historyDao = new ChatHistoryDao(this);
-        aiClient = AiClientFactory.create(this);
+        try {
+    
+        } catch (Throwable t) {
+            aiClient = null; // legacy path is optional; runTurn() uses the failover manager
+        }
 
         messagesContainer = findViewById(R.id.chatMessagesContainer);
         scrollView = findViewById(R.id.chatScrollView);
@@ -232,49 +245,73 @@ public class ChatActivity extends AppCompatActivity {
         final String finalMessage = effectiveMessage;
         final String finalImagePath = attIsImage ? attPath : null;
 
-        new Thread(() -> aiClient.ask(finalMessage, finalImagePath, conversation, new AiProvider.Callback() {
-            @Override
-            public void onResult(String answer) {
-                String chartPath = aiClient.getLastChartPath();
-                String imagePath = aiClient.getLastImagePath();
-                String pathToShow = imagePath != null ? imagePath : chartPath;
-                String safeAnswer = (answer == null || answer.trim().isEmpty())
-                        ? "I couldn't find anything to report for that." : answer;
+        // Single attempt chain: multi-key / multi-model failover. One dead key or a
+        // 429 must not leave the chat hanging until the watchdog trips.
+        new Thread(() -> {
+            AiException failure = null;
+            String answer = null;
+            java.util.List<String> charts = new ArrayList<>();
+            String imgPath = null;
+            try {
+                AiFailoverManager mgr = new AiFailoverManager(getApplicationContext(), buildCandidates());
+                AiRequest req = new AiRequest(finalMessage, finalImagePath,
+                        AiHistory.sanitize(conversation), finalMessage);
+                answer = mgr.runTurn(req, new AiProvider.Callback() {
+                    @Override public void onResult(String a) { }
+                    @Override public void onError(String m) { }
+                    @Override public void onProgress(String stage) {
+                        runOnUiThread(() -> {
+                            if (typingText != null) typingText.setText(stage);
+                            scrollToBottom();
+                        });
+                    }
+                }, new AiFailoverManager.UiHooks() {
+                    @Override
+                    public void onFailover(String label) {
+                        runOnUiThread(() -> {
+                            if (typingText != null) typingText.setText("Switching to " + label + "…");
+                        });
+                    }
+                });
+                java.util.List<String> c = mgr.getLastChartPaths();
+                if (c != null) charts = c;
+                imgPath = mgr.getLastImagePath();
+            } catch (AiException e) {
+                failure = e;
+            } catch (Throwable t) {
+                failure = new AiException(AiException.Kind.UNKNOWN,
+                        t.getClass().getSimpleName()
+                                + (t.getMessage() != null ? " — " + t.getMessage() : ""));
+            }
 
+            final String fAnswer = answer;
+            final AiException fFailure = failure;
+            final String fImg = imgPath;
+            final java.util.List<String> fCharts = charts;
+
+            runOnUiThread(() -> {
+                stopTyping();
+                if (fFailure != null) {
+                    addErrorBubble(describeFailure(fFailure));
+                    endTurn();
+                    return;
+                }
+                String safeAnswer = (fAnswer == null || fAnswer.trim().isEmpty())
+                        ? "I couldn't find anything to report for that." : fAnswer;
+                String pathToShow = fImg != null ? fImg
+                        : (!fCharts.isEmpty() ? fCharts.get(0) : null);
                 try {
                     JSONObject m = new JSONObject();
                     m.put("role", "model");
                     m.put("parts", new JSONArray().put(new JSONObject().put("text", safeAnswer)));
                     conversation.put(m);
-                } catch (Exception ignored) {
-                }
-
-                runOnUiThread(() -> {
-                    stopTyping();
-                    addBotBubble(safeAnswer, pathToShow);
-                    saveMessage(ChatMessage.ROLE_ASSISTANT, safeAnswer, null, null, pathToShow,
-                            AppConfig.get(ChatActivity.this).getAiProvider());
-                    endTurn();
-                });
-            }
-
-            @Override
-            public void onError(String message) {
-                runOnUiThread(() -> {
-                    stopTyping();
-                    addErrorBubble(message);
-                    endTurn();
-                });
-            }
-
-            @Override
-            public void onProgress(String stage) {
-                runOnUiThread(() -> {
-                    if (typingText != null) typingText.setText(stage);
-                    scrollToBottom();
-                });
-            }
-        })).start();
+                } catch (Exception ignored) { }
+                addBotBubble(safeAnswer, pathToShow);
+                saveMessage(ChatMessage.ROLE_ASSISTANT, safeAnswer, null, null, pathToShow,
+                        AppConfig.get(ChatActivity.this).getAiProvider());
+                endTurn();
+            });
+        }).start();
     }
 
     private void endTurn() {
@@ -317,11 +354,11 @@ public class ChatActivity extends AppCompatActivity {
         watchdog = () -> {
             if (inFlight) {
                 stopTyping();
-                addErrorBubble("No response in 60s — the assistant may be offline or your key/quota needs checking.");
+                addErrorBubble("No reply after 95s — the request stalled. Check your network, then check the model/API key in Config.");
                 endTurn();
             }
         };
-        uiHandler.postDelayed(watchdog, 60000);
+        uiHandler.postDelayed(watchdog, 95000);
     }
 
     private void stopTyping() {
@@ -506,5 +543,49 @@ public class ChatActivity extends AppCompatActivity {
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
+    }
+    // ── Candidate chain (multi-model / multi-key, active provider first) ──
+    private java.util.List<AiCandidate> buildCandidates() {
+        java.util.List<AiCandidate> out = new ArrayList<>();
+        String active = null;
+        try {
+            AiConfigStore.AiConfig cfg = new AiConfigStore(this).load();
+            active = cfg.activeProvider;
+            for (AiModelConfig m : cfg.models) {
+                int i = 0;
+                for (AiKeyConfig k : m.keys) {
+                    if (k.key == null || k.key.isBlank()) continue;
+                    out.add(new AiCandidate(m.provider, m.model, k.key, k.desc, i++));
+                }
+            }
+        } catch (Throwable ignored) { }
+        // Legacy per-provider single-key slots, so an un-migrated install still works.
+        try {
+            AppConfig cfg = AppConfig.get(this);
+            String[] provs = { AppConfig.PROVIDER_GEMINI, AppConfig.PROVIDER_OPENAI,
+                    AppConfig.PROVIDER_GROK, AppConfig.PROVIDER_CLAUDE, AppConfig.PROVIDER_GENSPARK };
+            for (String p : provs) {
+                String key = cfg.getAiKey(p);
+                String model = cfg.getAiModel(p);
+                if (key == null || key.isBlank() || model == null || model.isBlank()) continue;
+                boolean dup = false;
+                for (AiCandidate c : out)
+                    if (c.provider.equals(p) && c.model.equals(model) && c.apiKey.equals(key)) dup = true;
+                if (!dup) out.add(new AiCandidate(p, model, key, "", 0));
+            }
+        } catch (Throwable ignored) { }
+        if (active == null) return out;
+        java.util.List<AiCandidate> ordered = new ArrayList<>();
+        for (AiCandidate c : out) if (active.equals(c.provider)) ordered.add(c);
+        for (AiCandidate c : out) if (!active.equals(c.provider)) ordered.add(c);
+        return ordered;
+    }
+
+    /** Real error detail — kind + message, never a generic "no response". */
+    private String describeFailure(AiException e) {
+        if (e == null) return "Unknown AI error.";
+        String kind = e.kind != null ? e.kind.name() : "ERROR";
+        String msg = e.getMessage() != null && !e.getMessage().isBlank() ? e.getMessage() : "no details";
+        return "[" + kind + "] " + msg;
     }
 }

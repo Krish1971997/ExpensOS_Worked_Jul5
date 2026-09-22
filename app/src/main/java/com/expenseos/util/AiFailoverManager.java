@@ -130,7 +130,7 @@ public class AiFailoverManager {
         }
     }
 
-    private static final long TOTAL_TURN_BUDGET_MS = 75_000; // stay under ChatActivity's 90s watchdog
+    private static final long TOTAL_TURN_BUDGET_MS = 60_000; // must stay under ChatActivity's 95s watchdog
 
     private String runTurnInternal(AiRequest request, AiProvider.Callback cb, UiHooks hooks) throws AiException {
         if (candidates.isEmpty()) {
@@ -158,6 +158,14 @@ public class AiFailoverManager {
 
             int attempts = 0;
             while (true) {
+                // Budget check INSIDE the retry loop: a single hung/rate-limited
+                // candidate must never eat the whole turn and trip the UI watchdog.
+                if (System.currentTimeMillis() - turnStart > TOTAL_TURN_BUDGET_MS) {
+                    last = new AiException(AiException.Kind.NETWORK,
+                            "Timed out after " + (TOTAL_TURN_BUDGET_MS / 1000)
+                                    + "s on " + cand.maskedLabel() + " — check your network/API key.");
+                    break;
+                }
                 attempts++;
                 AiProvider client = AiClientFactory.create(ctx, cand);
                 try {

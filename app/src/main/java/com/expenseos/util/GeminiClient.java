@@ -80,6 +80,11 @@ public class GeminiClient implements AiProvider {
             askBlocking(new AiRequest(userMessage, imagePath, neutral, userMessage), cb);
         } catch (AiException e) {
             cb.onError(e.getMessage());
+        } catch (Throwable t) {
+            // Defence in depth: any non-AiException must still reach the UI as an
+            // error, never escape into a silently dead background thread.
+            cb.onError("Gemini failed: " + t.getClass().getSimpleName()
+                    + (t.getMessage() != null ? " — " + t.getMessage() : ""));
         }
     }
 
@@ -301,8 +306,8 @@ public class GeminiClient implements AiProvider {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setRequestProperty("x-goog-api-key", apiKey); // key in a header, never in the URL
         conn.setDoOutput(true);
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000);
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(30000);
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
