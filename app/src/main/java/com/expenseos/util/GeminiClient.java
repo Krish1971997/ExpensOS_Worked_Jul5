@@ -10,65 +10,49 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
+/**
+ * Google Gemini {@code generateContent} client (function calling).
+ * <p>
+ * One instance = one concrete candidate (provider → model → key), exactly like
+ * {@link ClaudeClient} and {@link OpenAiCompatibleClient}, so the failover
+ * manager can retry the same user turn on another key or model safely.
+ * Per-turn chart/image state is fresh ({@link ToolDispatcher#resetChart()}).
+ * <p>
+ * The API key travels in the {@code x-goog-api-key} header — never in a URL —
+ * so it can never leak into a log, an error message or the history.
+ */
 public class GeminiClient implements AiProvider {
 
-    // Known-good ids, tried in order. Kept inside the client so a stale/renamed
-    // model id, an overloaded model (503) or an exhausted quota (429) can never
-    // dead-end the chat: the client rotates and remembers what actually worked.
-    private static final String[] MODEL_CHAIN = {
-            "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"
-    };
-    private static final String GEMINI_ENDPOINT_BASE =
+    private static final String ENDPOINT_BASE =
             "https://generativelanguage.googleapis.com/v1beta/models/";
-
-    // Session memory of models that reported "quota/credits exhausted" or
-    // "not found", so later turns skip them automatically (auto-switch).
-    private static final Set<String> UNAVAILABLE =
-            Collections.synchronizedSet(new HashSet<String>());
-    private static volatile String ACTIVE_MODEL = null;
-
     private static final int MAX_ROUNDS = 12;
-    private static final int TRANSIENT_ATTEMPTS = 2;
-    private static final int MAX_HISTORY = 20;
 
-    private static String buildSystemPrompt() {
-        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
-        return
-                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
-                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
-                        "style questions instead of spending a step figuring out the date. " +
-                        "You can ONLY answer questions about this app's own data (transactions, categories, " +
-                        "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
-                        "You must NEVER attempt to modify data — you only have read tools available. " +
-                        "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
-                        "If the user asks to visualize or chart something, call render_chart with the labels/values " +
-                        "AFTER you've queried the data. Always reply in the same language and style the user wrote " +
-                        "in — including Tanglish (Tamil written in English letters), plain English, or Tamil script; " +
-                        "match their language rather than defaulting to English. " +
-                        "Prefer answering directly instead of running the same query twice. " +
-                        "Keep answers concise and grounded only in query results.";
-    }
+    /** Last model that actually answered — handy for UI/debugging. */
+    private static volatile String ACTIVE_MODEL = null;
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
 
+    /** Legacy single-provider construction (Config screen / AiClientFactory.create(ctx)). */
     public GeminiClient(Context ctx) {
-        AppConfig cfg = AppConfig.get(ctx);
-        this.apiKey = cfg.getAiKey(AppConfig.PROVIDER_GEMINI);
-        this.model = cfg.getAiModel(AppConfig.PROVIDER_GEMINI);
+        this(ctx, new AiCandidate(
+                AppConfig.PROVIDER_GEMINI,
+                AppConfig.get(ctx).getAiModel(AppConfig.PROVIDER_GEMINI),
+                AppConfig.get(ctx).getAiKey(AppConfig.PROVIDER_GEMINI),
+                "", 0));
+    }
+
+    /** Failover construction — one concrete (provider → model → key) candidate. */
+    public GeminiClient(Context ctx, AiCandidate cand) {
+        this.apiKey = cand != null ? cand.apiKey : null;
+        this.model = cand != null ? cand.model : null;
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
-    /** The model that most recently answered — useful for showing which engine replied. */
     public static String getActiveModel() {
         return ACTIVE_MODEL;
     }
@@ -79,422 +63,323 @@ public class GeminiClient implements AiProvider {
     }
 
     @Override
+    public List<String> getLastChartPaths() {
+        return dispatcher.getLastChartPaths();
+    }
+
+    @Override
     public String getLastImagePath() {
         return dispatcher.getLastImagePath();
     }
 
-    // ── HTTP failure classification ──────────────────────────────────
-    private static final class HttpFailure extends RuntimeException {
-        final int status;
-        final String apiStatus;
-
-        HttpFailure(int status, String apiStatus, String message) {
-            super(message);
-            this.status = status;
-            this.apiStatus = apiStatus == null ? "" : apiStatus;
-        }
-
-        boolean isAuth() {
-            return status == 401 || status == 403
-                    || "API_KEY_INVALID".equals(apiStatus) || "PERMISSION_DENIED".equals(apiStatus);
-        }
-
-        /** Credits / tokens / free-tier quota used up on THIS model → switch model. */
-        boolean isExhausted() {
-            return status == 429 || "RESOURCE_EXHAUSTED".equals(apiStatus)
-                    || "QUOTA_EXCEEDED".equals(apiStatus);
-        }
-
-        /** Model overloaded / server side hiccup → retry, then switch model. */
-        boolean isTransient() {
-            return status == 500 || status == 502 || status == 503 || status == 504
-                    || status == -1
-                    || "UNAVAILABLE".equals(apiStatus) || "INTERNAL".equals(apiStatus)
-                    || "DEADLINE_EXCEEDED".equals(apiStatus);
-        }
-
-        /** Bad/renamed model id → switch model. */
-        boolean isModelBad() {
-            return status == 404 || "NOT_FOUND".equals(apiStatus)
-                    || "INVALID_ARGUMENT".equals(apiStatus);
-        }
-
-        /** Nothing can be fixed by rotating models (safety block, empty answer, …). */
-        boolean isDefinitive() {
-            return !isAuth() && !isExhausted() && !isTransient() && !isModelBad();
+    /** Legacy entry — kept for compatibility; the chat goes through askBlocking(). */
+    @Override
+    public void ask(String userMessage, String imagePath, JSONArray priorMessages, Callback cb) {
+        try {
+            JSONArray neutral = AiHistory.sanitize(priorMessages);
+            askBlocking(new AiRequest(userMessage, imagePath, neutral, userMessage), cb);
+        } catch (AiException e) {
+            cb.onError(e.getMessage());
         }
     }
 
     @Override
-    public void ask(String userMessage, String imagePath, JSONArray conversationHistory, Callback cb) {
+    public String askBlocking(AiRequest request, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
-            cb.onError("Gemini API key is not configured in Config.");
-            return;
+            throw new AiException(AiException.Kind.AUTH,
+                    "Gemini API key is not configured — add it in Config.");
         }
-
-        JSONArray contents;
+        if (model == null || model.isBlank()) {
+            throw new AiException(AiException.Kind.MODEL_UNAVAILABLE,
+                    "Gemini: no model selected — pick one in Config.");
+        }
         try {
-            contents = normalizeHistory(conversationHistory);
-            contents.put(imagePath != null
-                    ? createContentWithImage(userMessage, imagePath)
-                    : createContent("user", userMessage));
-            contents = normalizeHistory(contents); // merges into a valid alternating shape
-        } catch (Exception e) {
-            cb.onError("Gemini: couldn't build the request — " + e);
-            return;
-        }
+            JSONArray contents = toGeminiContents(AiHistory.sanitize(request.history));
+            contents.put(request.imagePath != null
+                    ? userContentWithImage(request.userMessage, request.imagePath)
+                    : userContent(request.userMessage));
 
-        Exception lastError = null;
-        for (String useModel : modelChain()) {
-            if (UNAVAILABLE.contains(useModel)) continue;
-            try {
-                runConversation(contents, useModel, cb);
-                ACTIVE_MODEL = useModel;
-                return;
-            } catch (HttpFailure f) {
-                lastError = f;
-                if (f.isAuth() || f.isDefinitive()) {
-                    cb.onError(f.getMessage());
-                    return;
-                }
-                UNAVAILABLE.add(useModel);
-                if (f.isExhausted()) {
-                    cb.onProgress("Quota reached on " + useModel + " — switching model…");
-                } else if (f.isTransient()) {
-                    cb.onProgress(useModel + " is busy — trying another model…");
-                } else {
-                    cb.onProgress(useModel + " unavailable — trying another model…");
-                }
-            } catch (Throwable t) {
-                lastError = (t instanceof Exception) ? (Exception) t : new RuntimeException(t);
-                cb.onProgress("Network problem with " + useModel + " — trying another model…");
-            }
-        }
+            cb.onProgress("Thinking…");
+            for (int round = 0; round < MAX_ROUNDS; round++) {
+                JSONObject response = call(contents);
 
-        String detail = lastError != null && lastError.getMessage() != null ? lastError.getMessage() : "";
-        StringBuilder msg = new StringBuilder("Couldn't reach any Gemini model just now. ");
-        if (!UNAVAILABLE.isEmpty()) msg.append("Already blocked this session: ").append(UNAVAILABLE).append(". ");
-        if (!detail.isEmpty()) msg.append("Last error: ").append(detail).append(" ");
-        msg.append("Wait a few seconds and tap Retry, or check the key/model in Config.");
-        cb.onError(msg.toString());
-    }
-
-    private String[] modelChain() {
-        LinkedHashSet<String> chain = new LinkedHashSet<>();
-        if (ACTIVE_MODEL != null && !ACTIVE_MODEL.isBlank()) chain.add(ACTIVE_MODEL);
-        if (model != null && !model.isBlank()) chain.add(model);
-        for (String m : MODEL_CHAIN) chain.add(m);
-        return chain.toArray(new String[0]);
-    }
-
-    // ── One full assistant turn against one model ────────────────────
-    private void runConversation(JSONArray contents, String useModel, Callback cb) throws Exception {
-        for (int round = 0; round < MAX_ROUNDS; round++) {
-            JSONObject response = callWithRetries(contents, useModel, true);
-
-            JSONArray candidates = response.optJSONArray("candidates");
-            if (candidates == null || candidates.length() == 0) {
-                JSONObject feedback = response.optJSONObject("promptFeedback");
-                String why = feedback != null ? feedback.optString("blockReason", "") : "";
-                throw new HttpFailure(200, "", "The model returned no answer"
-                        + (why.isEmpty() ? "." : " (blocked: " + why + ")."));
-            }
-            JSONObject candidate = candidates.getJSONObject(0);
-            String finish = candidate.optString("finishReason", "");
-            JSONObject content = candidate.optJSONObject("content");
-            JSONArray parts = content != null ? content.optJSONArray("parts") : null;
-
-            if (parts == null || parts.length() == 0) {
-                if ("SAFETY".equals(finish) || "PROHIBITED_CONTENT".equals(finish) || "RECITATION".equals(finish))
-                    throw new HttpFailure(200, "", "The model declined that request (" + finish + "). Try rephrasing.");
-                if ("MAX_TOKENS".equals(finish))
-                    throw new HttpFailure(200, "", "That answer was cut off (token limit). Try a shorter question.");
-                throw new HttpFailure(200, "", "The model returned an empty response"
-                        + (finish.isEmpty() ? "." : " (" + finish + ")."));
-            }
-
-            JSONObject firstPart = parts.getJSONObject(0);
-
-            if (firstPart.has("functionCall")) {
-                contents.put(content);
-                JSONObject fnCall = firstPart.getJSONObject("functionCall");
-                String fnName = fnCall.getString("name");
-                JSONObject args = fnCall.optJSONObject("args");
-                if (args == null) args = new JSONObject();
-
-                cb.onProgress(progressLabel(fnName, args));
-
-                String toolResult;
-                try {
-                    toolResult = dispatcher.dispatch(fnName, args);
-                } catch (Throwable t) {
-                    toolResult = "ERROR: " + (t.getMessage() != null ? t.getMessage() : t.toString());
+                JSONArray candidates = response.optJSONArray("candidates");
+                if (candidates == null || candidates.length() == 0) {
+                    JSONObject feedback = response.optJSONObject("promptFeedback");
+                    String block = feedback != null ? feedback.optString("blockReason", "") : "";
+                    throw new AiException(AiException.Kind.BAD_REQUEST,
+                            "Gemini declined that request"
+                                    + (block.isEmpty() ? " — try rephrasing." : " (" + block + ")."));
                 }
 
-                JSONObject functionResponse = new JSONObject();
-                functionResponse.put("name", fnName);
-                functionResponse.put("response", new JSONObject().put("result", toolResult));
-                JSONObject toolResponseContent = new JSONObject();
-                toolResponseContent.put("role", "user");
-                toolResponseContent.put("parts", new JSONArray().put(
-                        new JSONObject().put("functionResponse", functionResponse)));
-                contents.put(toolResponseContent);
+                JSONObject candidate = candidates.getJSONObject(0);
+                String finish = candidate.optString("finishReason", "");
+                JSONObject content = candidate.optJSONObject("content");
+                JSONArray parts = content != null ? content.optJSONArray("parts") : null;
 
-                cb.onProgress("Thinking…");
-                continue;
-            }
+                if (parts == null || parts.length() == 0) {
+                    if ("MAX_TOKENS".equals(finish))
+                        throw new AiException(AiException.Kind.BAD_REQUEST,
+                                "That answer was cut off — try asking something shorter.");
+                    if ("SAFETY".equals(finish) || "PROHIBITED_CONTENT".equals(finish)
+                            || "RECITATION".equals(finish))
+                        throw new AiException(AiException.Kind.BAD_REQUEST,
+                                "Gemini declined that request (" + finish + ") — try rephrasing.");
+                    throw new AiException(AiException.Kind.UNKNOWN,
+                            "Gemini returned an empty response"
+                                    + (finish.isEmpty() ? "." : " (" + finish + ")."));
+                }
 
-            String textResponse = firstPart.optString("text", "").trim();
-            if (textResponse.isEmpty()) {
+                // Did the model ask to run tools?
+                boolean hasToolCall = false;
                 for (int i = 0; i < parts.length(); i++) {
                     JSONObject p = parts.optJSONObject(i);
-                    String t = p != null ? p.optString("text", "") : "";
-                    if (!t.trim().isEmpty()) {
-                        textResponse = t.trim();
+                    if (p != null && p.has("functionCall")) {
+                        hasToolCall = true;
                         break;
                     }
                 }
-            }
-            cb.onResult(textResponse.isEmpty() ? "I couldn't find anything to report for that." : textResponse);
-            return;
-        }
 
-        // Ran out of tool rounds — ask once more with tools OFF for a final summary,
-        // instead of dumping a "maximum steps" error on the user.
-        try {
-            JSONObject finalResp = callWithRetries(contents, useModel, false);
-            JSONArray cands = finalResp.optJSONArray("candidates");
-            if (cands != null && cands.length() > 0) {
-                JSONObject c = cands.getJSONObject(0).optJSONObject("content");
-                JSONArray ps = c != null ? c.optJSONArray("parts") : null;
-                if (ps != null && ps.length() > 0) {
-                    String t = ps.getJSONObject(0).optString("text", "").trim();
-                    if (!t.isEmpty()) {
-                        cb.onResult(t);
-                        return;
+                if (hasToolCall) {
+                    // Echo the model's tool-call turn back before the results.
+                    JSONObject modelTurn = new JSONObject();
+                    modelTurn.put("role", "model");
+                    modelTurn.put("parts", parts);
+                    contents.put(modelTurn);
+
+                    JSONArray fnResponses = new JSONArray();
+                    for (int i = 0; i < parts.length(); i++) {
+                        JSONObject p = parts.optJSONObject(i);
+                        if (p == null) continue;
+                        JSONObject fnCall = p.optJSONObject("functionCall");
+                        if (fnCall == null) continue;
+
+                        String fnName = fnCall.getString("name");
+                        JSONObject args = fnCall.optJSONObject("args");
+                        if (args == null) args = new JSONObject();
+
+                        cb.onProgress(progressLabel(fnName, args));
+                        String result;
+                        try {
+                            result = dispatcher.dispatch(fnName, args);
+                        } catch (Exception e) {
+                            result = "ERROR: " + (e.getMessage() != null ? e.getMessage() : e.toString());
+                        }
+
+                        JSONObject fr = new JSONObject();
+                        fr.put("name", fnName);
+                        fr.put("response", new JSONObject().put("result", result));
+                        fnResponses.put(new JSONObject().put("functionResponse", fr));
                     }
+
+                    JSONObject toolTurn = new JSONObject();
+                    toolTurn.put("role", "user");
+                    toolTurn.put("parts", fnResponses);
+                    contents.put(toolTurn);
+
+                    cb.onProgress("Thinking…");
+                    continue;
                 }
-            }
-        } catch (Throwable ignored) {
-        }
-        cb.onError("That question needed too many steps. Try asking something more specific.");
-    }
 
-    // ── HTTP with transient retry on the SAME model ──────────────────
-    private JSONObject callWithRetries(JSONArray contents, String useModel, boolean withTools) {
-        HttpFailure last = null;
-        for (int attempt = 0; attempt < TRANSIENT_ATTEMPTS; attempt++) {
-            try {
-                return requestOnce(contents, useModel, withTools);
-            } catch (HttpFailure f) {
-                last = f;
-                // Credentials broken, model missing or quota spent: rotating/retrying
-                // the same model cannot help — let the caller switch models now.
-                if (f.isAuth() || f.isExhausted() || f.isModelBad()) throw f;
-                if (!f.isTransient()) throw f;
-                if (attempt < TRANSIENT_ATTEMPTS - 1) sleepQuietly(500L);
-            }
-        }
-        throw last != null ? last : new HttpFailure(-1, "", "Gemini: request failed.");
-    }
-
-    private JSONObject requestOnce(JSONArray contents, String useModel, boolean withTools) {
-        HttpURLConnection conn = null;
-        try {
-            JSONObject body = new JSONObject();
-            JSONObject sysInstruction = new JSONObject();
-            sysInstruction.put("parts", new JSONArray().put(new JSONObject().put("text", buildSystemPrompt())));
-            body.put("systemInstruction", sysInstruction);
-            body.put("contents", contents);
-            if (withTools) {
-                body.put("tools", new JSONArray().put(
-                        new JSONObject().put("functionDeclarations", functionDeclarations())));
-            }
-
-            URL url = new URL(GEMINI_ENDPOINT_BASE + useModel + ":generateContent?key=" + apiKey);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(30000);
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(body.toString().getBytes(StandardCharsets.UTF_8));
-            }
-
-            int status = conn.getResponseCode();
-            InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
-            String responseStr = is != null ? new String(is.readAllBytes(), StandardCharsets.UTF_8) : "";
-
-            if (status < 200 || status >= 300) {
-                String apiStatus = "";
-                String message = "";
-                try {
-                    JSONObject err = new JSONObject(responseStr).optJSONObject("error");
-                    if (err != null) {
-                        apiStatus = err.optString("status", "");
-                        message = err.optString("message", "");
-                    }
-                } catch (Exception ignored) {
-                    message = responseStr.length() > 200 ? responseStr.substring(0, 200) : responseStr;
+                // Final answer — join every text part.
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < parts.length(); i++) {
+                    JSONObject p = parts.optJSONObject(i);
+                    if (p != null) sb.append(p.optString("text", ""));
                 }
-                throw new HttpFailure(status, apiStatus, friendlyError(status, apiStatus, message));
+                String answer = sb.toString().trim();
+                ACTIVE_MODEL = model;
+                return answer.isEmpty() ? "I couldn't find an answer." : answer;
             }
-            return new JSONObject(responseStr);
-        } catch (HttpFailure f) {
-            throw f;
-        } catch (java.net.SocketTimeoutException e) {
-            throw new HttpFailure(-1, "", "Gemini: the model took too long to respond.");
+            throw new AiException(AiException.Kind.UNKNOWN,
+                    "Assistant took too many steps — try rephrasing your question.");
+        } catch (AiException e) {
+            throw e;
+        } catch (java.io.IOException e) {
+            throw AiErrorClassifier.fromNetwork("Gemini", e, apiKey);
         } catch (Exception e) {
-            throw new HttpFailure(-1, "", "Gemini: network error — "
-                    + (e.getMessage() != null ? e.getMessage() : e.toString()));
-        } finally {
-            if (conn != null) conn.disconnect();
+            throw AiErrorClassifier.fromUnexpected("Gemini", e, apiKey);
         }
-    }
-
-    private JSONArray functionDeclarations() throws Exception {
-        JSONArray functionDeclarations = new JSONArray();
-        functionDeclarations.put(createToolDeclaration("list_tables", "List database tables", new JSONObject()));
-
-        JSONObject descProps = new JSONObject();
-        descProps.put("table_name", new JSONObject().put("type", "STRING"));
-        functionDeclarations.put(createToolDeclaration("describe_table", "Describe table structure", descProps));
-
-        JSONObject queryProps = new JSONObject();
-        queryProps.put("sql", new JSONObject().put("type", "STRING"));
-        functionDeclarations.put(createToolDeclaration("run_query", "Execute SELECT query", queryProps));
-
-        JSONObject chartProps = new JSONObject();
-        chartProps.put("title", new JSONObject().put("type", "STRING"));
-        chartProps.put("labels", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "STRING")));
-        chartProps.put("values", new JSONObject().put("type", "ARRAY").put("items", new JSONObject().put("type", "NUMBER")));
-        functionDeclarations.put(createToolDeclaration("render_chart",
-                "Render a bar chart from labels and values, shown to the user as an image", chartProps));
-
-        JSONObject imageProps = new JSONObject();
-        imageProps.put("prompt", new JSONObject().put("type", "STRING"));
-        functionDeclarations.put(createToolDeclaration("generate_image",
-                "Generate an AI illustrative image from a text prompt (via Grok/xAI). Only for explicit picture/illustration requests — use render_chart for real data/stats instead.",
-                imageProps));
-        return functionDeclarations;
-    }
-
-    // ── History hygiene: Gemini rejects non-alternating turns ────────
-    private JSONArray normalizeHistory(JSONArray raw) throws Exception {
-        JSONArray out = new JSONArray();
-        if (raw == null) return out;
-
-        List<JSONObject> items = new ArrayList<>();
-        for (int i = 0; i < raw.length(); i++) {
-            JSONObject o = raw.optJSONObject(i);
-            if (o != null) items.add(o);
-        }
-
-        String lastRole = null;
-        JSONArray lastParts = null;
-        for (JSONObject o : items) {
-            String role = o.optString("role", "user").toLowerCase(Locale.ROOT);
-            boolean isModel = role.contains("model") || role.contains("assistant")
-                    || role.contains("bot") || role.contains("ai");
-            role = isModel ? "model" : "user";
-
-            JSONArray parts = o.optJSONArray("parts");
-            if (parts == null) {
-                String t = o.optString("text", o.optString("content", ""));
-                parts = new JSONArray().put(new JSONObject().put("text", t));
-            }
-            if (parts.length() == 0) continue;
-
-            if (role.equals(lastRole) && lastParts != null) {
-                for (int i = 0; i < parts.length(); i++) lastParts.put(parts.get(i)); // merge same-role turns
-            } else {
-                JSONObject c = new JSONObject();
-                c.put("role", role);
-                c.put("parts", parts);
-                out.put(c);
-                lastRole = role;
-                lastParts = parts;
-            }
-        }
-
-        while (out.length() > MAX_HISTORY) out.remove(0);
-        while (out.length() > 0 && !"user".equals(out.getJSONObject(0).optString("role"))) out.remove(0);
-        return out;
     }
 
     private String progressLabel(String toolName, JSONObject args) {
         return switch (toolName) {
             case "list_tables" -> "Checking tables…";
-            case "describe_table" -> "Reading \"" + args.optString("table_name", "table") + "\" structure…";
+            case "describe_table" ->
+                    "Reading \"" + args.optString("table_name", "table") + "\" structure…";
             case "run_query" -> "Querying your data…";
             case "render_chart" -> "Drawing chart…";
+            case "render_pdf" -> "Building PDF…";
             case "generate_image" -> "Generating image…";
             default -> "Working on \"" + toolName + "\"…";
         };
     }
 
-    private JSONObject createContent(String role, String text) throws Exception {
+    /** Neutral history (from AiHistory) → Gemini {@code contents} (user / model). */
+    private JSONArray toGeminiContents(JSONArray neutral) throws Exception {
+        JSONArray out = new JSONArray();
+        if (neutral == null) return out;
+
+        for (int i = 0; i < neutral.length(); i++) {
+            JSONObject item = neutral.optJSONObject(i);
+            if (item == null) continue;
+
+            String role = item.optString("role", "user").toLowerCase(Locale.ROOT);
+            boolean isModel = role.contains("model") || role.contains("assistant")
+                    || role.contains("bot") || role.contains("ai");
+
+            JSONArray parts = item.optJSONArray("parts");
+            if (parts == null || parts.length() == 0) {
+                String text = item.optString("content", item.optString("text", ""));
+                if (text == null || text.isEmpty()) continue;
+                parts = new JSONArray().put(new JSONObject().put("text", text));
+            }
+
+            String geminiRole = isModel ? "model" : "user";
+            // Merge consecutive same-role turns — Gemini rejects non-alternating history.
+            if (out.length() > 0) {
+                JSONObject prev = out.optJSONObject(out.length() - 1);
+                if (prev != null && geminiRole.equals(prev.optString("role"))) {
+                    JSONArray prevParts = prev.optJSONArray("parts");
+                    for (int k = 0; k < parts.length(); k++) prevParts.put(parts.get(k));
+                    continue;
+                }
+            }
+
+            JSONObject c = new JSONObject();
+            c.put("role", geminiRole);
+            c.put("parts", parts);
+            out.put(c);
+        }
+
+        // History must begin with a user turn.
+        while (out.length() > 0 && !"user".equals(out.getJSONObject(0).optString("role"))) {
+            out.remove(0);
+        }
+        return out;
+    }
+
+    private JSONObject userContent(String text) throws Exception {
         JSONObject content = new JSONObject();
-        content.put("role", role);
-        JSONArray parts = new JSONArray();
-        parts.put(new JSONObject().put("text", text));
-        content.put("parts", parts);
+        content.put("role", "user");
+        content.put("parts", new JSONArray().put(new JSONObject().put("text", text)));
         return content;
     }
 
-    private JSONObject createContentWithImage(String text, String imagePath) throws Exception {
+    private JSONObject userContentWithImage(String text, String imagePath) throws Exception {
         byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(imagePath));
         String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
         String mime = imagePath.toLowerCase(Locale.ROOT).endsWith(".png") ? "image/png" : "image/jpeg";
 
-        JSONObject content = new JSONObject();
-        content.put("role", "user");
         JSONArray parts = new JSONArray();
         parts.put(new JSONObject().put("text", text));
         JSONObject inlineData = new JSONObject();
         inlineData.put("mime_type", mime);
         inlineData.put("data", b64);
         parts.put(new JSONObject().put("inline_data", inlineData));
+
+        JSONObject content = new JSONObject();
+        content.put("role", "user");
         content.put("parts", parts);
         return content;
     }
 
-    private String friendlyError(int status, String apiStatus, String message) {
-        if (status == 400 && "API_KEY_INVALID".equals(apiStatus))
-            return "Gemini: invalid API key — check it in Config.";
-        if (status == 401 || status == 403 || "PERMISSION_DENIED".equals(apiStatus))
-            return "Gemini: this API key isn't allowed for that model — check the key/billing in Config.";
-        if (status == 429 || "RESOURCE_EXHAUSTED".equals(apiStatus))
-            return "Gemini: quota/credits used up on this model — switching to the next one…";
-        if (status == 404 || "NOT_FOUND".equals(apiStatus))
-            return "Gemini: model \"" + model + "\" not found — trying another model…";
-        if (status == 500 || status == 502 || status == 503 || status == 504 || "UNAVAILABLE".equals(apiStatus))
-            return "Gemini is busy (" + status + ") — retrying…";
-        if (message != null && !message.isEmpty()) return "Gemini error (" + status + "): " + message;
-        return "Gemini error (" + status + ").";
+    private JSONObject call(JSONArray contents) throws Exception {
+        JSONObject body = new JSONObject();
+        JSONObject systemInstruction = new JSONObject();
+        systemInstruction.put("parts",
+                new JSONArray().put(new JSONObject().put("text", AiPrompts.systemPrompt())));
+        body.put("systemInstruction", systemInstruction);
+        body.put("contents", contents);
+        body.put("tools", new JSONArray().put(
+                new JSONObject().put("functionDeclarations", functionDeclarations())));
+
+        URL url = new URL(ENDPOINT_BASE + model + ":generateContent");
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("x-goog-api-key", apiKey); // key in a header, never in the URL
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(20000);
+        conn.setReadTimeout(60000);
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (java.net.SocketTimeoutException e) {
+            throw new java.io.IOException("timeout");
+        }
+
+        int status;
+        try {
+            status = conn.getResponseCode();
+        } catch (java.net.SocketTimeoutException e) {
+            throw new java.io.IOException("timeout");
+        }
+
+        InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
+        String responseBody = is != null ? new String(is.readAllBytes(), StandardCharsets.UTF_8) : "";
+
+        if (status < 200 || status >= 300) {
+            throw AiErrorClassifier.fromHttp("Gemini", status, responseBody, apiKey);
+        }
+        return new JSONObject(responseBody);
     }
 
-    private JSONObject createToolDeclaration(String name, String description, JSONObject properties) throws Exception {
+    private JSONArray functionDeclarations() throws Exception {
+        JSONArray declarations = new JSONArray();
+
+        declarations.put(tool("list_tables", "List the database tables available to query.",
+                new JSONObject().put("type", "OBJECT").put("properties", new JSONObject())));
+
+        JSONObject describeProps = new JSONObject();
+        describeProps.put("table_name", new JSONObject().put("type", "STRING"));
+        declarations.put(tool("describe_table", "Get the column names and types for a table.",
+                new JSONObject().put("type", "OBJECT").put("properties", describeProps)));
+
+        JSONObject queryProps = new JSONObject();
+        queryProps.put("sql", new JSONObject().put("type", "STRING")
+                .put("description", "A single read-only SELECT statement."));
+        declarations.put(tool("run_query", "Run a read-only SELECT query against the app database.",
+                new JSONObject().put("type", "OBJECT").put("properties", queryProps)));
+
+        JSONObject chartProps = new JSONObject();
+        chartProps.put("title", new JSONObject().put("type", "STRING"));
+        chartProps.put("chart_type", new JSONObject().put("type", "STRING")
+                .put("description", "bar (default) or pie"));
+        chartProps.put("labels", new JSONObject().put("type", "ARRAY")
+                .put("items", new JSONObject().put("type", "STRING")));
+        chartProps.put("values", new JSONObject().put("type", "ARRAY")
+                .put("items", new JSONObject().put("type", "NUMBER")));
+        declarations.put(tool("render_chart",
+                "Render a bar or pie chart from labels/values, shown to the user as an image.",
+                new JSONObject().put("type", "OBJECT").put("properties", chartProps)));
+
+        JSONObject pdfProps = new JSONObject();
+        pdfProps.put("title", new JSONObject().put("type", "STRING"));
+        pdfProps.put("rows", new JSONObject().put("type", "ARRAY")
+                .put("items", new JSONObject().put("type", "STRING")));
+        declarations.put(tool("render_pdf",
+                "Generate a PDF file from rows of \"date|amount|note\". The user gets a download link.",
+                new JSONObject().put("type", "OBJECT").put("properties", pdfProps)));
+
+        JSONObject imageProps = new JSONObject();
+        imageProps.put("prompt", new JSONObject().put("type", "STRING")
+                .put("description", "Description of the illustrative image to generate. "
+                        + "Use render_chart instead for real data/stats."));
+        declarations.put(tool("generate_image",
+                "Generate an AI illustrative image from a text prompt (via Grok/xAI). "
+                        + "Requires a Grok API key configured in Config.",
+                new JSONObject().put("type", "OBJECT").put("properties", imageProps)));
+
+        return declarations;
+    }
+
+    private JSONObject tool(String name, String description, JSONObject parameters) throws Exception {
         JSONObject fn = new JSONObject();
         fn.put("name", name);
         fn.put("description", description);
-        if (properties.length() > 0) {
-            JSONObject parameters = new JSONObject();
-            parameters.put("type", "OBJECT");
-            parameters.put("properties", properties);
-            fn.put("parameters", parameters);
-        }
+        fn.put("parameters", parameters);
         return fn;
-    }
-
-    private static void sleepQuietly(long ms) {
-        try {
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }
