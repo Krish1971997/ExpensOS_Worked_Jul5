@@ -463,11 +463,13 @@ public class FoodTrackerActivity extends AppCompatActivity {
                 try (FileOutputStream out = new FileOutputStream(pdfFile)) {
                     writeFoodTrackerPdf(out);
                 }
-                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
                 runOnUiThread(() -> {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setDataAndType(uri, "application/pdf");
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    // In-app zoomable preview — no more external PDF viewer.
+                    Intent intent = new Intent(FoodTrackerActivity.this, ZoomablePdfPreviewActivity.class);
+                    intent.putExtra("pdfPath", pdfFile.getAbsolutePath());
+                    intent.putExtra("suggestedFileName", "food_tracker_" + monthTitle() + ".pdf");
+                    intent.putExtra("title", "Food Tracker — " + monthTitle());
+                    intent.putExtra("sourceTag", "food-tracker");
                     startActivity(intent);
                 });
             } catch (Exception e) {

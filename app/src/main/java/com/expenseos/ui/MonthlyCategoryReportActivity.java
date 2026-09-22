@@ -280,10 +280,11 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
                 String downloadFileName = "category_report_" + System.currentTimeMillis() + ".pdf";
                 mainHandler.post(() -> {
-                    Intent i = new Intent(this, ReportPdfPreviewActivity.class);
+                    Intent i = new Intent(this, ZoomablePdfPreviewActivity.class);
                     i.putExtra("pdfPath", tempFile.getAbsolutePath());
                     i.putExtra("suggestedFileName", downloadFileName);
                     i.putExtra("title", "Monthly Category Report");
+                    i.putExtra("sourceTag", "monthly-category");
                     startActivity(i);
                 });
             } catch (Exception e) {

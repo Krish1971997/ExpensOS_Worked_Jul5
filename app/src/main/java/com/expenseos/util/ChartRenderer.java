@@ -197,7 +197,7 @@ public class ChartRenderer {
         }
 
         // Legend on right
-        int legendX = (int) pieRect.right + 40;
+        int legendX = (int) (pieRect.right + 40);
         int legendY = pieTop + 10;
         for (int i = 0; i < n; i++) {
             legendDot.setColor(Color.parseColor(paletteFor(i)));

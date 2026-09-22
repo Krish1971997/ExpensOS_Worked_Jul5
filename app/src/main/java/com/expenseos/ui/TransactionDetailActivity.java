@@ -2,6 +2,7 @@ package com.expenseos.ui;
 
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Typeface;
@@ -271,22 +272,13 @@ public class TransactionDetailActivity extends AppCompatActivity {
     }
 
     private void showTimePicker() {
-        com.google.android.material.timepicker.MaterialTimePicker picker =
-                new com.google.android.material.timepicker.MaterialTimePicker.Builder()
-                        .setTimeFormat(com.google.android.material.timepicker.TimeFormat.CLOCK_12H)
-                        .setHour(selectedTime.getHour())
-                        .setMinute(selectedTime.getMinute())
-                        .setTitleText("Select time")
-                        .build();
-        picker.addOnPositiveButtonClickListener(v -> {
-            selectedTime = LocalTime.of(picker.getHour(), picker.getMinute());
+        new TimePickerDialog(this, (view, h, min) -> {
+            selectedTime = LocalTime.of(h, min);
             isDirty = true;
             updateDateTimeText();
-        });
-        picker.show(getSupportFragmentManager(), "time_picker");
+        }, selectedTime.getHour(), selectedTime.getMinute(), false).show();
     }
 
-    
     private void updateDateTimeText() {
         tvDetailDate.setText(selectedDate.format(DATE_FMT));
         tvDetailTime.setText(selectedTime.format(TIME_FMT));

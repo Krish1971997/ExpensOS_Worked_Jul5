@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Premium skeleton shape: rounded gradient bar that animates horizontally
+     when bound to a GradientDrawable via ValueAnimator. Reused by the new
+     ShimmerView helper and any inline skeleton placeholder (chat loading,
+     splash, PDF preview "rendering" line). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <gradient
+        android:startColor="@color/shimmer_track"
+        android:centerColor="@color/shimmer_highlight"
+        android:endColor="@color/shimmer_track"
+        android:angle="0" />
+</shape>

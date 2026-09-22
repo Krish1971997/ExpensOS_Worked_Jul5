@@ -25,24 +25,8 @@ public class GrokImageGenerator {
     private static final String ENDPOINT = "https://api.x.ai/v1/images/generations";
     private static final String MODEL = "grok-imagine-image-quality";
 
-
-    /** First available Grok key from the multi-key config (legacy slot fallback). */
-    private static String firstGrokKey(Context ctx) {
-        try {
-            AiConfigStore store = new AiConfigStore(ctx);
-            for (AiModelConfig m : store.load().models) {
-                if (!AppConfig.PROVIDER_GROK.equals(m.provider)) continue;
-                for (AiKeyConfig k : m.keys) {
-                    if (k.key != null && !k.key.isBlank()) return k.key;
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return AppConfig.get(ctx).getAiKey(AppConfig.PROVIDER_GROK);
-    }
-
     public static String generate(Context ctx, String prompt) {
-        String apiKey = firstGrokKey(ctx);
+        String apiKey = AppConfig.get(ctx).getAiKey(AppConfig.PROVIDER_GROK);
         if (apiKey == null || apiKey.isBlank()) {
             return errorJson("Grok API key not configured — add it under the \"grok\" provider in Config to enable image generation.");
         }

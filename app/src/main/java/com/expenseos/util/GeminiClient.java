@@ -10,25 +10,41 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
-/**
- * Google Gemini chat client (function calling). One instance = one concrete
- * candidate (provider → model → key); per-turn state (charts/images) is fresh
- * so failover attempts never leak partial results between keys.
- */
 public class GeminiClient implements AiProvider {
-
     private static final String[] FALLBACK_MODELS = {"gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"};
     private static final String GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
+
+    private static String buildSystemPrompt() {
+        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
+        return
+                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
+                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
+                        "style questions instead of spending a step figuring out the date. " +
+                        "You can ONLY answer questions about this app's own data (transactions, categories, " +
+                        "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
+                        "You must NEVER attempt to modify data — you only have read tools available. " +
+                        "Always start by calling list_tables, then describe_table on relevant tables before writing a query. " +
+                        "CHART RULES: (a) If the user asks for a bar chart vs pie chart, set chart_type accordingly. " +
+                        "(b) If the user asks for BOTH day-wise AND category-wise data in one turn (e.g. \"day wise and category wise\", \"daily and category breakdown\"), " +
+                        "call render_chart TWICE — once with chart_type='bar' titled \"Day-wise\" using day/totals, then again with chart_type='pie' titled \"Category-wise\" using category totals. " +
+                        "Both will appear under the same bot bubble in that order. (c) When asked for a PDF export (\"pdf kudu\", \"send me a pdf\", \"monthly report pdf\"), use render_pdf with a title and rows array formatted as \"YYYY-MM-DD|amount|note\". " +
+                        "If the user asks to visualize or chart something, call render_chart with the labels/values " +
+                        "AFTER you've queried the data. Always reply in the same language and style the user wrote " +
+                        "in — including Tanglish (Tamil written in English letters), plain English, or Tamil script; " +
+                        "match their language rather than defaulting to English. " +
+                        "You CAN use markdown formatting (### headings, **bold**, *italic*, - bullet lists, --- dividers) " +
+                        "in your answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
+    }
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
 
-    public GeminiClient(Context ctx, AiCandidate cand) {
-        this.apiKey = cand.apiKey;
-        this.model = cand.model;
+    public GeminiClient(Context ctx) {
+        AppConfig cfg = AppConfig.get(ctx);
+        this.apiKey = cfg.getAiKey(AppConfig.PROVIDER_GEMINI);
+        this.model = cfg.getAiModel(AppConfig.PROVIDER_GEMINI);
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
@@ -38,39 +54,21 @@ public class GeminiClient implements AiProvider {
     }
 
     @Override
-    public List<String> getLastChartPaths() {
-        return dispatcher.getLastChartPaths();
-    }
-
-    @Override
     public String getLastImagePath() {
         return dispatcher.getLastImagePath();
     }
 
     @Override
     public void ask(String userMessage, String imagePath, JSONArray conversationHistory, Callback cb) {
-        // Legacy entry: wrap into a neutral request with the raw history as-is.
-        try {
-            JSONArray neutral = AiHistory.sanitize(conversationHistory);
-            askBlocking(new AiRequest(userMessage, imagePath, neutral, userMessage), cb);
-        } catch (AiException e) {
-            cb.onError(e.getMessage());
-        }
-    }
-
-    @Override
-    public String askBlocking(AiRequest request, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
-            throw new AiException(AiException.Kind.AUTH, "Gemini: API key is not configured.");
+            cb.onError("Gemini API key is not configured in Config.");
+            return;
         }
 
         try {
-            JSONArray neutral = AiHistory.sanitize(request.history);
-            JSONArray contents = AiHistory.toGemini(neutral);
-            contents.put(request.imagePath != null
-                    ? createContentWithImage(request.userMessage, request.imagePath)
-                    : createContent("user", request.userMessage));
+            JSONArray contents = conversationHistory != null ? conversationHistory : new JSONArray();
+            contents.put(imagePath != null ? createContentWithImage(userMessage, imagePath) : createContent("user", userMessage));
 
             cb.onProgress("Thinking…");
             for (int round = 0; round < 12; round++) {
@@ -111,15 +109,12 @@ public class GeminiClient implements AiProvider {
 
                 // Final Answer
                 String textResponse = firstPart.optString("text", "").trim();
-                return textResponse.isEmpty() ? "No answer received." : textResponse;
+                cb.onResult(textResponse.isEmpty() ? "No answer received." : textResponse);
+                return;
             }
-            throw new AiException(AiException.Kind.UNKNOWN, "Assistant reached maximum tool calling steps.");
-        } catch (AiException e) {
-            throw e;
-        } catch (java.io.IOException e) {
-            throw AiErrorClassifier.fromNetwork("Gemini", e instanceof Exception ? (Exception) e : new Exception(e), apiKey);
+            cb.onError("Assistant reached maximum tool calling steps.");
         } catch (Exception e) {
-            throw AiErrorClassifier.fromUnexpected("Gemini", e, apiKey);
+            cb.onError(e.getMessage() != null ? e.getMessage() : e.toString());
         }
     }
 
@@ -130,6 +125,7 @@ public class GeminiClient implements AiProvider {
                     "Reading \"" + args.optString("table_name", "table") + "\" structure…";
             case "run_query" -> "Querying your data…";
             case "render_chart" -> "Drawing chart…";
+            case "render_pdf" -> "Building PDF…";
             case "generate_image" -> "Generating image…";
             default -> "Working on \"" + toolName + "\"…";
         };
@@ -163,21 +159,37 @@ public class GeminiClient implements AiProvider {
     }
 
     private JSONObject callGeminiApi(JSONArray contents) throws Exception {
-        // Auto-heal a stale/renamed model id: retry the request against known-good models.
-        try {
-            return callGeminiApiOnce(contents, model);
-        } catch (AiException first) {
-            if (first.kind == AiException.Kind.MODEL_UNAVAILABLE) {
-                for (String alt : FALLBACK_MODELS) {
-                    if (alt.equals(model)) continue;
-                    try {
-                        return callGeminiApiOnce(contents, alt);
-                    } catch (AiException ignored) {
-                    }
-                }
+        // Auto-heal BOTH a stale/renamed model id AND transient 503 (high-demand).
+        // 503 / "high demand" errors are extremely common on gemini-2.0-flash at
+        // peak hours — letting them bubble up as a hard failure would make the
+        // chat feel dead. Cycle through the known-good models once each, with a
+        // tiny backoff between retries, before giving up.
+        Exception last = null;
+        for (String m : preferredModels()) {
+            try {
+                return callGeminiApiOnce(contents, m);
+            } catch (Exception e) {
+                last = e;
+                String msg = (e.getMessage() == null ? "" : e.getMessage()).toLowerCase();
+                boolean recoverable =
+                        msg.contains("503") || msg.contains("unavailable")
+                                || msg.contains("high demand") || msg.contains("overloaded")
+                                || msg.contains("not found") || msg.contains("404")
+                                || msg.contains("not supported") || msg.contains("timeout")
+                                || msg.contains("timed out");
+                if (!recoverable) throw e;
+                try { Thread.sleep(400); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             }
-            throw first;
         }
+        throw last == null ? new RuntimeException("All fallback models failed") : last;
+    }
+
+    /** Current model first, then known-good fallbacks. */
+    private String[] preferredModels() {
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        set.add(model);
+        for (String f : FALLBACK_MODELS) set.add(f);
+        return set.toArray(new String[0]);
     }
 
     private JSONObject callGeminiApiOnce(JSONArray contents, String useModel) throws Exception {
@@ -185,7 +197,7 @@ public class GeminiClient implements AiProvider {
 
         // System Instruction
         JSONObject sysInstruction = new JSONObject();
-        sysInstruction.put("parts", new JSONArray().put(new JSONObject().put("text", AiPrompts.systemPrompt())));
+        sysInstruction.put("parts", new JSONArray().put(new JSONObject().put("text", buildSystemPrompt())));
         body.put("systemInstruction", sysInstruction);
         body.put("contents", contents);
 
@@ -235,22 +247,42 @@ public class GeminiClient implements AiProvider {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
         } catch (java.net.SocketTimeoutException e) {
-            throw new java.io.IOException("timeout");
+            throw new RuntimeException("Gemini: request timed out — try a shorter/simpler question.");
         }
 
         int status;
         try {
             status = conn.getResponseCode();
         } catch (java.net.SocketTimeoutException e) {
-            throw new java.io.IOException("timeout");
+            throw new RuntimeException("Gemini: response timed out (model took too long) — try again.");
         }
         InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
         String responseStr = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
         if (status < 200 || status >= 300) {
-            throw AiErrorClassifier.fromHttp("Gemini", status, responseStr, apiKey);
+            throw new RuntimeException(friendlyError(status, responseStr));
         }
         return new JSONObject(responseStr);
+    }
+
+    private String friendlyError(int status, String responseBody) {
+        try {
+            JSONObject err = new JSONObject(responseBody).optJSONObject("error");
+            String apiStatus = err != null ? err.optString("status", "") : "";
+            String message = err != null ? err.optString("message", "") : "";
+
+            if (status == 400 && "API_KEY_INVALID".equals(apiStatus))
+                return "Gemini: invalid API key — check it in Config.";
+            if (status == 404 || "NOT_FOUND".equals(apiStatus))
+                return "Gemini: model \"" + model + "\" not found — try \"gemini-2.0-flash\" in Config.";
+            if (status == 429 || "RESOURCE_EXHAUSTED".equals(apiStatus))
+                return "Gemini: quota limit reached on this API key — check your plan & billing.";
+            if (status == 503 || "UNAVAILABLE".equals(apiStatus))
+                return "Gemini is busy right now (503). Retried all fallback models — please try again in a moment.";
+            if (!message.isEmpty()) return "Gemini error (" + status + "): " + message;
+        } catch (Exception ignored) {
+        }
+        return "Gemini error (" + status + "): " + responseBody;
     }
 
     private JSONObject createToolDeclaration(String name, String description, JSONObject properties) throws Exception {

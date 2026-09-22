@@ -39,11 +39,7 @@ public class AppConfig {
     private final SharedPreferences prefs;
     private static AppConfig instance;
 
-    AppConfig(Context ctx) { // package-private: AiConfigStore legacy migration reuses slot defaults
-        if (ctx == null) {
-            prefs = null;
-            return;
-        }
+    private AppConfig(Context ctx) {
         prefs = ctx.getApplicationContext()
                 .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
     }
@@ -90,7 +86,7 @@ public class AppConfig {
         return prefs.getString(KEY_AI_PROVIDER, PROVIDER_GEMINI);
     }
 
-    String defaultModelFor(String provider) { // package-private: reused by legacy migration
+    public static String defaultModelFor(String provider) {
         return switch (provider) {
             case PROVIDER_OPENAI -> "gpt-4o-mini";
             case PROVIDER_GROK -> "grok-2-latest";

@@ -2,9 +2,6 @@ package com.expenseos.util;
 
 import android.content.Context;
 
-import java.util.Collections;
-import java.util.List;
-
 /**
  * Genspark exposes an OpenAI-compatible chat-completions endpoint, so this
  * is just a thin OpenAiCompatibleClient with the production endpoint
@@ -12,22 +9,13 @@ import java.util.List;
  */
 public class GensparkClient extends OpenAiCompatibleClient {
 
+    // Public endpoint; model defaults to "genspark-instruct" in AppConfig.
     public GensparkClient(Context ctx) {
-        super(
-                ctx,
-                new AiCandidate(
-                        AppConfig.PROVIDER_GENSPARK,
-                        AppConfig.get(ctx).getAiModel(AppConfig.PROVIDER_GENSPARK),
-                        AppConfig.get(ctx).getAiKey(AppConfig.PROVIDER_GENSPARK),
-                        "",
-                        0
-                ),
-                "https://api.genspark.ai/v1/chat/completions"
-        );
+        super(ctx, AppConfig.PROVIDER_GENSPARK, "https://api.genspark.ai/v1/chat/completions");
     }
 
     @Override
-    public List<String> getLastChartPaths() {
-        return Collections.emptyList();
+    protected String providerLabel() {
+        return "Genspark";
     }
 }

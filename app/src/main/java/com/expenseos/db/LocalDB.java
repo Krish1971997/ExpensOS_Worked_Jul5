@@ -395,7 +395,7 @@ public class LocalDB extends SQLiteOpenHelper {
         // Seed default categories
         String[] incomes = {"Salary", "Freelance", "Gift", "Other"};
         String[] expenses = {"Food", "Transport", "Merchandise",
-                "Health", "Entertainment", "Other", "Snacks"};
+                "Health", "Entertainment", "Snacks"};
         for (String c : incomes)
             db.execSQL("INSERT OR IGNORE INTO categories(name,type,book_id) VALUES('" + c + "','INCOME',NULL)");
         for (String c : expenses)

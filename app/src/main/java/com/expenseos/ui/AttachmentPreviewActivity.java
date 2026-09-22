@@ -90,17 +90,12 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
         findViewById(R.id.btnShareAttachment).setOnClickListener(v -> shareAttachment());
     }
 
-    // Renders EVERY page of the PDF to a bitmap using Android's built-in
-    // PdfRenderer (API 21+, no external library needed) and shows them all
-    // in a scrollable RecyclerView (matching the old app's page-by-page
-    // scroll view), with a "Page X / Y" indicator that tracks scroll
-    // position. Falls back to the icon placeholder if rendering fails for
-    // any reason (corrupt file, password-protected PDF, etc.).
-    //
-    // NOTE: all pages are rendered up front and held in memory as bitmaps.
-    // Fine for typical receipts/documents; a very large page-count PDF
-    // (50+ pages) could use noticeable memory — not a concern for this
-    // screen's normal use case, but worth knowing if that ever changes.
+    // Renders EVERY page of the PDF using Android's built-in PdfRenderer into
+    // a scrollable list of ZoomableImageView rows — pinch/double-tap zoom + pan
+    // (matching real PDF apps like Drive/Adobe), plus floating "+/-" zoom
+    // buttons in the bottom-right (same pattern as ReportPdfPreviewActivity).
+    // "Page X / Y" indicator tracks scroll position. Falls back to the icon
+    // placeholder if rendering fails.
     private void renderAllPdfPages(View pdfPlaceholder, RecyclerView rvPdfPages, TextView tvPageIndicator) {
         new Thread(() -> {
             File tempFile = null;
@@ -119,11 +114,10 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
 
                     for (int i = 0; i < count; i++) {
                         try (PdfRenderer.Page page = renderer.openPage(i)) {
-                            // 2x scale for a sharper render on high-density screens
                             int width = page.getWidth() * 2;
                             int height = page.getHeight() * 2;
                             Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                            bitmap.eraseColor(Color.WHITE); // PDF pages render transparent otherwise
+                            bitmap.eraseColor(Color.WHITE);
                             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                             pages.add(bitmap);
                         }
@@ -133,7 +127,7 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
                 int totalPages = pages.size();
                 runOnUiThread(() -> {
                     rvPdfPages.setLayoutManager(new LinearLayoutManager(this));
-                    rvPdfPages.setAdapter(new PdfPageAdapter(pages));
+                    rvPdfPages.setAdapter(new ZoomablePdfPageAdapter(pages));
                     rvPdfPages.setVisibility(View.VISIBLE);
                     pdfPlaceholder.setVisibility(View.GONE);
 
@@ -149,6 +143,25 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
                                 tvPageIndicator.setText("Page " + (pos + 1) + " / " + totalPages);
                         }
                     });
+
+                    // Floating zoom buttons — find the currently-attached page
+                    // (LayoutManager.findViewByPosition is more reliable than
+                    // findViewHolderForAdapterPosition, which can return null
+                    // mid-scroll). Page is a ZoomableImageView with built-in
+                    // pinch + zoomIn()/zoomOut() methods.
+                    findViewById(R.id.zoomControls).setVisibility(View.VISIBLE);
+                    findViewById(R.id.btnZoomIn).setOnClickListener(v -> {
+                        LinearLayoutManager lm = (LinearLayoutManager) rvPdfPages.getLayoutManager();
+                        if (lm == null) return;
+                        View child = lm.findViewByPosition(Math.max(0, lm.findFirstVisibleItemPosition()));
+                        if (child instanceof ZoomableImageView ziv) ziv.zoomIn();
+                    });
+                    findViewById(R.id.btnZoomOut).setOnClickListener(v -> {
+                        LinearLayoutManager lm = (LinearLayoutManager) rvPdfPages.getLayoutManager();
+                        if (lm == null) return;
+                        View child = lm.findViewByPosition(Math.max(0, lm.findFirstVisibleItemPosition()));
+                        if (child instanceof ZoomableImageView ziv) ziv.zoomOut();
+                    });
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(this,
@@ -159,19 +172,21 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
         }).start();
     }
 
-    // One full-width page per row; RecyclerView recycles the ImageViews as
-    // you scroll, so this stays lightweight even with many pages.
-    private static class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.VH> {
+    // One page per row — ZoomableImageView swaps the legacy plain ImageView so
+    // attachment previews get the SAME pinch-to-zoom / double-tap-to-zoom / pan
+    // (when zoomed past 1x) gestures as ReportPdfPreviewActivity. Without
+    // this, users had no way to zoom into detail on a receipt PDF.
+    private static class ZoomablePdfPageAdapter extends RecyclerView.Adapter<ZoomablePdfPageAdapter.VH> {
         private final List<Bitmap> pages;
 
-        PdfPageAdapter(List<Bitmap> pages) {
+        ZoomablePdfPageAdapter(List<Bitmap> pages) {
             this.pages = pages;
         }
 
         static class VH extends RecyclerView.ViewHolder {
-            ImageView iv;
+            ZoomableImageView iv;
 
-            VH(ImageView v) {
+            VH(ZoomableImageView v) {
                 super(v);
                 iv = v;
             }
@@ -180,11 +195,10 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            ImageView iv = new ImageView(parent.getContext());
+            ZoomableImageView iv = new ZoomableImageView(parent.getContext());
             iv.setLayoutParams(new RecyclerView.LayoutParams(
                     RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
             iv.setAdjustViewBounds(true);
-            iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             int pad = (int) (4 * parent.getResources().getDisplayMetrics().density);
             iv.setPadding(0, pad, 0, pad);
             return new VH(iv);
@@ -198,6 +212,14 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
         @Override
         public int getItemCount() {
             return pages.size();
+        }
+    }
+
+    // Legacy plain-ImageView adapter kept as a no-op stub — older callers
+    // (if any) compiled against PdfPageAdapter still resolve.
+    private static class PdfPageAdapter extends ZoomablePdfPageAdapter {
+        PdfPageAdapter(List<Bitmap> pages) {
+            super(pages);
         }
     }
 

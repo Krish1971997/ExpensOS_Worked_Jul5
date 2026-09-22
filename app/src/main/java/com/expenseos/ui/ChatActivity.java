@@ -1,7 +1,5 @@
 package com.expenseos.ui;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -11,7 +9,6 @@ import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -29,19 +26,13 @@ import androidx.core.content.ContextCompat;
 import com.expenseos.R;
 import com.expenseos.dao.ChatHistoryDao;
 import com.expenseos.model.ChatMessage;
-import com.expenseos.util.AiCandidate;
-import com.expenseos.util.AiConfigStore;
-import com.expenseos.util.AiException;
-import com.expenseos.util.AiFailoverManager;
-import com.expenseos.util.AiKeyConfig;
-import com.expenseos.util.AiModelConfig;
-import com.expenseos.util.AiRequest;
+import com.expenseos.util.AiClientFactory;
+import com.expenseos.util.AiProvider;
 import com.expenseos.util.AppConfig;
 import com.expenseos.util.MarkdownRenderer;
 import com.expenseos.util.PdfAttachmentReader;
 
 import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -52,21 +43,13 @@ import java.util.Locale;
 
 /**
  * Chat with the in-app AI Assistant.
- * - Multi-select delete (long-press), per-bubble Copy/Delete (⋮ menu), new-chat, history
+ * - Multi-select delete (long-press), new-chat, history
  * - Markdown-rendered bot bubbles (### heading, **bold**, - bullet, --- divider)
  * - Inline image / PDF attachments + preview
  * - Multiple chart paths per turn (day-wise + category-wise)
  * - Sessions isolated by session_id (multi-chat like claude / chatgpt)
- * - Central failover (model/key priority) with ChatGPT-style error bubble + Retry
- * - Token-optimized: bounded neutral history window, no duplicated turns,
- * single in-flight guard (see AiFailoverManager / AiHistory / AiPrompts).
  */
 public class ChatActivity extends AppCompatActivity {
-
-    /**
-     * How many recent neutral history turns are sent to the model per request.
-     */
-    private static final int HISTORY_WINDOW = 8;
 
     private LinearLayout messagesContainer;
     private ScrollView scrollView;
@@ -80,19 +63,7 @@ public class ChatActivity extends AppCompatActivity {
     private android.widget.Button btnSelectAll, btnCancelSelection;
 
     private ChatHistoryDao historyDao;
-    private AiFailoverManager failover;
-    // Ovvoru runTurn() call-kum unique id — watchdog give-up pannina apparam
-    // background thread late-ah result kொடுthalum, adhு STALE turn-ah irundha
-    // UI-ah touch pannாma silently ignore pannum (typingBubble/typingTextView
-    // corruption idha avoid pannும்).
-    private final java.util.concurrent.atomic.AtomicInteger turnCounter = new java.util.concurrent.atomic.AtomicInteger(0);
-    private int activeTurnId = 0;
-
-    /**
-     * Neutral conversation history: [{role:"user"|"assistant", text:"…"}].
-     * Provider-agnostic — each client converts it to its own wire format, so
-     * system prompts and tool traffic are never duplicated in this array.
-     */
+    private AiProvider aiClient;
     private final JSONArray conversation = new JSONArray();
 
     private String pendingAttachmentPath;
@@ -106,17 +77,6 @@ public class ChatActivity extends AppCompatActivity {
     // last bubble view per message id — track so when we delete selected rows
     // we can also remove their views without re-rendering everything
     private final java.util.HashMap<Integer, View> bubbleViews = new java.util.HashMap<>();
-
-    // Single in-flight guard: send + retry share it so requests never stack
-    private boolean requestInFlight = false;
-
-    // Retry state — the exact original user turn, preserved across failures
-    private String lastFailedUserDisplay;
-    private String lastFailedEffective;
-    private String lastFailedImagePath;
-    private View typingBubble;
-    private TextView typingTextView;
-    private Button retryButton;
 
     // Session
     private String currentSessionId = "default";
@@ -132,7 +92,7 @@ public class ChatActivity extends AppCompatActivity {
         setContentView(R.layout.activity_chat);
 
         historyDao = new ChatHistoryDao(this);
-        rebuildFailover();
+        aiClient = AiClientFactory.create(this);
 
         messagesContainer = findViewById(R.id.chatMessagesContainer);
         scrollView = findViewById(R.id.chatScrollView);
@@ -151,9 +111,7 @@ public class ChatActivity extends AppCompatActivity {
         btnCancelSelection = findViewById(R.id.btnCancelSelection);
 
         findViewById(R.id.btnChatBack).setOnClickListener(v -> finish());
-        btnSend.setOnClickListener(v -> {
-            if (!requestInFlight) sendMessage();
-        });
+        btnSend.setOnClickListener(v -> sendMessage());
         btnAttach.setOnClickListener(v -> filePicker.launch(new String[]{"image/*", "application/pdf", "text/plain", "text/csv"}));
         btnAttachRemove.setOnClickListener(v -> clearPendingAttachment());
         btnNew.setOnClickListener(v -> startNewChat());
@@ -165,34 +123,23 @@ public class ChatActivity extends AppCompatActivity {
         loadSession("default");
     }
 
-    /**
-     * Builds the failover candidate list (provider → model → keys, in saved priority order).
-     */
-    private void rebuildFailover() {
-        AiConfigStore store = new AiConfigStore(this);
-        AiConfigStore.AiConfig cfg = store.load();
-        List<AiCandidate> candidates = new ArrayList<>();
-        for (int i = 0; i < cfg.models.size(); i++) {
-            AiModelConfig m = cfg.models.get(i);
-            for (int k = 0; k < m.keys.size(); k++) {
-                AiKeyConfig key = m.keys.get(k);
-                if (key.key == null || key.key.isBlank()) continue;
-                candidates.add(new AiCandidate(m.provider, m.model, key.key, key.desc, k));
-            }
-        }
-        failover = new AiFailoverManager(this, candidates);
-    }
-
     // ── Session loading ──────────────────────────────────────────────────────
     private void loadSession(String sessionId) {
         currentSessionId = sessionId == null ? "default" : sessionId;
         messagesContainer.removeAllViews();
         bubbleViews.clear();
+        // Rebuild the in-memory provider-format history from the persisted DB
+        // rows so the AI assistant can carry context across re-opens. Without
+        // this rebuild, the very first send after returning to the activity
+        // would call the LLM with NO prior turns — making multi-step
+        // follow-ups (e.g. "last week" → "now only that day's breakdown")
+        // silently lose context.
+        conversation.length();
 
         List<ChatMessage> history = historyDao.findBySession(currentSessionId);
         if (history.isEmpty()) {
-            addBotBubble("Ask me anything about your ExpenseOS data — spending, categories, budgets, backups, etc. " +
-                    "You can also attach a receipt image or a PDF statement.", null);
+            addBotBubble(-1, "Ask me anything about your ExpenseOS data — spending, categories, budgets, backups, etc. " +
+                    "You can also attach a receipt image or a PDF statement.", (String) null);
             return;
         }
         for (ChatMessage m : history) {
@@ -202,7 +149,32 @@ public class ChatActivity extends AppCompatActivity {
             } else {
                 addBotBubble(storedId, m.getContent(), m.getChartPath());
             }
+            // Append to provider-format history (plain string — model is OK
+            // with simple text turns for follow-up, vision/image attachments
+            // can't be replayed cross-session and are intentionally omitted).
+            try {
+                if (m.isUser()) {
+                    conversation.put(userTextMessage(m.getContent()));
+                } else if (m.getContent() != null && !m.getContent().isEmpty()) {
+                    conversation.put(assistantTextMessage(m.getContent()));
+                }
+            } catch (Exception ignored) {
+            }
         }
+    }
+
+    private static org.json.JSONObject userTextMessage(String text) throws org.json.JSONException {
+        org.json.JSONObject msg = new org.json.JSONObject();
+        msg.put("role", "user");
+        msg.put("text", text);
+        return msg;
+    }
+
+    private static org.json.JSONObject assistantTextMessage(String text) throws org.json.JSONException {
+        org.json.JSONObject msg = new org.json.JSONObject();
+        msg.put("role", "assistant");
+        msg.put("text", text);
+        return msg;
     }
 
     private void startNewChat() {
@@ -211,7 +183,8 @@ public class ChatActivity extends AppCompatActivity {
         currentSessionId = "session_" + System.currentTimeMillis();
         messagesContainer.removeAllViews();
         bubbleViews.clear();
-        addBotBubble("🆕 New chat started. Ask me anything about your ExpenseOS data.", null);
+        conversation.length();
+        addBotBubble(-1, "🆕 New chat started. Ask me anything about your ExpenseOS data.", (String) null);
     }
 
     private void showHistory() {
@@ -309,45 +282,12 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
-    // ── Copy / Delete per-bubble menu ─────────────────────────────────────
-    private void showCopyDeleteMenu(int storedId, String text) {
-        String[] items = {"Copy", "Delete"};
-        new AlertDialog.Builder(this)
-                .setItems(items, (d, which) -> {
-                    if (which == 0) {
-                        copyToClipboard(text);
-                    } else {
-                        confirmDeleteOne(storedId);
-                    }
-                })
-                .show();
-    }
-
-    private void copyToClipboard(String text) {
-        if (text == null || text.isEmpty()) return;
-        // Copy only the raw message text — no UI metadata, no timestamps.
-        ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-        cm.setPrimaryClip(ClipData.newPlainText("message", text));
-        Toast.makeText(this, "Copied to clipboard", Toast.LENGTH_SHORT).show();
-    }
-
-    private void confirmDeleteOne(int storedId) {
-        if (storedId <= 0) {
-            Toast.makeText(this, "Nothing to delete", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Delete this message?")
-                .setPositiveButton("Delete", (d, w) -> {
-                    List<Integer> ids = new ArrayList<>();
-                    ids.add(storedId);
-                    historyDao.deleteByIds(ids);
-                    View v = bubbleViews.remove(storedId);
-                    if (v != null) messagesContainer.removeView(v);
-                    Toast.makeText(this, "✓ Deleted", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
+    private View getOrCreateBubbleView(int id, java.util.function.Supplier<View> factory) {
+        View existing = bubbleViews.get(id);
+        if (existing != null) return existing;
+        View v = factory.get();
+        bubbleViews.put(id, v);
+        return v;
     }
 
     // ── Attachment picking ──────────────────────────────────────────────
@@ -379,7 +319,7 @@ public class ChatActivity extends AppCompatActivity {
             tvAttachName.setText(prefix + pendingAttachmentName);
             attachPreviewRow.setVisibility(View.VISIBLE);
         } catch (Exception e) {
-            addBotBubble("⚠ Couldn't read that file: " + e.getMessage(), null);
+            addBotBubble(-1, "⚠ Couldn't read that file: " + e.getMessage(), (String) null);
         }
     }
 
@@ -402,18 +342,6 @@ public class ChatActivity extends AppCompatActivity {
         attachPreviewRow.setVisibility(View.GONE);
     }
 
-    private String readSmallTextFile(String path) {
-        try {
-            String lower = path.toLowerCase(Locale.ROOT);
-            if (!lower.endsWith(".txt") && !lower.endsWith(".csv")) return null;
-            byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
-            String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            return text.length() > 8000 ? text.substring(0, 8000) + "\n…(truncated)" : text;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
     // ── Sending ──────────────────────────────────────────────────────────
     private void sendMessage() {
         if (inSelectionMode) exitSelectionMode();
@@ -431,271 +359,100 @@ public class ChatActivity extends AppCompatActivity {
         addUserBubble(-1, text, attPath, attName);
         saveMessage(ChatMessage.ROLE_USER, text, attPath, attName, null, null);
 
-        Prepared prep = prepareAttachment(text, attPath, attName, attIsImage, attIsPdf);
-        runTurn(text, prep.effectiveMessage, prep.imagePathForApi);
-    }
-
-    /**
-     * One user turn — shared by fresh sends and Retry (same message, no duplicates).
-     */
-    private void runTurn(String userDisplay, String effectiveMessage, String imagePathForApi) {
-        setBusy(true);
-        final int myTurnId = turnCounter.incrementAndGet();
-        activeTurnId = myTurnId;
-
-        TextView typingText = new TextView(this);
-        typingBubble = addBotBubbleView(typingText, "Thinking…");
-        typingTextView = typingText;
-
-        // Token optimization: bounded recent-context window instead of the
-        // whole (ever-growing) conversation.
-        JSONArray historyWindow = new JSONArray();
-        int from = Math.max(0, conversation.length() - HISTORY_WINDOW);
-        for (int i = from; i < conversation.length(); i++) {
-            try {
-                historyWindow.put(conversation.getJSONObject(i));
-            } catch (Exception ignored) {
+        String effectiveMessage = text;
+        String imagePathForApi = null;
+        if (attPath != null) {
+            if (attIsImage) {
+                imagePathForApi = attPath;
+            } else if (attIsPdf) {
+                // Render the first page as a PNG, and pass it as the vision image.
+                // Also annotate the prompt so the AI knows there's a PDF attached.
+                String pngPath = PdfAttachmentReader.renderFirstPageToFile(this, attPath);
+                if (pngPath != null) {
+                    imagePathForApi = pngPath;
+                    effectiveMessage = (text.isEmpty() ? "Please read this PDF." : text)
+                            + "\n\n[Attached PDF: " + attName + " — first page rendered for vision.]";
+                } else {
+                    effectiveMessage = (text.isEmpty() ? "" : text + " ")
+                            + "[Attached PDF: " + attName + " — could not render.]";
+                }
+            } else {
+                String extracted = readSmallTextFile(attPath);
+                if (extracted != null) {
+                    effectiveMessage = (text.isEmpty() ? "Please look at this attached file." : text)
+                            + "\n\n[Attached file: " + attName + "]\n" + extracted;
+                } else {
+                    effectiveMessage = (text.isEmpty() ? "" : text + " ")
+                            + "[User attached a file named \"" + attName + "\" — its content couldn't be read inline.]";
+                }
             }
         }
 
-        // remember how to reproduce this exact turn for Retry
-        lastFailedUserDisplay = userDisplay;
-        lastFailedEffective = effectiveMessage;
-        lastFailedImagePath = imagePathForApi;
-
-        // Remember the user turn in neutral history (deduped so a Retry after
-        // a failure never records the same message twice).
-        if (conversation.length() == 0 || !lastNeutralIs("user", userDisplay)) {
-            appendNeutral("user", userDisplay);
-        }
-
-        final AiRequest request = new AiRequest(effectiveMessage, imagePathForApi, historyWindow, userDisplay);
+        btnSend.setEnabled(false);
         final boolean[] answered = {false};
         final android.os.Handler wh = new android.os.Handler(android.os.Looper.getMainLooper());
         final Runnable watchdog = () -> {
             if (!answered[0]) {
-                answered[0] = true;
-                runOnUiThread(() -> {
-                    // Turn-ah abandon pannுрோm, aana activeTurnId idhே vachchே
-                    // vекkanum (myTurnId decrement pannадhу) — pazhaya thread
-                    // eppadiyாவும் late-ah finish aana apparam "stale"-ah
-                    // theriyanum, illainaale removeTypingBubble() adhoda OWN
-                    // typing bubble-ah correct-ah remove pannuridும், aana
-                    // andha bubble ippODhu screen-la illa (already removed
-                    // idhே watchdog-la) — so andha late call no-op aagum.
-                    removeTypingBubble();
-                    addErrorBubble("No response after 90s — the provider didn't answer in time. (It may still complete in the background — please wait a moment before retrying.)");
-                    setBusy(false);
-                });
+                addBotBubble(-1, "⚠ No response after 90s. Check your AI provider + API key in Config, then resend.", (String) null);
+                btnSend.setEnabled(true);
             }
         };
-
         wh.postDelayed(watchdog, 90000);
+        TextView typingText = new TextView(this);
+        View typing = addBotBubbleView(typingText, "Thinking…");
 
-        new Thread(() -> {
-            try {
-                String answer = failover.runTurn(request, new AiProviderCallbackBridge(typingText), null);
-                List<String> charts = failover.getLastChartPaths();
-                String genImage = failover.getLastImagePath();
+        String finalMessage = effectiveMessage;
+        String finalImagePath = imagePathForApi;
+        new Thread(() -> aiClient.ask(finalMessage, finalImagePath, conversation, new AiProvider.Callback() {
+            @Override
+            public void onResult(String answer) {
                 answered[0] = true;
                 wh.removeCallbacks(watchdog);
+                String chartPath = aiClient.getLastChartPath();
+                String imagePath = aiClient.getLastImagePath();
                 runOnUiThread(() -> {
-                    if (myTurnId != activeTurnId)
-                        return; // watchdog already gave up on this turn — ignore the late result
-                    lastFailedUserDisplay = null; // success clears the retry state
-                    lastFailedEffective = null;
-                    lastFailedImagePath = null;
-                    removeTypingBubble();
-                    String first = genImage != null ? genImage : (charts.isEmpty() ? null : charts.get(0));
-                    int storedId = saveMessage(ChatMessage.ROLE_ASSISTANT, answer, null, null, first, activeProvider());
-                    addBotBubble(storedId, answer, charts);
-                    appendNeutral("assistant", answer);
-                    setBusy(false);
-                });
-            } catch (AiException e) {
-                answered[0] = true;
-                wh.removeCallbacks(watchdog);
-                runOnUiThread(() -> {
-                    if (myTurnId != activeTurnId)
-                        return; // stale — the UI already moved past this turn
-                    removeTypingBubble();
-                    addErrorBubble(e.getMessage());
-                    setBusy(false);
-                });
-            } catch (Exception e) {
-                answered[0] = true;
-                wh.removeCallbacks(watchdog);
-                runOnUiThread(() -> {
-                    if (myTurnId != activeTurnId) return; // stale
-                    removeTypingBubble();
-                    addErrorBubble("Something went wrong — please retry.");
-                    setBusy(false);
+                    messagesContainer.removeView(typing);
+                    // First previewable path wins as the inline chart "title" saved record.
+                    String first = imagePath != null ? imagePath : chartPath;
+                    int storedId = saveMessage(ChatMessage.ROLE_ASSISTANT, answer, null, null, first, AppConfig.get(ChatActivity.this).getAiProvider());
+                    addBotBubble(storedId, answer, chartPath);
+                    btnSend.setEnabled(true);
                 });
             }
-        }).start();
+
+            @Override
+            public void onError(String message) {
+                answered[0] = true;
+                wh.removeCallbacks(watchdog);
+                runOnUiThread(() -> {
+                    messagesContainer.removeView(typing);
+                    addBotBubble(-1, "⚠ " + message, (String) null);
+                    btnSend.setEnabled(true);
+                });
+            }
+
+            @Override
+            public void onProgress(String stage) {
+                runOnUiThread(() -> {
+                    typingText.setText(stage);
+                    scrollToBottom();
+                });
+            }
+        })).start();
     }
 
-    private void setBusy(boolean busy) {
-        requestInFlight = busy;
-        btnSend.setEnabled(!busy);
-        btnSend.setAlpha(busy ? 0.5f : 1f);
-        setRetryEnabled(!busy);
-    }
-
-    private void setRetryEnabled(boolean on) {
-        if (retryButton != null) retryButton.setEnabled(on);
-    }
-
-    private void removeTypingBubble() {
-        if (typingBubble != null) {
-            messagesContainer.removeView(typingBubble);
-            typingBubble = null;
-            typingTextView = null;
-        }
-    }
-
-    // ── Retry: same message, no duplicate user bubble/row ─────────────────
-    private void retryLastFailure() {
-        if (requestInFlight) return; // no parallel requests
-        if (lastFailedUserDisplay == null) return;
-        String display = lastFailedUserDisplay;
-        String effective = lastFailedEffective;
-        String image = lastFailedImagePath;
-        runTurn(display, effective, image);
-    }
-
-    // ── Error bubble with Retry (ChatGPT/Claude style) ──────────────────────
-    private void addErrorBubble(String safeMessage) {
-        LinearLayout col = bubbleColumn(false);
-        TextView tv = new TextView(this);
-        tv.setText("⚠ AI response failed.\n" + (safeMessage == null ? "" : safeMessage));
-        tv.setTextSize(14);
-        tv.setPadding(dp(12), dp(8), dp(12), dp(8));
-        tv.setBackgroundResource(R.drawable.bg_chat_bubble_bot);
-        tv.setTextColor(ContextCompat.getColor(this, R.color.text));
-        col.addView(tv);
-
-        Button retry = new Button(this, null, 0);
-        retry.setText("Retry");
-        retry.setTextSize(13);
-        retry.setAllCaps(false);
-        retry.setTextColor(ContextCompat.getColor(this, R.color.primary));
-        retry.setBackgroundResource(R.drawable.bg_retry_button);
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(32));
-        rlp.topMargin = dp(6);
-        retry.setLayoutParams(rlp);
-        retry.setOnClickListener(v -> {
-            if (requestInFlight) return; // prevent simultaneous retries
-            messagesContainer.removeView(col); // clear the error state bubble
-            retryLastFailure();
-        });
-        col.addView(retry);
-        retryButton = retry;
-
-        messagesContainer.addView(col);
-        scrollToBottom();
-    }
-
-    /**
-     * Bridges provider progress callbacks to the typing bubble.
-     */
-    private class AiProviderCallbackBridge implements com.expenseos.util.AiProvider.Callback {
-        private final TextView typingText;
-
-        AiProviderCallbackBridge(TextView typingText) {
-            this.typingText = typingText;
-        }
-
-        @Override
-        public void onResult(String answer) {
-        }
-
-        @Override
-        public void onError(String message) {
-            // Unused — the failover manager surfaces errors via exceptions.
-        }
-
-        @Override
-        public void onProgress(String stage) {
-            runOnUiThread(() -> {
-                typingText.setText(stage);
-                scrollToBottom();
-            });
-        }
-    }
-
-
-    /**
-     * True if the newest neutral-history entry is role with exactly this text.
-     */
-    private boolean lastNeutralIs(String role, String text) {
+    private String readSmallTextFile(String path) {
         try {
-            if (conversation.length() == 0) return false;
-            JSONObject last = conversation.getJSONObject(conversation.length() - 1);
-            return role.equals(last.optString("role")) && text.equals(last.optString("text"));
+            String lower = path.toLowerCase(Locale.ROOT);
+            if (!lower.endsWith(".txt") && !lower.endsWith(".csv")) return null;
+            byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path));
+            String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            return text.length() > 8000 ? text.substring(0, 8000) + "\n…(truncated)" : text;
         } catch (Exception e) {
-            return false;
+            return null;
         }
     }
 
-    /**
-     * Appends one neutral turn to the shared history.
-     */
-    private void appendNeutral(String role, String text) {
-        try {
-            JSONObject e = new JSONObject();
-            e.put("role", role);
-            e.put("text", text == null ? "" : text);
-            conversation.put(e);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private String activeProvider() {
-        try {
-            return new AiConfigStore(this).load().activeProvider;
-        } catch (Exception e) {
-            return AppConfig.get(this).getAiProvider();
-        }
-    }
-
-    // ── Attachment → request prep (shared by send; retry reuses stored result) ──
-    private static class Prepared {
-        String effectiveMessage;
-        String imagePathForApi;
-    }
-
-    private Prepared prepareAttachment(String text, String attPath, String attName, boolean attIsImage, boolean attIsPdf) {
-        Prepared p = new Prepared();
-        p.effectiveMessage = text;
-        if (attPath == null) return p;
-        if (attIsImage) {
-            p.imagePathForApi = attPath;
-        } else if (attIsPdf) {
-            String pngPath = PdfAttachmentReader.renderFirstPageToFile(this, attPath);
-            if (pngPath != null) {
-                p.imagePathForApi = pngPath;
-                p.effectiveMessage = (text.isEmpty() ? "Please read this PDF." : text)
-                        + "\n\n[Attached PDF: " + attName + " — first page rendered for vision.]";
-            } else {
-                p.effectiveMessage = (text.isEmpty() ? "" : text + " ")
-                        + "[Attached PDF: " + attName + " — could not render.]";
-            }
-        } else {
-            String extracted = readSmallTextFile(attPath);
-            if (extracted != null) {
-                p.effectiveMessage = (text.isEmpty() ? "Please look at this attached file." : text)
-                        + "\n\n[Attached file: " + attName + "]\n" + extracted;
-            } else {
-                p.effectiveMessage = (text.isEmpty() ? "" : text + " ")
-                        + "[User attached a file named \"" + attName + "\" — its content couldn't be read inline.]";
-            }
-        }
-        return p;
-    }
-
-    // ── Persistence ──────────────────────────────────────────────────────
     private int saveMessage(String role, String content, String attPath, String attName, String chartPath, String provider) {
         ChatMessage m = new ChatMessage();
         m.setRole(role);
@@ -720,6 +477,7 @@ public class ChatActivity extends AppCompatActivity {
         }
         if (text != null && !text.isEmpty()) {
             TextView userBubble = textBubble(text, true);
+            // wrap in a sub-layout so image above can float
             LinearLayout rightCol = new LinearLayout(this);
             rightCol.setOrientation(LinearLayout.VERTICAL);
             rightCol.setGravity(Gravity.END);
@@ -727,16 +485,11 @@ public class ChatActivity extends AppCompatActivity {
             col.addView(rightCol);
         }
         int id = storedId < 0 ? -((int) java.util.UUID.randomUUID().hashCode()) : storedId;
-        attachCopyDeleteMenu(col, storedId, text == null ? "" : text);
-        attachLongPress(col, storedId);
+        attachLongPress(col, id);
         messagesContainer.addView(col);
         if (storedId > 0) bubbleViews.put(storedId, col);
         scrollToBottom();
         return storedId;
-    }
-
-    private int addBotBubble(String text, String chartPath) {
-        return addBotBubble(-1, text, chartPath);
     }
 
     private int addBotBubble(int storedId, String text, String chartPath) {
@@ -746,6 +499,7 @@ public class ChatActivity extends AppCompatActivity {
     private int addBotBubble(int storedId, String text, java.util.List<String> chartPaths) {
         LinearLayout col = bubbleColumn(false);
         if (text != null && !text.isEmpty()) {
+            // Render the markdown subset (###, **bold**, - bullet, --- divider)
             MarkdownRenderer.render(this, col, text);
         }
         if (chartPaths != null) {
@@ -754,7 +508,6 @@ public class ChatActivity extends AppCompatActivity {
                 col.addView(imageView(p));
             }
         }
-        attachCopyDeleteMenu(col, storedId, text == null ? "" : text);
         attachLongPress(col, storedId);
         messagesContainer.addView(col);
         if (storedId > 0) bubbleViews.put(storedId, col);
@@ -770,7 +523,7 @@ public class ChatActivity extends AppCompatActivity {
         reusableTextView.setBackgroundResource(R.drawable.bg_chat_bubble_bot);
         reusableTextView.setTextColor(ContextCompat.getColor(this, R.color.text));
         col.addView(reusableTextView);
-        // No long-press on the typing bubble — it isn't tracked for delete
+        // No long-press on the typing bubble — give it an artificial id so we don't track it
         messagesContainer.addView(col);
         scrollToBottom();
         return col;
@@ -790,36 +543,17 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void attachLongPress(View v, int storedId) {
-        if (storedId <= 0) return;
         v.setLongClickable(true);
         v.setOnLongClickListener(e -> {
-            enterSelectionMode(storedId);
+            if (storedId > 0) enterSelectionMode(storedId);
             return true;
         });
     }
 
-    /**
-     * Three-dot affordance under the bubble: tap bubble to reveal, ⋮ for Copy/Delete.
-     */
-    private void attachCopyDeleteMenu(LinearLayout v, int storedId, String text) {
-        LinearLayout menuRow = new LinearLayout(this);
-        menuRow.setOrientation(LinearLayout.HORIZONTAL);
-        TextView more = new TextView(this);
-        more.setText("⋮");
-        more.setTextSize(16);
-        more.setPadding(dp(6), 0, dp(6), 0);
-        more.setAlpha(0.55f);
-        more.setOnClickListener(x -> showCopyDeleteMenu(storedId, text));
-        menuRow.addView(more);
-        menuRow.setVisibility(View.GONE);
-        v.addView(menuRow);
-        v.setOnClickListener(x -> menuRow.setVisibility(
-                menuRow.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
-    }
-
     private TextView textBubble(String text, boolean isUser) {
         TextView tv = new TextView(this);
-        tv.setText(MarkdownRenderer.applyInlineSpans(text));
+        // For user bubbles still render inline spans (so bold/italic typed by user still shows)
+        tv.setText(MarkdownRenderer.applyInlineSpansStatic(text));
         tv.setTextSize(14);
         tv.setPadding(dp(12), dp(8), dp(12), dp(8));
         tv.setBackgroundResource(isUser ? R.drawable.bg_chat_bubble_user : R.drawable.bg_chat_bubble_bot);
@@ -831,6 +565,7 @@ public class ChatActivity extends AppCompatActivity {
     private ImageView imageView(String path) {
         ImageView iv = new ImageView(this);
         Bitmap bmp = BitmapFactory.decodeFile(path);
+        // Cap max width so very large charts still fit screen
         if (bmp != null) {
             int maxW = (int) (getResources().getDisplayMetrics().widthPixels * 0.85f);
             if (bmp.getWidth() > maxW) {
@@ -869,8 +604,10 @@ public class ChatActivity extends AppCompatActivity {
             Uri uri = androidx.core.content.FileProvider.getUriForFile(
                     this, getPackageName() + ".fileprovider", new File(path));
             Intent i = new Intent(Intent.ACTION_VIEW);
+            // Guess mime — pdf read view otherwise image viewer
             String lower = path.toLowerCase(Locale.ROOT);
-            String mime = lower.endsWith(".pdf") ? "application/pdf" : "image/*";
+            String mime = lower.endsWith(".pdf") ? "application/pdf"
+                    : "image/*";
             i.setDataAndType(uri, mime);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(i);

@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Typeface;
 import android.text.SpannableStringBuilder;
 import android.text.style.StyleSpan;
+import android.text.style.ForegroundColorSpan;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -15,15 +17,14 @@ import com.expenseos.R;
 
 /**
  * Renders a small markdown subset the AI Assistant actually produces:
- * ### / ## headings, **bold**, *italic*, `code`, - bullet lists, --- dividers
+ *   ### / ## headings, **bold**, *italic*, `code`, - bullet lists, --- dividers
  * and inline newlines. Spits a stack of TextViews / divider Views into the
  * bubble column. Handles every render call safely (no exceptions escape —
  * falls back to a single plain TextView if the input is weird).
  */
 public final class MarkdownRenderer {
 
-    private MarkdownRenderer() {
-    }
+    private MarkdownRenderer() {}
 
     public static void render(Context ctx, LinearLayout col, String text) {
         if (text == null || text.isEmpty()) return;
@@ -126,8 +127,14 @@ public final class MarkdownRenderer {
     /**
      * Handles **bold** / *italic* / `code` spans inside a paragraph.
      * Non-greedy so **foo**bar** does not eat the trailing text.
+     * Exposed as a public static helper so user bubbles rendered outside
+     * MarkdownRenderer (e.g. ChatActivity.textBubble) can inline-format too.
      */
-    public static CharSequence applyInlineSpans(String text) {
+    public static CharSequence applyInlineSpansStatic(String text) {
+        return applyInlineSpans(text);
+    }
+
+    private static CharSequence applyInlineSpans(String text) {
         SpannableStringBuilder sb = new SpannableStringBuilder();
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|`([^`]+)`")

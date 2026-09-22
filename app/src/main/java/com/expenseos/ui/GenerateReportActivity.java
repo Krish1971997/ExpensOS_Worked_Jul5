@@ -805,10 +805,13 @@ public class GenerateReportActivity extends AppCompatActivity {
                 ReportGenerator.writePdf(txns, reportType, cashbookName, customTitle, out);
             }
 
-            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(uri, "application/pdf");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            // In-app zoomable preview — pinch, double-tap, +/- buttons (same look as
+            // the new ZoomablePdfPreviewActivity used by Reports / Food Tracker / Stats).
+            Intent intent = new Intent(this, ZoomablePdfPreviewActivity.class);
+            intent.putExtra("pdfPath", pdfFile.getAbsolutePath());
+            intent.putExtra("suggestedFileName", "Report_" + reportType + ".pdf");
+            intent.putExtra("title", customTitle);
+            intent.putExtra("sourceTag", "generate-report");
             startActivity(intent);
         } catch (Exception e) {
             Toast.makeText(this, "Couldn't generate preview: " + e.getMessage(), Toast.LENGTH_LONG).show();
