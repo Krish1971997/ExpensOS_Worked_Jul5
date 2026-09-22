@@ -10,47 +10,32 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
- * OpenAI's Chat Completions tool-calling format — shared by OpenAI itself
- * and xAI's Grok (Grok's API is OpenAI-compatible), so both just supply a
- * different endpoint/key/model to this same request/response logic.
+ * OpenAI's Chat Completions tool-calling format — shared by OpenAI itself,
+ * xAI's Grok and Genspark (all OpenAI-compatible). One instance = one concrete
+ * candidate (provider → model → key). Per-turn chart/image state is fresh.
  */
-public abstract class OpenAiCompatibleClient implements AiProvider {
+public class OpenAiCompatibleClient implements AiProvider {
 
-    private static String buildSystemPrompt() {
-        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
-        return
-                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
-                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
-                        "style questions instead of spending a step figuring out the date. " +
-                        "You can ONLY answer questions about this app's own data (transactions, categories, " +
-                        "budgets, cash books, backups, schedulers, etc.) using the provided tools. " +
-                        "You must NEVER attempt to modify data — you only have read tools available. " +
-                        "Always start by calling list_tables, then describe_table on relevant tables before " +
-                        "writing a query — never guess column names. CHART RULES: render_chart supports " +
-                        "chart_type='bar' (default) or 'pie'. When the user explicitly asks for BOTH day-wise " +
-                        "AND category-wise in one turn (e.g. \"day wise and category wise\", \"daily and by category\"), " +
-                        "you MUST call render_chart TWICE — once titled \"Day-wise\" with daily totals, again titled \"Category-wise\" with category totals; both show under one bubble. " +
-                        "When the user asks for an EXPORT/PDF (\"pdf kudu\", \"send pdf\"), use render_pdf with title + a rows array of \"YYYY-MM-DD|amount|note\" strings. " +
-                        "If the user asks to visualize or chart something, call render_chart with labels/values AFTER querying the data. " +
-                        "Always reply in the same language and style the user wrote in — including Tanglish " +
-                        "(Tamil written in English letters), plain English, or Tamil script; match their " +
-                        "language rather than defaulting to English. " +
-                        "You CAN use markdown formatting (### headings, **bold**, *italic*, - bullet, --- divider) " +
-                        "in your answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
-    }
+    public static final String OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
     private final ToolDispatcher dispatcher;
-    protected final String apiKey;
-    protected final String model;
-    protected final String endpoint;
+    private final String apiKey;
+    private final String model;
+    private final String endpoint;
+    private final String label;
 
-    protected OpenAiCompatibleClient(Context ctx, String provider, String endpoint) {
-        AppConfig cfg = AppConfig.get(ctx);
-        this.apiKey = cfg.getAiKey(provider);
-        this.model = cfg.getAiModel(provider);
+    public OpenAiCompatibleClient(Context ctx, AiCandidate cand) {
+        this(ctx, cand, OPENAI_ENDPOINT);
+    }
+
+    public OpenAiCompatibleClient(Context ctx, AiCandidate cand, String endpoint) {
+        this.apiKey = cand.apiKey;
+        this.model = cand.model;
         this.endpoint = endpoint;
+        this.label = cand.providerLabel();
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
@@ -60,21 +45,40 @@ public abstract class OpenAiCompatibleClient implements AiProvider {
     }
 
     @Override
+    public List<String> getLastChartPaths() {
+        return dispatcher.getLastChartPaths();
+    }
+
+    @Override
     public String getLastImagePath() {
         return dispatcher.getLastImagePath();
     }
 
     @Override
     public void ask(String userMessage, String imagePath, JSONArray priorMessages, Callback cb) {
+        // Legacy entry: wrap into a neutral request with the raw history as-is.
+        try {
+            JSONArray neutral = AiHistory.sanitize(priorMessages);
+            askBlocking(new AiRequest(userMessage, imagePath, neutral, userMessage), cb);
+        } catch (AiException e) {
+            cb.onError(e.getMessage());
+        }
+    }
+
+    @Override
+    public String askBlocking(AiRequest request, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
-            cb.onError(providerLabel() + " API key not configured — set it in Config first.");
-            return;
+            throw new AiException(AiException.Kind.AUTH, label + " API key is not configured — add it in Config.");
         }
         try {
-            JSONArray messages = priorMessages != null ? priorMessages : new JSONArray();
-            if (messages.length() == 0) messages.put(msg("system", buildSystemPrompt()));
-            messages.put(imagePath != null ? userMsgWithImage(userMessage, imagePath) : msg("user", userMessage));
+            JSONArray neutral = AiHistory.sanitize(request.history);
+            JSONArray messages = AiHistory.toOpenAi(neutral);
+            if (messages.length() == 0 || !messages.optJSONObject(0).optString("role", "").equals("system")) {
+                // single concise system prompt, added per-request — never stored in shared history
+                messages.put(msg("system", AiPrompts.systemPrompt()));
+            }
+            messages.put(request.imagePath != null ? userMsgWithImage(request.userMessage, request.imagePath) : msg("user", request.userMessage));
 
             cb.onProgress("Thinking…");
             for (int round = 0; round < 12; round++) {
@@ -106,16 +110,17 @@ public abstract class OpenAiCompatibleClient implements AiProvider {
                 }
 
                 String answer = message.optString("content", "").trim();
-                cb.onResult(answer.isEmpty() ? "I couldn't find an answer." : answer);
-                return;
+                return answer.isEmpty() ? "I couldn't find an answer." : answer;
             }
-            cb.onError("Assistant took too many steps — try rephrasing your question.");
+            throw new AiException(AiException.Kind.UNKNOWN, "Assistant took too many steps — try rephrasing your question.");
+        } catch (AiException e) {
+            throw e;
+        } catch (java.io.IOException e) {
+            throw AiErrorClassifier.fromNetwork(label, e instanceof Exception ? (Exception) e : new Exception(e), apiKey);
         } catch (Exception e) {
-            cb.onError(e.getMessage() != null ? e.getMessage() : e.toString());
+            throw AiErrorClassifier.fromUnexpected(label, e, apiKey);
         }
     }
-
-    protected abstract String providerLabel();
 
     // Friendly progress labels for the common tools — falls back to the raw name for anything else.
     private String progressLabel(String toolName, JSONObject args) {
@@ -177,44 +182,22 @@ public abstract class OpenAiCompatibleClient implements AiProvider {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
         } catch (java.net.SocketTimeoutException e) {
-            throw new RuntimeException(providerLabel() + ": request timed out — try a shorter/simpler question.");
+            throw new java.io.IOException("timeout");
         }
 
         int status;
         try {
             status = conn.getResponseCode();
         } catch (java.net.SocketTimeoutException e) {
-            throw new RuntimeException(providerLabel() + ": response timed out (model took too long) — try again.");
+            throw new java.io.IOException("timeout");
         }
         InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
         String responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
         if (status < 200 || status >= 300) {
-            throw new RuntimeException(friendlyError(providerLabel(), status, responseBody));
+            throw AiErrorClassifier.fromHttp(label, status, responseBody, apiKey);
         }
         return new JSONObject(responseBody);
-    }
-
-    // Turns the raw error JSON into one readable line instead of dumping
-    // the whole payload — the common cases (bad key, quota, bad model) all
-    // have a stable "error.code"/"error.type" field to key off.
-    private String friendlyError(String provider, int status, String responseBody) {
-        try {
-            JSONObject err = new JSONObject(responseBody).optJSONObject("error");
-            String code = err != null ? err.optString("code", err.optString("type", "")) : "";
-            String message = err != null ? err.optString("message", "") : "";
-
-            if (status == 401) return provider + ": invalid API key — check it in Config.";
-            if (status == 404)
-                return provider + ": model \"" + model + "\" not found — check the model name in Config.";
-            if (status == 429 && code.contains("quota")) {
-                return provider + ": quota/billing limit reached on this API key's account — check your plan & billing.";
-            }
-            if (status == 429) return provider + ": rate limited — try again in a moment.";
-            if (!message.isEmpty()) return provider + " error (" + status + "): " + message;
-        } catch (Exception ignored) {
-        }
-        return provider + " error (" + status + "): " + responseBody;
     }
 
     private JSONArray toolDefinitions() throws Exception {

@@ -7,10 +7,8 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -39,12 +37,10 @@ public class ConfigFragment extends Fragment {
     // Gmail Config
     private EditText etGmailFrom, etGmailPass, etAlertEmail;
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
-    private EditText etOpenAiKey, etOpenAiModel;
 
     // Status & AI Spinner views
     private Button btnTestConnection, btnSyncConfigToDb;
     private TextView tvConnectionResult, tvSyncConfigStatus;
-    private Spinner spAiProvider;
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inf, ViewGroup pg, Bundle s) {
@@ -58,7 +54,6 @@ public class ConfigFragment extends Fragment {
                 "expenseos_prefs", android.content.Context.MODE_PRIVATE);
 
         bindViews(v);
-        setupSpinner();
         loadSavedValues();
         setupButtons();
     }
@@ -76,38 +71,10 @@ public class ConfigFragment extends Fragment {
         etZohoRefreshToken = v.findViewById(R.id.etCfgZohoRefreshToken);
 
         etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
-        etOpenAiKey = v.findViewById(R.id.etCfgOpenAiKey);
-        etOpenAiModel = v.findViewById(R.id.etCfgOpenAiModel);
-        spAiProvider = v.findViewById(R.id.spCfgAiProvider);
-
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
-    }
-
-    private static final String[] AI_PROVIDERS = {"gemini", "openai", "grok", "claude", "genspark"};
-
-    private void setupSpinner() {
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_dropdown_item, AI_PROVIDERS);
-        spAiProvider.setAdapter(adapter);
-
-        // Reload the key/model fields for whichever provider is selected —
-        // each provider has its own saved slot (see AppConfig.getAiKey/getAiModel).
-        spAiProvider.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                String provider = AI_PROVIDERS[position];
-                AppConfig cfg = AppConfig.get(requireContext());
-                etOpenAiKey.setText(cfg.getAiKey(provider));
-                etOpenAiModel.setText(cfg.getAiModel(provider));
-            }
-
-            @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {
-            }
-        });
     }
 
     private void loadSavedValues() {
@@ -124,11 +91,6 @@ public class ConfigFragment extends Fragment {
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
 
-        // Select the active provider first — the spinner's onItemSelected
-        // above will then load THAT provider's own saved key/model.
-        String activeProvider = cfg.getAiProvider();
-        int idx = java.util.Arrays.asList(AI_PROVIDERS).indexOf(activeProvider);
-        spAiProvider.setSelection(idx >= 0 ? idx : 0);
     }
 
     private void setupButtons() {
@@ -149,15 +111,6 @@ public class ConfigFragment extends Fragment {
                     etZohoRefreshToken.getText().toString().trim(),
                     etWorkdriveFolderId.getText().toString().trim());
             toast("✓ Zoho Config saved!");
-        });
-
-        requireView().findViewById(R.id.btnSaveCfgOpenAi).setOnClickListener(v -> {
-            String selectedProvider = spAiProvider.getSelectedItem().toString();
-            AppConfig.get(requireContext()).setAiConfig(
-                    etOpenAiKey.getText().toString().trim(),
-                    etOpenAiModel.getText().toString().trim(),
-                    selectedProvider);
-            toast("✓ " + selectedProvider + " config saved!");
         });
 
         btnTestConnection.setOnClickListener(v -> testConnection());

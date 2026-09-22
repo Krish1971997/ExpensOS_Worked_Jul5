@@ -130,12 +130,6 @@ public class SchedulerWorker extends Worker {
                     message = o.message;
                     break;
                 }
-                case "FOOD_TRACKER_REPORT": {
-                    FoodTrackerReportOutcome o = runFoodTrackerReport(ctx);
-                    ok = o.ok;
-                    message = o.message;
-                    break;
-                }
                 default:
                     ok = false;
                     message = "Unknown scheduler: " + s.getName();
@@ -211,12 +205,6 @@ public class SchedulerWorker extends Worker {
             }
             case "MONTHLY_CATEGORY_REPORT": {
                 MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
-                ok = o.ok;
-                message = o.message;
-                break;
-            }
-            case "FOOD_TRACKER_REPORT": {
-                FoodTrackerReportOutcome o = runFoodTrackerReport(ctx);
                 ok = o.ok;
                 message = o.message;
                 break;
@@ -447,53 +435,6 @@ public class SchedulerWorker extends Worker {
         String message = "";
     }
 
-    // ── FOOD_TRACKER_REPORT: emails the food-tracker's daily breakfast/lunch/
-    // dinner totals for LAST MONTH — runs at 00:15 on the 1st (after the
-    // Monthly Category Report at 00:05, so both land in the same first-of-
-    // month tick). Builds a PDF the same way FoodTrackerActivity does,
-    // then attaches it. Reuses the existing GmailSender path and the same
-    // alert email address configured in Config — no new settings needed.
-    private FoodTrackerReportOutcome runFoodTrackerReport(Context ctx) {
-        FoodTrackerReportOutcome outcome = new FoodTrackerReportOutcome();
-        String alertEmail = com.expenseos.util.AppConfig.get(ctx).getSchedulerAlertEmail();
-        if (alertEmail == null || alertEmail.isBlank()) {
-            outcome.ok = false;
-            outcome.message = "Alert email not configured — skipped";
-            return outcome;
-        }
-        try {
-            java.io.ByteArrayOutputStream pdfBytes = new java.io.ByteArrayOutputStream();
-            // Reuse the same generator the on-screen Food Tracker uses so the
-            // emailed PDF is byte-identical to what the user sees when they
-            // pick "Email" in the app — references last calendar month's
-            // data (i.e. the month that just ended).
-            com.expenseos.util.FoodTrackerReportGenerator.writeLastMonth(ctx, pdfBytes);
-
-            java.time.LocalDate lastMonth = java.time.LocalDate.now().minusMonths(1);
-            String subject = "Food Tracker Report — " + lastMonth.format(
-                    java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
-            String html = "<html><body style='font-family:Arial,sans-serif;'>"
-                    + "<p>Attached: food tracker report for "
-                    + lastMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"))
-                    + " (PDF). Open in any PDF reader; Adobe / Drive / WPS / Outlook all work.</p>"
-                    + "</body></html>";
-            com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
-                    "food_tracker_report.pdf", pdfBytes.toByteArray(), "application/pdf");
-            com.expenseos.util.GmailSender.send(ctx, alertEmail, subject, html, attachment);
-            outcome.ok = true;
-            outcome.message = "Sent food tracker report for " + subject.replace("Food Tracker Report — ", "");
-        } catch (Exception e) {
-            outcome.ok = false;
-            outcome.message = e.getMessage() == null ? e.toString() : e.getMessage();
-        }
-        return outcome;
-    }
-
-    private static class FoodTrackerReportOutcome {
-        boolean ok = false;
-        String message = "";
-    }
-
     // ── BUDGET: applies the saved allocation-template (% split per
     // category, set once via BudgetConfigActivity) to the CURRENT month for
     // the active book. Mirrors MONTHLY_CATEGORY_REPORT's single-active-book
@@ -639,28 +580,6 @@ public class SchedulerWorker extends Worker {
         dao.insertScheduler("MONTHLY_CATEGORY_REPORT", "Monthly Category Report Email",
                 true, "MONTHLY", "1", 0, 5, nextRun);
         ConsoleLogger.get().info("Monthly Category Report scheduler seeded — next run: " + nextRun);
-    }
-
-    /**
-     * Seeds the "FOOD_TRACKER_REPORT" scheduler row if it doesn't exist yet
-     * (CONFLICT_IGNORE on name — safe to call repeatedly). Runs at 00:15 on
-     * the 1st of each month so the monthly email digest of food-track
-     * breakfast/lunch/dinner totals lands right after the
-     * MONTHLY_CATEGORY_REPORT (00:05) scheduler in the same tick.
-     */
-    public static void ensureFoodTrackerReportScheduler(Context ctx) {
-        SchedulerDao dao = new SchedulerDao(ctx);
-        if (dao.findByName("FOOD_TRACKER_REPORT") != null) return;
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime firstOfThisMonth = now.withDayOfMonth(1).withHour(0).withMinute(15).withSecond(0).withNano(0);
-        LocalDateTime nextRun = now.isBefore(firstOfThisMonth)
-                ? firstOfThisMonth
-                : firstOfThisMonth.plusMonths(1);
-
-        dao.insertScheduler("FOOD_TRACKER_REPORT", "Monthly Food Tracker Report Email",
-                true, "MONTHLY", "1", 0, 15, nextRun);
-        ConsoleLogger.get().info("Food Tracker Report scheduler seeded — next run: " + nextRun);
     }
 
     /**

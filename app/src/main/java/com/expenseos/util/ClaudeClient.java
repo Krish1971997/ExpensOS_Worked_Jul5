@@ -10,42 +10,24 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
+/**
+ * Anthropic Claude Messages API client (tool use). One instance = one concrete
+ * candidate (provider → model → key). Per-turn chart/image state is fresh.
+ */
 public class ClaudeClient implements AiProvider {
 
     private static final String ENDPOINT = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
 
-    private static String buildSystemPrompt() {
-        String today = java.time.LocalDate.now().toString(); // yyyy-MM-dd
-        return
-                "You are the in-app data assistant for ExpenseOS, a personal expense-tracking app. " +
-                        "Today's date is " + today + " — use this directly for \"today\"/\"yesterday\"/\"this month\" " +
-                        "style questions instead of spending a step figuring out the date. " +
-                        "You can ONLY answer questions about this app's own data using the provided tools. " +
-                        "You must NEVER attempt to modify data — you only have read tools available. " +
-                        "Always start by calling list_tables, then describe_table on relevant tables before " +
-                        "writing a query. CHART RULES: When asked for a chart, call render_chart with chart_type " +
-                        "= 'bar' or 'pie'. When the user asks for BOTH day-wise and category-wise in one turn " +
-                        "(e.g. \"day wise and category wise\"), call render_chart TWICE — once with the daily totals, " +
-                        "once with category totals. When asked for a PDF, use render_pdf with a title + rows array " +
-                        "of \"date|amount|note\" strings. " +
-                        "If asked to visualize/chart something, call render_chart after " +
-                        "querying. Always reply in the same language and style the user wrote in — including " +
-                        "Tanglish (Tamil written in English letters), plain English, or Tamil script; match " +
-                        "their language rather than defaulting to English. " +
-                        "You CAN use markdown formatting (### headings, **bold**, - bullet lists, --- dividers) " +
-                        "in answers — the chat bubble renders it natively. Keep answers concise and grounded only in query results.";
-    }
-
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
 
-    public ClaudeClient(Context ctx) {
-        AppConfig cfg = AppConfig.get(ctx);
-        this.apiKey = cfg.getAiKey(AppConfig.PROVIDER_CLAUDE);
-        this.model = cfg.getAiModel(AppConfig.PROVIDER_CLAUDE);
+    public ClaudeClient(Context ctx, AiCandidate cand) {
+        this.apiKey = cand.apiKey;
+        this.model = cand.model;
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
@@ -55,20 +37,35 @@ public class ClaudeClient implements AiProvider {
     }
 
     @Override
+    public List<String> getLastChartPaths() {
+        return dispatcher.getLastChartPaths();
+    }
+
+    @Override
     public String getLastImagePath() {
         return dispatcher.getLastImagePath();
     }
 
     @Override
     public void ask(String userMessage, String imagePath, JSONArray priorMessages, Callback cb) {
+        try {
+            JSONArray neutral = AiHistory.sanitize(priorMessages);
+            askBlocking(new AiRequest(userMessage, imagePath, neutral, userMessage), cb);
+        } catch (AiException e) {
+            cb.onError(e.getMessage());
+        }
+    }
+
+    @Override
+    public String askBlocking(AiRequest request, Callback cb) {
         dispatcher.resetChart();
         if (apiKey == null || apiKey.isBlank()) {
-            cb.onError("Claude API key not configured — set it in Config first.");
-            return;
+            throw new AiException(AiException.Kind.AUTH, "Claude API key is not configured — add it in Config.");
         }
         try {
-            JSONArray messages = priorMessages != null ? priorMessages : new JSONArray();
-            messages.put(imagePath != null ? userMsgWithImage(userMessage, imagePath) : userMsg(userMessage));
+            JSONArray neutral = AiHistory.sanitize(request.history);
+            JSONArray messages = AiHistory.toClaude(neutral);
+            messages.put(request.imagePath != null ? userMsgWithImage(request.userMessage, request.imagePath) : userMsg(request.userMessage));
 
             cb.onProgress("Thinking…");
             for (int round = 0; round < 12; round++) {
@@ -110,19 +107,22 @@ public class ClaudeClient implements AiProvider {
                     continue;
                 }
 
-                StringBuilder text = new StringBuilder();
+                // Final answer — collect all text blocks.
+                StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < content.length(); i++) {
                     JSONObject block = content.getJSONObject(i);
-                    if ("text".equals(block.optString("type")))
-                        text.append(block.optString("text"));
+                    if ("text".equals(block.optString("type"))) sb.append(block.optString("text", ""));
                 }
-                String answer = text.toString().trim();
-                cb.onResult(answer.isEmpty() ? "I couldn't find an answer." : answer);
-                return;
+                String answer = sb.toString().trim();
+                return answer.isEmpty() ? "I couldn't find an answer." : answer;
             }
-            cb.onError("Assistant took too many steps — try rephrasing your question.");
+            throw new AiException(AiException.Kind.UNKNOWN, "Assistant took too many steps — try rephrasing your question.");
+        } catch (AiException e) {
+            throw e;
+        } catch (java.io.IOException e) {
+            throw AiErrorClassifier.fromNetwork("Claude", e instanceof Exception ? (Exception) e : new Exception(e), apiKey);
         } catch (Exception e) {
-            cb.onError(e.getMessage() != null ? e.getMessage() : e.toString());
+            throw AiErrorClassifier.fromUnexpected("Claude", e, apiKey);
         }
     }
 
@@ -141,13 +141,10 @@ public class ClaudeClient implements AiProvider {
     private JSONObject userMsg(String text) throws Exception {
         JSONObject m = new JSONObject();
         m.put("role", "user");
-        JSONArray content = new JSONArray();
-        content.put(new JSONObject().put("type", "text").put("text", text));
-        m.put("content", content);
+        m.put("content", new JSONArray().put(new JSONObject().put("type", "text").put("text", text)));
         return m;
     }
 
-    // Claude vision format: an image content block (base64 source) alongside the text block.
     private JSONObject userMsgWithImage(String text, String imagePath) throws Exception {
         byte[] bytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(imagePath));
         String b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP);
@@ -175,7 +172,7 @@ public class ClaudeClient implements AiProvider {
         JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("max_tokens", 1024);
-        body.put("system", buildSystemPrompt());
+        body.put("system", AiPrompts.systemPrompt());
         body.put("messages", messages);
         body.put("tools", toolDefinitions());
 
@@ -192,39 +189,21 @@ public class ClaudeClient implements AiProvider {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
         } catch (java.net.SocketTimeoutException e) {
-            throw new RuntimeException("Claude: request timed out — try a shorter/simpler question.");
+            throw new java.io.IOException("timeout");
         }
 
         int status;
         try {
             status = conn.getResponseCode();
         } catch (java.net.SocketTimeoutException e) {
-            throw new RuntimeException("Claude: response timed out (model took too long) — try again.");
+            throw new java.io.IOException("timeout");
         }
         InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
         String responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         if (status < 200 || status >= 300)
-            throw new RuntimeException(friendlyError(status, responseBody));
+            throw AiErrorClassifier.fromHttp("Claude", status, responseBody, apiKey);
         return new JSONObject(responseBody);
     }
-
-    private String friendlyError(int status, String responseBody) {
-        try {
-            JSONObject err = new JSONObject(responseBody).optJSONObject("error");
-            String type = err != null ? err.optString("type", "") : "";
-            String message = err != null ? err.optString("message", "") : "";
-
-            if (status == 401) return "Claude: invalid API key — check it in Config.";
-            if (status == 404 || "not_found_error".equals(type))
-                return "Claude: model \"" + model + "\" not found — check the model name in Config.";
-            if (status == 429 || "rate_limit_error".equals(type))
-                return "Claude: quota/rate limit reached — check your plan & billing.";
-            if (!message.isEmpty()) return "Claude error (" + status + "): " + message;
-        } catch (Exception ignored) {
-        }
-        return "Claude error (" + status + "): " + responseBody;
-    }
-
 
     private JSONArray toolDefinitions() throws Exception {
         JSONArray tools = new JSONArray();

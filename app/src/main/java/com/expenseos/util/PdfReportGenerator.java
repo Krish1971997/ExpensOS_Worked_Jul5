@@ -35,10 +35,10 @@ public final class PdfReportGenerator {
             PdfDocument.Page page = doc.startPage(info);
             android.graphics.Canvas c = page.getCanvas();
 
-            Paint titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            titlePaint.setColor(Color.parseColor("#111827"));
-            titlePaint.setTextSize(20);
-            titlePaint.setFakeBoldText(true);
+            Paint paintTitle = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paintTitle.setColor(Color.parseColor("#111827"));
+            paintTitle.setTextSize(20);
+            paintTitle.setFakeBoldText(true);
 
             Paint meta = new Paint(Paint.ANTI_ALIAS_FLAG);
             meta.setColor(Color.parseColor("#6B7280"));
@@ -56,8 +56,8 @@ public final class PdfReportGenerator {
             Paint altFill = new Paint();
             altFill.setColor(Color.parseColor("#F9FAFB"));
 
-            // Header
-            c.drawText(title == null || title.isEmpty() ? "ExpenseOS Report" : title, 36, 60, titlePaint);
+            // 🟢 FIXED: Now checking the String parameter 'title' and passing 'paintTitle' as the Paint arg
+            c.drawText(title == null || title.isEmpty() ? "ExpenseOS Report" : title, 36, 60, paintTitle);
             String now = new SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.UK).format(new Date());
             c.drawText("Generated: " + now, 36, 80, meta);
             c.drawLine(36, 90, pageW - 36, 90, meta);
@@ -101,7 +101,8 @@ public final class PdfReportGenerator {
                 PdfDocument.Page page2 = doc.startPage(info2);
                 android.graphics.Canvas c2 = page2.getCanvas();
                 int y2 = 60;
-                c2.drawText(title + " (cont.)", 36, y2, titlePaint);
+                // 🟢 FIXED: Updated here as well
+                c2.drawText(title + " (cont.)", 36, y2, paintTitle);
                 y2 += 24;
                 while (idx < total) {
                     if (y2 > pageH - 60) break;

@@ -59,7 +59,6 @@ public class HomeActivity extends AppCompatActivity {
 
         com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);   // <-- add this
         com.expenseos.scheduler.SchedulerWorker.ensureMonthlyCategoryReportScheduler(this);
-        com.expenseos.scheduler.SchedulerWorker.ensureFoodTrackerReportScheduler(this);
 
         setupBottomNav();
         setupDrawer();

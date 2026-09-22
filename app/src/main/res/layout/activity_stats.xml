@@ -27,7 +27,9 @@
             android:layout_weight="1"
             android:text="📊 Stats"
             android:textSize="18sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <ImageButton
             android:id="@+id/btnPrevMonth"
@@ -51,14 +53,17 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_media_next" />
 
-        <ImageButton
+        <TextView
             android:id="@+id/btnStatsInsights"
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:gravity="center"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
             android:contentDescription="Insights"
-            android:src="@drawable/ic_stats"
-            app:tint="@color/primary" />
+            android:text="📈"
+            android:textSize="20sp" />
 
         <ImageButton
             android:id="@+id/btnStatsMenu"
@@ -183,10 +188,10 @@
                 android:layout_marginBottom="8dp" />
 
             <LinearLayout
-            android:id="@+id/rvStatsCategories"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
+                android:id="@+id/rvStatsCategories"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

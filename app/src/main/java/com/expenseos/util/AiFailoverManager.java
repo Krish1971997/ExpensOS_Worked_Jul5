@@ -159,44 +159,12 @@ public class AiFailoverManager {
             int attempts = 0;
             while (true) {
                 attempts++;
-                AiProvider client = AiClientFactory.create(ctx);
+                AiProvider client = AiClientFactory.create(ctx, cand);
                 try {
                     cb.onProgress(!anyTried && attempts == 1
                             ? "Thinking…"
                             : "Trying " + cand.maskedLabel() + "…");
-                    final String[] answerArr = new String[1];
-                    final Exception[] errArr = new Exception[1];
-                    final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-
-                    client.ask(request.userMessage, request.imagePath, request.history, new AiProvider.Callback() {
-                        @Override
-                        public void onResult(String answer) {
-                            answerArr[0] = answer;
-                            latch.countDown();
-                        }
-
-                        @Override
-                        public void onError(String message) {
-                            errArr[0] = new Exception(message);
-                            latch.countDown();
-                        }
-
-                        @Override
-                        public void onProgress(String stage) {
-                            cb.onProgress(stage);
-                        }
-                    });
-
-                    try {
-                        latch.await();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-
-                    if (errArr[0] != null) {
-                        throw new AiException(AiException.Kind.UNKNOWN, errArr[0].getMessage());
-                    }
-                    String answer = answerArr[0];
+                    String answer = client.askBlocking(request, cb);
                     captureOutput(client);
                     rememberActive(cand);
                     return answer;
@@ -217,6 +185,11 @@ public class AiFailoverManager {
                     last = AiErrorClassifier.fromUnexpected(cand.providerLabel(), e, cand.apiKey);
                     notifyFailover(cb, hooks, cand);
                     break; // defensive: move on
+                } finally {
+                    try {
+                        client.close();
+                    } catch (Exception ignored) {
+                    }
                 }
             }
         }
@@ -231,7 +204,7 @@ public class AiFailoverManager {
 
     private void captureOutput(AiProvider client) {
         try {
-            List<String> charts = new ArrayList<>();
+            List<String> charts = client.getLastChartPaths();
             lastChartPaths = charts != null ? charts : new ArrayList<>();
             lastImagePath = client.getLastImagePath();
         } catch (Exception ignored) {
