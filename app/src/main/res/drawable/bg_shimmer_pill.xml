@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Soft gradient bar used as a skeleton / shimmer accent under the loader. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="4dp" />
+    <gradient
+        android:angle="0"
+        android:centerColor="@color/primary"
+        android:endColor="@color/border"
+        android:startColor="@color/border" />
+</shape>

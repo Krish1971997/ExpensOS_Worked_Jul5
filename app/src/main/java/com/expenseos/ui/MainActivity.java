@@ -42,14 +42,27 @@ public class MainActivity extends AppCompatActivity {
     private String sort = null; // null=updated, name_asc, balance_desc, balance_asc, created
     private static final int REQ_SMS_PERMISSION = 101;
 
+    private android.view.View premiumLoader;
+    private boolean premiumLoaderGone = false;
+
 
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        setTheme(R.style.Theme_ExpenseOS); // back to the normal app theme — the Splash theme was only for the cold-start window background
         setContentView(R.layout.activity_main);
         com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
         dao = new CashBookDao(this);
+
+        // Premium cold-start loader — shown while the shell initialises, then faded out.
+        try {
+            android.view.ViewGroup rootView = findViewById(android.R.id.content);
+            premiumLoader = android.view.LayoutInflater.from(this)
+                    .inflate(R.layout.view_premium_loading, rootView, false);
+            rootView.addView(premiumLoader);
+            premiumLoader.setAlpha(0f);
+            premiumLoader.animate().alpha(1f).setDuration(160).start();
+            rootView.postDelayed(this::dismissPremiumLoader, 550);
+        } catch (Throwable ignored) { }
 
         com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
         requestNotificationPermissionIfNeeded();
@@ -391,5 +404,22 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
         }
+    }
+    // ── Premium cold-start loader ────────────────────────────────────
+    private void dismissPremiumLoader() {
+        if (premiumLoaderGone || premiumLoader == null) return;
+        premiumLoaderGone = true;
+        final android.view.View v = premiumLoader;
+        premiumLoader = null;
+        v.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+            android.view.ViewGroup parent = (android.view.ViewGroup) v.getParent();
+            if (parent != null) parent.removeView(v);
+        }).start();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        dismissPremiumLoader(); // any tap reveals the app immediately
+        return super.dispatchTouchEvent(ev);
     }
 }
