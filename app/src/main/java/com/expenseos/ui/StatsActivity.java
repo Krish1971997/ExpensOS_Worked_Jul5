@@ -8,19 +8,16 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.LinearLayout;
 import android.widget.ArrayAdapter;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
-import com.expenseos.adapter.StatsCategoryAdapter;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.CashBook;
@@ -98,7 +95,10 @@ public class StatsActivity extends AppCompatActivity {
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_stats);
-        try { findViewById(R.id.btnStatsInsights).setOnClickListener(v -> startActivity(new Intent(this, InsightsActivity.class))); } catch (Throwable ignored) {}
+        try {
+            findViewById(R.id.btnStatsInsights).setOnClickListener(v -> startActivity(new Intent(this, InsightsActivity.class)));
+        } catch (Throwable ignored) {
+        }
 
         findViewById(R.id.btnStatsBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnStatsMenu).setOnClickListener(this::showExportMenu);
@@ -370,7 +370,9 @@ public class StatsActivity extends AppCompatActivity {
 
         BigDecimal total = BigDecimal.ZERO;
         for (Map<String, Object> r : rows) total = total.add((BigDecimal) r.get("total"));
-        tvTotalBalance.setText("₹" + total.toPlainString());
+        // .toPlainString() surfaces the raw unrounded double-derived scale
+        // (e.g. 7998.3199999999999) — round to money's 2 decimals for display.
+        tvTotalBalance.setText("₹" + total.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
 
         lastCategoryRows.clear();
 
@@ -416,7 +418,7 @@ public class StatsActivity extends AppCompatActivity {
 
         // Category list — tap → CategoryStatsActivity drill-down
         final CashBook resolvedBook = book;
-                // Category list — tap → CategoryStatsActivity drill-down.
+        // Category list — tap → CategoryStatsActivity drill-down.
         // Built as plain views so every category renders regardless of how
         // the parent ScrollView measures the container.
         rvCategories.removeAllViews();

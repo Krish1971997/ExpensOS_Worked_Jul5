@@ -38,6 +38,7 @@
         <item name="editTextStyle">@style/Widget.ExpenseOS.EditText</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ExpenseOS.Dialog</item>
         <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ExpenseOS.BottomSheet</item>
+        <item name="materialTimePickerTheme">@style/ThemeOverlay.ExpenseOS.TimePicker</item>
         <item name="android:windowAnimationStyle">@style/Animation.ExpenseOS.Window</item>
         <item name="android:windowActivityTransitions">true</item>
         <item name="android:windowContentTransitions">true</item>
@@ -63,6 +64,14 @@
         <item name="shapeAppearanceOverlay">@style/ShapeAppearance.ExpenseOS.Dialog</item>
         <item name="android:windowMinWidthMajor">84%</item>
         <item name="android:windowMinWidthMinor">84%</item>
+    </style>
+
+    <style name="ThemeOverlay.ExpenseOS.TimePicker" parent="ThemeOverlay.MaterialComponents.TimePicker">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ExpenseOS.Dialog</item>
     </style>
 
     <style name="ThemeOverlay.ExpenseOS.BottomSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">

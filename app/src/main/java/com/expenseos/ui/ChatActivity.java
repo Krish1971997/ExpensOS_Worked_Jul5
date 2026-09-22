@@ -59,11 +59,13 @@ import java.util.Locale;
  * - Sessions isolated by session_id (multi-chat like claude / chatgpt)
  * - Central failover (model/key priority) with ChatGPT-style error bubble + Retry
  * - Token-optimized: bounded neutral history window, no duplicated turns,
- *   single in-flight guard (see AiFailoverManager / AiHistory / AiPrompts).
+ * single in-flight guard (see AiFailoverManager / AiHistory / AiPrompts).
  */
 public class ChatActivity extends AppCompatActivity {
 
-    /** How many recent neutral history turns are sent to the model per request. */
+    /**
+     * How many recent neutral history turns are sent to the model per request.
+     */
     private static final int HISTORY_WINDOW = 8;
 
     private LinearLayout messagesContainer;
@@ -79,6 +81,12 @@ public class ChatActivity extends AppCompatActivity {
 
     private ChatHistoryDao historyDao;
     private AiFailoverManager failover;
+    // Ovvoru runTurn() call-kum unique id — watchdog give-up pannina apparam
+    // background thread late-ah result kொடுthalum, adhு STALE turn-ah irundha
+    // UI-ah touch pannாma silently ignore pannum (typingBubble/typingTextView
+    // corruption idha avoid pannும்).
+    private final java.util.concurrent.atomic.AtomicInteger turnCounter = new java.util.concurrent.atomic.AtomicInteger(0);
+    private int activeTurnId = 0;
 
     /**
      * Neutral conversation history: [{role:"user"|"assistant", text:"…"}].
@@ -157,7 +165,9 @@ public class ChatActivity extends AppCompatActivity {
         loadSession("default");
     }
 
-    /** Builds the failover candidate list (provider → model → keys, in saved priority order). */
+    /**
+     * Builds the failover candidate list (provider → model → keys, in saved priority order).
+     */
     private void rebuildFailover() {
         AiConfigStore store = new AiConfigStore(this);
         AiConfigStore.AiConfig cfg = store.load();
@@ -425,9 +435,13 @@ public class ChatActivity extends AppCompatActivity {
         runTurn(text, prep.effectiveMessage, prep.imagePathForApi);
     }
 
-    /** One user turn — shared by fresh sends and Retry (same message, no duplicates). */
+    /**
+     * One user turn — shared by fresh sends and Retry (same message, no duplicates).
+     */
     private void runTurn(String userDisplay, String effectiveMessage, String imagePathForApi) {
         setBusy(true);
+        final int myTurnId = turnCounter.incrementAndGet();
+        activeTurnId = myTurnId;
 
         TextView typingText = new TextView(this);
         typingBubble = addBotBubbleView(typingText, "Thinking…");
@@ -462,12 +476,20 @@ public class ChatActivity extends AppCompatActivity {
             if (!answered[0]) {
                 answered[0] = true;
                 runOnUiThread(() -> {
+                    // Turn-ah abandon pannுрோm, aana activeTurnId idhே vachchே
+                    // vекkanum (myTurnId decrement pannадhу) — pazhaya thread
+                    // eppadiyாவும் late-ah finish aana apparam "stale"-ah
+                    // theriyanum, illainaale removeTypingBubble() adhoda OWN
+                    // typing bubble-ah correct-ah remove pannuridும், aana
+                    // andha bubble ippODhu screen-la illa (already removed
+                    // idhே watchdog-la) — so andha late call no-op aagum.
                     removeTypingBubble();
-                    addErrorBubble("No response after 90s — the provider didn't answer in time.");
+                    addErrorBubble("No response after 90s — the provider didn't answer in time. (It may still complete in the background — please wait a moment before retrying.)");
                     setBusy(false);
                 });
             }
         };
+
         wh.postDelayed(watchdog, 90000);
 
         new Thread(() -> {
@@ -477,10 +499,12 @@ public class ChatActivity extends AppCompatActivity {
                 String genImage = failover.getLastImagePath();
                 answered[0] = true;
                 wh.removeCallbacks(watchdog);
-                lastFailedUserDisplay = null; // success clears the retry state
-                lastFailedEffective = null;
-                lastFailedImagePath = null;
                 runOnUiThread(() -> {
+                    if (myTurnId != activeTurnId)
+                        return; // watchdog already gave up on this turn — ignore the late result
+                    lastFailedUserDisplay = null; // success clears the retry state
+                    lastFailedEffective = null;
+                    lastFailedImagePath = null;
                     removeTypingBubble();
                     String first = genImage != null ? genImage : (charts.isEmpty() ? null : charts.get(0));
                     int storedId = saveMessage(ChatMessage.ROLE_ASSISTANT, answer, null, null, first, activeProvider());
@@ -492,6 +516,8 @@ public class ChatActivity extends AppCompatActivity {
                 answered[0] = true;
                 wh.removeCallbacks(watchdog);
                 runOnUiThread(() -> {
+                    if (myTurnId != activeTurnId)
+                        return; // stale — the UI already moved past this turn
                     removeTypingBubble();
                     addErrorBubble(e.getMessage());
                     setBusy(false);
@@ -500,6 +526,7 @@ public class ChatActivity extends AppCompatActivity {
                 answered[0] = true;
                 wh.removeCallbacks(watchdog);
                 runOnUiThread(() -> {
+                    if (myTurnId != activeTurnId) return; // stale
                     removeTypingBubble();
                     addErrorBubble("Something went wrong — please retry.");
                     setBusy(false);
@@ -570,7 +597,9 @@ public class ChatActivity extends AppCompatActivity {
         scrollToBottom();
     }
 
-    /** Bridges provider progress callbacks to the typing bubble. */
+    /**
+     * Bridges provider progress callbacks to the typing bubble.
+     */
     private class AiProviderCallbackBridge implements com.expenseos.util.AiProvider.Callback {
         private final TextView typingText;
 
@@ -597,7 +626,9 @@ public class ChatActivity extends AppCompatActivity {
     }
 
 
-    /** True if the newest neutral-history entry is role with exactly this text. */
+    /**
+     * True if the newest neutral-history entry is role with exactly this text.
+     */
     private boolean lastNeutralIs(String role, String text) {
         try {
             if (conversation.length() == 0) return false;
@@ -608,7 +639,9 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
-    /** Appends one neutral turn to the shared history. */
+    /**
+     * Appends one neutral turn to the shared history.
+     */
     private void appendNeutral(String role, String text) {
         try {
             JSONObject e = new JSONObject();
@@ -765,7 +798,9 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
-    /** Three-dot affordance under the bubble: tap bubble to reveal, ⋮ for Copy/Delete. */
+    /**
+     * Three-dot affordance under the bubble: tap bubble to reveal, ⋮ for Copy/Delete.
+     */
     private void attachCopyDeleteMenu(LinearLayout v, int storedId, String text) {
         LinearLayout menuRow = new LinearLayout(this);
         menuRow.setOrientation(LinearLayout.HORIZONTAL);

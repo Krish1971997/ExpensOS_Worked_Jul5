@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
+
     <style name="Theme.ExpenseOS" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>
@@ -30,6 +31,8 @@
 
         <item name="editTextStyle">@style/Widget.ExpenseOS.EditText</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.ExpenseOS.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ExpenseOS.BottomSheet</item>
+        <item name="materialTimePickerTheme">@style/ThemeOverlay.ExpenseOS.TimePicker</item>
         <item name="bottomSheetDialogTheme">@style/ThemeOverlay.ExpenseOS.BottomSheet</item>
         <item name="android:windowAnimationStyle">@style/Animation.ExpenseOS.Window</item>
         <item name="android:windowActivityTransitions">true</item>

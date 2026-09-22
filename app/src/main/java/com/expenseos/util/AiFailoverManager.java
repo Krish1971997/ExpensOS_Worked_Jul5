@@ -11,17 +11,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Central orchestrator: one user turn → possibly several candidate attempts
  * (provider → model → key), following the configured priority order.
- *
+ * <p>
  * Error policy:
- *  - NETWORK / SERVER / timeout: up to {@link #NET_RETRIES} bounded retries on
- *    the SAME candidate (short backoff), then move to the next candidate.
- *  - RATE_LIMIT (429/quota/credit): no same-key retry — cool the key down,
- *    move to the next key/model immediately.
- *  - AUTH (invalid/expired key): long cooldown, move on — never re-hammered.
- *  - MODEL_UNAVAILABLE: cool the model down, move on.
- *  - BAD_REQUEST / UNKNOWN: not a key/model problem — abort without burning
- *    other keys.
- *
+ * - NETWORK / SERVER / timeout: up to {@link #NET_RETRIES} bounded retries on
+ * the SAME candidate (short backoff), then move to the next candidate.
+ * - RATE_LIMIT (429/quota/credit): no same-key retry — cool the key down,
+ * move to the next key/model immediately.
+ * - AUTH (invalid/expired key): long cooldown, move on — never re-hammered.
+ * - MODEL_UNAVAILABLE: cool the model down, move on.
+ * - BAD_REQUEST / UNKNOWN: not a key/model problem — abort without burning
+ * other keys.
+ * <p>
  * Cooldowns are process-lifetime: a cooled key is skipped on subsequent turns
  * until its cooldown elapses, then rechecked naturally.
  * Exactly one turn runs at any time ({@link #inFlight} guard).
@@ -31,7 +31,9 @@ public class AiFailoverManager {
     private static final int NET_RETRIES = 2;          // extra attempts after the first failure
     private static final long NET_BACKOFF_MS = 1200;
 
-    /** Progress callback bridge (called on a worker thread). */
+    /**
+     * Progress callback bridge (called on a worker thread).
+     */
     public interface UiHooks {
         default void onFailover(String maskedCandidateLabel) {
         }
@@ -128,19 +130,28 @@ public class AiFailoverManager {
         }
     }
 
+    private static final long TOTAL_TURN_BUDGET_MS = 75_000; // stay under ChatActivity's 90s watchdog
+
     private String runTurnInternal(AiRequest request, AiProvider.Callback cb, UiHooks hooks) throws AiException {
         if (candidates.isEmpty()) {
             throw new AiException(AiException.Kind.UNKNOWN,
                     "No AI model configured — add a model and API key in Config.");
         }
 
-        long now = System.currentTimeMillis();
+        long turnStart = System.currentTimeMillis();
+        long now = turnStart;
         AiException last = null;
         boolean anyTried = false;
 
         // Single deterministic pass in priority order: keys of model 1, then
-        // model 2, … Cooled keys/models are skipped for this turn.
+        // model 2, … Cooled keys/models are skipped for this turn. Stop
+        // early (rather than let ChatActivity's watchdog time us out mid-
+        // candidate) if we're eating into the 90s UI budget — an orphaned
+        // background attempt is exactly what corrupts a later turn's UI.
         for (int idx = 0; idx < candidates.size(); idx++) {
+            if (System.currentTimeMillis() - turnStart > TOTAL_TURN_BUDGET_MS) {
+                break;
+            }
             AiCandidate cand = candidates.get(idx);
             if (keyCooling(cand, now) || modelCooling(cand, now)) continue;
             anyTried = true;

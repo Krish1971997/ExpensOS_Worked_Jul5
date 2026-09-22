@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+        setTheme(R.style.Theme_ExpenseOS); // back to the normal app theme — the Splash theme was only for the cold-start window background
         setContentView(R.layout.activity_main);
         com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
         dao = new CashBookDao(this);

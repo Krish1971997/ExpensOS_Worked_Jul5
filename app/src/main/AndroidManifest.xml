@@ -31,10 +31,15 @@
         android:theme="@style/Theme.ExpenseOS"
         android:usesCleartextTraffic="true">
 
-        <!-- Launch: Book Selector -->
+        <!-- Launch: Book Selector — Splash theme shows the logo instantly
+             on cold start (loadBooks() DB query + scheduler init in
+             onCreate() are slow enough to otherwise flash a blank white
+             screen); MainActivity switches back to the normal theme in
+             onCreate() before setContentView(). -->
         <activity
             android:name=".ui.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.ExpenseOS.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -129,7 +134,7 @@
             </intent-filter>
         </receiver>
 
-            <activity
+        <activity
             android:name="com.expenseos.ui.InsightsActivity"
             android:label="Insights &amp; Reports"
             android:parentActivityName="com.expenseos.ui.HomeActivity" />
