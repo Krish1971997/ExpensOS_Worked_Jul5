@@ -212,7 +212,10 @@ public class ChartRenderer {
     }
 
     private static File saveBitmap(Context ctx, Bitmap bmp) throws Exception {
-        File dir = new File(ctx.getCacheDir(), "ai_charts");
+        // filesDir (not cacheDir) — chart paths are persisted in chat history
+        // (ChatMessage.chartPath), so a "Clear cache" action must never delete
+        // a file an old message still points to.
+        File dir = new File(ctx.getFilesDir(), "ai_charts");
         if (!dir.exists()) dir.mkdirs();
         File out = new File(dir, "chart_" + System.currentTimeMillis() + ".png");
         try (FileOutputStream fos = new FileOutputStream(out)) {

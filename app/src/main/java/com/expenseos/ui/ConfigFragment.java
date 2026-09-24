@@ -1,14 +1,21 @@
 package com.expenseos.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,8 +61,84 @@ public class ConfigFragment extends Fragment {
                 "expenseos_prefs", android.content.Context.MODE_PRIVATE);
 
         bindViews(v);
+        enhanceAllFields();
         loadSavedValues();
         setupButtons();
+    }
+
+    /**
+     * Wraps each field with a copy button (and a show/hide toggle for secrets),
+     * without touching the XML layout.
+     */
+    private void enhanceAllFields() {
+        enhanceField(etDbUrl, false);
+        enhanceField(etDbUser, false);
+        enhanceField(etDbPass, true);
+        enhanceField(etGmailFrom, false);
+        enhanceField(etGmailPass, true);
+        enhanceField(etAlertEmail, false);
+        enhanceField(etZohoClientId, false);
+        enhanceField(etZohoClientSecret, true);
+        enhanceField(etZohoRefreshToken, true);
+        enhanceField(etWorkdriveFolderId, false);
+    }
+
+    private void enhanceField(EditText et, boolean isSecret) {
+        if (et == null || !(et.getParent() instanceof ViewGroup parent)) return;
+        int idx = parent.indexOfChild(et);
+        ViewGroup.LayoutParams originalLp = et.getLayoutParams();
+        parent.removeView(et);
+
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setLayoutParams(originalLp); // keep whatever margins/width the field had in XML
+
+        et.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(et);
+
+        int iconSize = (int) (36 * getResources().getDisplayMetrics().density);
+        int iconPad = (int) (6 * getResources().getDisplayMetrics().density);
+
+        if (isSecret) {
+            et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            ImageButton toggle = new ImageButton(requireContext());
+            toggle.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
+            toggle.setPadding(iconPad, iconPad, iconPad, iconPad);
+            toggle.setBackgroundResource(android.R.color.transparent);
+            toggle.setImageResource(android.R.drawable.ic_menu_view);
+            toggle.setContentDescription("Show/hide");
+            toggle.setOnClickListener(v -> {
+                int variation = et.getInputType() & InputType.TYPE_MASK_VARIATION;
+                boolean currentlyMasked = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD;
+                et.setInputType(InputType.TYPE_CLASS_TEXT | (currentlyMasked
+                        ? InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                        : InputType.TYPE_TEXT_VARIATION_PASSWORD));
+                et.setSelection(et.getText().length());
+            });
+            row.addView(toggle);
+        }
+
+        ImageButton copy = new ImageButton(requireContext());
+        copy.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
+        copy.setPadding(iconPad, iconPad, iconPad, iconPad);
+        copy.setBackgroundResource(android.R.color.transparent);
+        copy.setImageResource(android.R.drawable.ic_menu_save);
+        copy.setContentDescription("Copy");
+        copy.setOnClickListener(v -> copyToClipboard(et.getText().toString()));
+        row.addView(copy);
+
+        parent.addView(row, idx);
+    }
+
+    private void copyToClipboard(String text) {
+        if (text == null || text.isEmpty()) {
+            toast("Nothing to copy");
+            return;
+        }
+        ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText("ExpenseOS", text));
+        toast("✓ Copied");
     }
 
     private void bindViews(View v) {

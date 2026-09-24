@@ -29,15 +29,20 @@ public class GeminiClient implements AiProvider {
     private static final String ENDPOINT_BASE =
             "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final int MAX_ROUNDS = 12;
+    private static final int MAX_TOOL_RESULT_CHARS = 4000; // uncapped run_query output was the biggest token burner
 
-    /** Last model that actually answered — handy for UI/debugging. */
+    /**
+     * Last model that actually answered — handy for UI/debugging.
+     */
     private static volatile String ACTIVE_MODEL = null;
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
 
-    /** Legacy single-provider construction (Config screen / AiClientFactory.create(ctx)). */
+    /**
+     * Legacy single-provider construction (Config screen / AiClientFactory.create(ctx)).
+     */
     public GeminiClient(Context ctx) {
         this(ctx, new AiCandidate(
                 AppConfig.PROVIDER_GEMINI,
@@ -46,10 +51,12 @@ public class GeminiClient implements AiProvider {
                 "", 0));
     }
 
-    /** Failover construction — one concrete (provider → model → key) candidate. */
+    /**
+     * Failover construction — one concrete (provider → model → key) candidate.
+     */
     public GeminiClient(Context ctx, AiCandidate cand) {
-        this.apiKey = cand != null ? cand.apiKey : null;
-        this.model = cand != null ? cand.model : null;
+        this.apiKey = cand != null ? cand.apiKey() : null;
+        this.model = cand != null ? cand.model() : null;
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
@@ -72,7 +79,9 @@ public class GeminiClient implements AiProvider {
         return dispatcher.getLastImagePath();
     }
 
-    /** Legacy entry — kept for compatibility; the chat goes through askBlocking(). */
+    /**
+     * Legacy entry — kept for compatibility; the chat goes through askBlocking().
+     */
     @Override
     public void ask(String userMessage, String imagePath, JSONArray priorMessages, Callback cb) {
         try {
@@ -171,6 +180,8 @@ public class GeminiClient implements AiProvider {
                         } catch (Exception e) {
                             result = "ERROR: " + (e.getMessage() != null ? e.getMessage() : e.toString());
                         }
+                        // This gets re-sent on EVERY remaining round of this turn — cap it.
+                        result = capToolResult(result);
 
                         JSONObject fr = new JSONObject();
                         fr.put("name", fnName);
@@ -208,6 +219,14 @@ public class GeminiClient implements AiProvider {
         }
     }
 
+    private String capToolResult(String result) {
+        if (result == null) return "";
+        if (result.length() <= MAX_TOOL_RESULT_CHARS) return result;
+        return result.substring(0, MAX_TOOL_RESULT_CHARS)
+                + "\n…(truncated — " + (result.length() - MAX_TOOL_RESULT_CHARS)
+                + " more chars; ask a narrower question or add a LIMIT to the SQL)";
+    }
+
     private String progressLabel(String toolName, JSONObject args) {
         return switch (toolName) {
             case "list_tables" -> "Checking tables…";
@@ -221,7 +240,9 @@ public class GeminiClient implements AiProvider {
         };
     }
 
-    /** Neutral history (from AiHistory) → Gemini {@code contents} (user / model). */
+    /**
+     * Neutral history (from AiHistory) → Gemini {@code contents} (user / model).
+     */
     private JSONArray toGeminiContents(JSONArray neutral) throws Exception {
         JSONArray out = new JSONArray();
         if (neutral == null) return out;

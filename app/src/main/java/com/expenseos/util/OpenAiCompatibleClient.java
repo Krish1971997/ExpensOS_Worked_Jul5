@@ -20,6 +20,7 @@ import java.util.List;
 public class OpenAiCompatibleClient implements AiProvider {
 
     public static final String OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+    private static final int MAX_TOOL_RESULT_CHARS = 4000; // same fix as GeminiClient — uncapped tool output re-sent every round
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
@@ -32,8 +33,8 @@ public class OpenAiCompatibleClient implements AiProvider {
     }
 
     public OpenAiCompatibleClient(Context ctx, AiCandidate cand, String endpoint) {
-        this.apiKey = cand.apiKey;
-        this.model = cand.model;
+        this.apiKey = cand.apiKey();
+        this.model = cand.model();
         this.endpoint = endpoint;
         this.label = cand.providerLabel();
         this.dispatcher = new ToolDispatcher(ctx);
@@ -97,7 +98,7 @@ public class OpenAiCompatibleClient implements AiProvider {
                         JSONObject args = new JSONObject(fn.optString("arguments", "{}"));
 
                         cb.onProgress(progressLabel(fnName, args));
-                        String result = dispatcher.dispatch(fnName, args);
+                        String result = capToolResult(dispatcher.dispatch(fnName, args));
 
                         JSONObject toolResultMsg = new JSONObject();
                         toolResultMsg.put("role", "tool");
@@ -133,6 +134,14 @@ public class OpenAiCompatibleClient implements AiProvider {
             case "generate_image" -> "Generating image…";
             default -> "Working on \"" + toolName + "\"…";
         };
+    }
+
+    private String capToolResult(String result) {
+        if (result == null) return "";
+        if (result.length() <= MAX_TOOL_RESULT_CHARS) return result;
+        return result.substring(0, MAX_TOOL_RESULT_CHARS)
+                + "\n…(truncated — " + (result.length() - MAX_TOOL_RESULT_CHARS)
+                + " more chars; ask a narrower question or add a LIMIT to the SQL)";
     }
 
     private JSONObject msg(String role, String content) throws Exception {

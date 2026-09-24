@@ -21,21 +21,6 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Default AI Provider"
-            android:textColor="@color/text_muted"
-            android:textSize="10sp"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/spAiMgrProvider"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Models / AI Configurations — drag ⋮⋮ to set failover priority"
             android:textColor="@color/text_muted"

@@ -20,14 +20,15 @@ public class ClaudeClient implements AiProvider {
 
     private static final String ENDPOINT = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
+    private static final int MAX_TOOL_RESULT_CHARS = 4000; // same fix as GeminiClient
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
 
     public ClaudeClient(Context ctx, AiCandidate cand) {
-        this.apiKey = cand.apiKey;
-        this.model = cand.model;
+        this.apiKey = cand.apiKey();
+        this.model = cand.model();
         this.dispatcher = new ToolDispatcher(ctx);
     }
 
@@ -90,7 +91,7 @@ public class ClaudeClient implements AiProvider {
                         if (args == null) args = new JSONObject();
 
                         cb.onProgress(progressLabel(fnName, args));
-                        String result = dispatcher.dispatch(fnName, args);
+                        String result = capToolResult(dispatcher.dispatch(fnName, args));
 
                         JSONObject toolResultBlock = new JSONObject();
                         toolResultBlock.put("type", "tool_result");
@@ -111,7 +112,8 @@ public class ClaudeClient implements AiProvider {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < content.length(); i++) {
                     JSONObject block = content.getJSONObject(i);
-                    if ("text".equals(block.optString("type"))) sb.append(block.optString("text", ""));
+                    if ("text".equals(block.optString("type")))
+                        sb.append(block.optString("text", ""));
                 }
                 String answer = sb.toString().trim();
                 return answer.isEmpty() ? "I couldn't find an answer." : answer;
@@ -136,6 +138,14 @@ public class ClaudeClient implements AiProvider {
             case "generate_image" -> "Generating image…";
             default -> "Working on \"" + toolName + "\"…";
         };
+    }
+
+    private String capToolResult(String result) {
+        if (result == null) return "";
+        if (result.length() <= MAX_TOOL_RESULT_CHARS) return result;
+        return result.substring(0, MAX_TOOL_RESULT_CHARS)
+                + "\n…(truncated — " + (result.length() - MAX_TOOL_RESULT_CHARS)
+                + " more chars; ask a narrower question or add a LIMIT to the SQL)";
     }
 
     private JSONObject userMsg(String text) throws Exception {

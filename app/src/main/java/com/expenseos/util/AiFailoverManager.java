@@ -49,7 +49,7 @@ public class AiFailoverManager {
     private static final long MODEL_COOLDOWN_MS = 60_000;         // 1 min after model-404
 
     private static String keyId(AiCandidate c) {
-        return c.provider + "|" + c.model + "|" + c.apiKey;
+        return c.provider() + "|" + c.model() + "|" + c.apiKey();
     }
 
     private static boolean keyCooling(AiCandidate c, long now) {
@@ -61,7 +61,7 @@ public class AiFailoverManager {
 
     private static boolean modelCooling(AiCandidate c, long now) {
         synchronized (COOLDOWN_LOCK) {
-            Long until = modelCooldown.get(c.provider + "|" + c.model);
+            Long until = modelCooldown.get(c.provider() + "|" + c.model());
             return until != null && now < until;
         }
     }
@@ -76,7 +76,7 @@ public class AiFailoverManager {
                     keyCooldown.put(keyId(c), now + KEY_AUTH_COOLDOWN_MS);
                     break;
                 case MODEL_UNAVAILABLE:
-                    modelCooldown.put(c.provider + "|" + c.model, now + MODEL_COOLDOWN_MS);
+                    modelCooldown.put(c.provider() + "|" + c.model(), now + MODEL_COOLDOWN_MS);
                     break;
                 default:
                     // SERVER / NETWORK / BAD_REQUEST / UNKNOWN — no cooldown;
@@ -187,11 +187,13 @@ public class AiFailoverManager {
                         throw ae; // not a key/model problem — don't burn other keys
                     }
                     markFailed(cand, ae.kind, System.currentTimeMillis());
-                    notifyFailover(cb, hooks, cand);
+                    AiCandidate next = findNextCandidate(idx + 1, System.currentTimeMillis());
+                    if (next != null) notifyFailover(cb, hooks, next);
                     break; // next candidate
                 } catch (Exception e) {
-                    last = AiErrorClassifier.fromUnexpected(cand.providerLabel(), e, cand.apiKey);
-                    notifyFailover(cb, hooks, cand);
+                    last = AiErrorClassifier.fromUnexpected(cand.providerLabel(), e, cand.apiKey());
+                    AiCandidate next2 = findNextCandidate(idx + 1, System.currentTimeMillis());
+                    if (next2 != null) notifyFailover(cb, hooks, next2);
                     break; // defensive: move on
                 } finally {
                     try {
@@ -221,9 +223,9 @@ public class AiFailoverManager {
         }
     }
 
-    private void notifyFailover(AiProvider.Callback cb, UiHooks hooks, AiCandidate failed) {
+    private void notifyFailover(AiProvider.Callback cb, UiHooks hooks, AiCandidate next) {
         if (hooks != null) {
-            String label = failed.maskedLabel();
+            String label = next.switchLabel();
             mainHandler.post(() -> {
                 try {
                     hooks.onFailover(label);
@@ -233,11 +235,23 @@ public class AiFailoverManager {
         }
     }
 
+    /**
+     * Peeks ahead past cooled-down entries to find the candidate that will actually
+     * be tried next, so the "switching" message announces the right one.
+     */
+    private AiCandidate findNextCandidate(int fromIdx, long now) {
+        for (int i = fromIdx; i < candidates.size(); i++) {
+            AiCandidate c = candidates.get(i);
+            if (!keyCooling(c, now) && !modelCooling(c, now)) return c;
+        }
+        return null;
+    }
+
     private void rememberActive(AiCandidate cand) {
         try {
             AiConfigStore store = new AiConfigStore(ctx);
             AiConfigStore.AiConfig cfg = store.load();
-            cfg.activeProvider = cand.provider;
+            cfg.activeProvider = cand.provider();
             store.save(cfg);
         } catch (Exception ignored) {
         }

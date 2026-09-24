@@ -82,9 +82,9 @@
     <color name="chart_axis">#94A3B8</color>
 
     <!-- Transaction badges -->
-    <color name="income_badge_bg">#ECFDF5</color>
+    <color name="income_badge_bg">#C5FAE1</color>
     <color name="income_badge_text">#047857</color>
-    <color name="expense_badge_bg">#FFF1F2</color>
+    <color name="expense_badge_bg">#F4CCCC</color>  <!--FFF1F2-->
     <color name="expense_badge_text">#BE123C</color>
 
     <!-- Interaction / states -->

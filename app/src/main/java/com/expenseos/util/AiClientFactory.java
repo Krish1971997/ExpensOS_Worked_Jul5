@@ -9,7 +9,9 @@ import android.content.Context;
  */
 public class AiClientFactory {
 
-    /** Builds the client for the currently selected default provider (legacy path). */
+    /**
+     * Builds the client for the currently selected default provider (legacy path).
+     */
     public static AiProvider create(Context ctx) {
         String provider = AppConfig.get(ctx).getAiProvider();
         return create(ctx, new AiCandidate(provider,
@@ -17,9 +19,11 @@ public class AiClientFactory {
                 AppConfig.get(ctx).getAiKey(provider), "", 0));
     }
 
-    /** Builds the client for one concrete failover candidate. */
+    /**
+     * Builds the client for one concrete failover candidate.
+     */
     public static AiProvider create(Context ctx, AiCandidate cand) {
-        switch (cand.provider) {
+        switch (cand.provider()) {
             case AppConfig.PROVIDER_OPENAI:
                 return new OpenAiCompatibleClient(ctx, cand);
             case AppConfig.PROVIDER_GROK:

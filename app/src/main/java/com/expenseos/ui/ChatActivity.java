@@ -24,17 +24,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.expenseos.R;
 import com.expenseos.dao.ChatHistoryDao;
 import com.expenseos.model.ChatMessage;
-import com.expenseos.util.AiClientFactory;
-import com.expenseos.util.AiProvider;
-import com.expenseos.util.AiFailoverManager;
-import com.expenseos.util.AiException;
-import com.expenseos.util.AiRequest;
-import com.expenseos.util.AiHistory;
 import com.expenseos.util.AiCandidate;
 import com.expenseos.util.AiConfigStore;
+import com.expenseos.util.AiException;
+import com.expenseos.util.AiFailoverManager;
+import com.expenseos.util.AiHistory;
 import com.expenseos.util.AiKeyConfig;
 import com.expenseos.util.AiModelConfig;
-import java.util.ArrayList;
+import com.expenseos.util.AiProvider;
+import com.expenseos.util.AiRequest;
 import com.expenseos.util.AppConfig;
 
 import org.json.JSONArray;
@@ -43,6 +41,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -58,7 +57,14 @@ public class ChatActivity extends AppCompatActivity {
     private ChatHistoryDao historyDao;
     private AiProvider aiClient;
     private final JSONArray conversation = new JSONArray(); // provider-format history
+    private static final int MAX_HISTORY_MESSAGES = 12; // ~6 turns only — cuts input tokens per call
 
+    private static final int SEED_HISTORY_MESSAGES = 2; // existing-page reopen: seed only the last 2 turns
+    private static final int ATTACHMENT_LOOKBACK = 3;    // how far back to look for a reusable image/pdf
+    private static final String[] ATTACHMENT_KEYWORDS = {
+            "image", "photo", "picture", "pic", "screenshot", "receipt", "pdf", "file", "attachment", "attach"
+    };
+    private List<ChatMessage> loadedHistory = new ArrayList<>();
     private String pendingAttachmentPath;
     private String pendingAttachmentName;
     private boolean pendingAttachmentIsImage;
@@ -87,7 +93,7 @@ public class ChatActivity extends AppCompatActivity {
         uiHandler = new Handler(Looper.getMainLooper());
         historyDao = new ChatHistoryDao(this);
         try {
-    
+
         } catch (Throwable t) {
             aiClient = null; // legacy path is optional; runTurn() uses the failover manager
         }
@@ -118,7 +124,9 @@ public class ChatActivity extends AppCompatActivity {
     // ── History ──────────────────────────────────────────────────────
     private void loadHistory() {
         List<ChatMessage> history = historyDao.findAll();
+        loadedHistory = history;
         if (history.isEmpty()) {
+            // Brand-new page — nothing to seed, conversation stays empty.
             addBotBubble("Ask me anything about your ExpenseOS data — spending, categories, budgets, backups, etc. " +
                     "You can also attach a receipt image or a CSV/text file.", null);
             return;
@@ -130,6 +138,54 @@ public class ChatActivity extends AppCompatActivity {
                 addBotBubble(m.getContent(), m.getChartPath());
             }
         }
+        seedConversationFromHistory(history);
+    }
+
+    /**
+     * Existing page reopened — seed only the last few turns for continuity,
+     * instead of paying full-history tokens on every message from now on.
+     */
+    private void seedConversationFromHistory(List<ChatMessage> history) {
+        int from = Math.max(0, history.size() - SEED_HISTORY_MESSAGES);
+        for (int i = from; i < history.size(); i++) {
+            ChatMessage m = history.get(i);
+            if (m.getContent() == null || m.getContent().isEmpty()) continue;
+            try {
+                JSONObject turn = new JSONObject();
+                turn.put("role", m.isUser() ? "user" : "model");
+                turn.put("parts", new JSONArray().put(new JSONObject().put("text", m.getContent())));
+                conversation.put(turn);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * No fresh attachment this turn, but the text references an image/pdf, and one
+     * showed up in the last ATTACHMENT_LOOKBACK messages — reattach that file so the
+     * model can actually see what's being asked about. Otherwise: text only, no reuse.
+     */
+    private String[] resolveRecentAttachment(String text) {
+        if (loadedHistory.isEmpty()) return null;
+        String lower = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        boolean mentioned = false;
+        for (String kw : ATTACHMENT_KEYWORDS) {
+            if (lower.contains(kw)) {
+                mentioned = true;
+                break;
+            }
+        }
+        if (!mentioned) return null;
+
+        int from = Math.max(0, loadedHistory.size() - ATTACHMENT_LOOKBACK);
+        for (int i = loadedHistory.size() - 1; i >= from; i--) {
+            ChatMessage m = loadedHistory.get(i);
+            String path = m.getAttachmentPath() != null ? m.getAttachmentPath() : m.getChartPath();
+            if (path == null) continue;
+            if (isImagePath(path)) return new String[]{path, "true"};
+            if (path.toLowerCase(Locale.ROOT).endsWith(".pdf")) return new String[]{path, "false"};
+        }
+        return null;
     }
 
     // ── Attachment picking ──────────────────────────────────────────
@@ -189,6 +245,15 @@ public class ChatActivity extends AppCompatActivity {
         String attName = pendingAttachmentName;
         boolean attIsImage = pendingAttachmentIsImage;
 
+        if (attPath == null) {
+            String[] recent = resolveRecentAttachment(text);
+            if (recent != null) {
+                attPath = recent[0];
+                attIsImage = Boolean.parseBoolean(recent[1]);
+                attName = new File(attPath).getName();
+            }
+        }
+
         etInput.setText("");
         clearPendingAttachment();
 
@@ -202,7 +267,9 @@ public class ChatActivity extends AppCompatActivity {
         runTurn(text, attPath, attName, attIsImage);
     }
 
-    /** Re-runs the previous question without echoing the user bubble again. */
+    /**
+     * Re-runs the previous question without echoing the user bubble again.
+     */
     private void retryLast() {
         if (inFlight || lastText == null) return;
         runTurn(lastText, lastAttPath, null, lastAttIsImage);
@@ -239,6 +306,7 @@ public class ChatActivity extends AppCompatActivity {
             u.put("role", "user");
             u.put("parts", new JSONArray().put(new JSONObject().put("text", effectiveMessage)));
             conversation.put(u);
+            trimConversation();
         } catch (Exception ignored) {
         }
 
@@ -257,9 +325,16 @@ public class ChatActivity extends AppCompatActivity {
                 AiRequest req = new AiRequest(finalMessage, finalImagePath,
                         AiHistory.sanitize(conversation), finalMessage);
                 answer = mgr.runTurn(req, new AiProvider.Callback() {
-                    @Override public void onResult(String a) { }
-                    @Override public void onError(String m) { }
-                    @Override public void onProgress(String stage) {
+                    @Override
+                    public void onResult(String a) {
+                    }
+
+                    @Override
+                    public void onError(String m) {
+                    }
+
+                    @Override
+                    public void onProgress(String stage) {
                         runOnUiThread(() -> {
                             if (typingText != null) typingText.setText(stage);
                             scrollToBottom();
@@ -269,7 +344,7 @@ public class ChatActivity extends AppCompatActivity {
                     @Override
                     public void onFailover(String label) {
                         runOnUiThread(() -> {
-                            if (typingText != null) typingText.setText("Switching to " + label + "…");
+                            if (typingText != null) typingText.setText("Switching: " + label + "…");
                         });
                     }
                 });
@@ -305,7 +380,10 @@ public class ChatActivity extends AppCompatActivity {
                     m.put("role", "model");
                     m.put("parts", new JSONArray().put(new JSONObject().put("text", safeAnswer)));
                     conversation.put(m);
-                } catch (Exception ignored) { }
+                    trimConversation();
+                } catch (Exception ignored) {
+                }
+
                 addBotBubble(safeAnswer, pathToShow);
                 saveMessage(ChatMessage.ROLE_ASSISTANT, safeAnswer, null, null, pathToShow,
                         AppConfig.get(ChatActivity.this).getAiProvider());
@@ -318,6 +396,15 @@ public class ChatActivity extends AppCompatActivity {
         inFlight = false;
         btnSend.setEnabled(true);
         btnSend.setAlpha(1f);
+    }
+
+    /**
+     * Keeps only the last MAX_HISTORY_MESSAGES turns so input tokens don't keep growing per call.
+     */
+    private void trimConversation() {
+        while (conversation.length() > MAX_HISTORY_MESSAGES) {
+            conversation.remove(0);
+        }
     }
 
     // ── Typing indicator (premium, animated) ────────────────────────
@@ -418,7 +505,7 @@ public class ChatActivity extends AppCompatActivity {
     private View addBotBubble(String text, String chartPath) {
         LinearLayout col = bubbleColumn(false);
         if (text != null && !text.isEmpty()) {
-            col.addView(textBubble(text, false));
+            addFormattedContent(col, text);
         }
         if (chartPath != null) {
             col.addView(imageView(chartPath));
@@ -428,7 +515,142 @@ public class ChatActivity extends AppCompatActivity {
         return col;
     }
 
-    /** Error bubble that always offers a one-tap Retry — no dead ends. */
+    /**
+     * Splits the answer into prose + at most one table block. Whether the model wrote
+     * a GFM "| a | b |" table or our bullet-list expense format, it renders as a real
+     * bordered TableLayout — cells wrap on narrow screens instead of breaking
+     * monospace column alignment.
+     */
+    private void addFormattedContent(LinearLayout col, String text) {
+        String[] lines = text.split("\n");
+        int[] pipeBlock = findPipeTableBlock(lines);
+
+        if (pipeBlock != null) {
+            String before = joinLines(lines, 0, pipeBlock[0]);
+            String after = joinLines(lines, pipeBlock[1], lines.length);
+            if (!before.isBlank()) col.addView(textBubble(before.trim(), false));
+
+            String[] header = splitPipeRow(lines[pipeBlock[0]]);
+            List<String[]> rows = new ArrayList<>();
+            for (int i = pipeBlock[0] + 2; i < pipeBlock[1]; i++) rows.add(splitPipeRow(lines[i]));
+            col.addView(buildTableView(header, rows));
+
+            if (!after.isBlank()) col.addView(textBubble(after.trim(), false));
+            return;
+        }
+
+        List<String[]> bulletRows = extractBulletRows(text);
+        if (bulletRows != null) {
+            int[] block = findBulletBlockRange(lines);
+            String before = joinLines(lines, 0, block[0]);
+            String after = joinLines(lines, block[1], lines.length);
+            if (!before.isBlank()) col.addView(textBubble(before.trim(), false));
+            col.addView(buildTableView(new String[]{"Category", "Amt", "Details"}, bulletRows));
+            if (!after.isBlank()) col.addView(textBubble(after.trim(), false));
+            return;
+        }
+
+        col.addView(textBubble(text, false));
+    }
+
+    private String joinLines(String[] lines, int from, int to) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < to; i++) sb.append(lines[i]).append("\n");
+        return sb.toString();
+    }
+
+    private static final java.util.regex.Pattern PIPE_ROW = java.util.regex.Pattern.compile("^\\|(.+)\\|$");
+    private static final java.util.regex.Pattern PIPE_SEP = java.util.regex.Pattern.compile("^\\|?[\\s:|-]+\\|?$");
+
+    /**
+     * A "| a | b |" header row followed by a ":---|:---" separator, then zero or more
+     * data rows. Returns [start, end) line indices, or null if none found.
+     */
+    private int[] findPipeTableBlock(String[] lines) {
+        for (int i = 0; i < lines.length - 1; i++) {
+            String l1 = lines[i].trim();
+            String l2 = lines[i + 1].trim();
+            if (PIPE_ROW.matcher(l1).matches() && PIPE_SEP.matcher(l2).matches() && l2.contains("-")) {
+                int end = i + 2;
+                while (end < lines.length && PIPE_ROW.matcher(lines[end].trim()).matches()) end++;
+                return new int[]{i, end};
+            }
+        }
+        return null;
+    }
+
+    private String[] splitPipeRow(String line) {
+        String t = line.trim();
+        if (t.startsWith("|")) t = t.substring(1);
+        if (t.endsWith("|")) t = t.substring(0, t.length() - 1);
+        String[] parts = t.split("\\|", -1);
+        for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+        return parts;
+    }
+
+    private static final java.util.regex.Pattern BULLET_ROW = java.util.regex.Pattern.compile(
+            "^-\\s*\\*\\*(.+?):\\*\\*\\s*₹?([\\d,]+)\\s*[—-]\\s*(.+)$");
+
+    private List<String[]> extractBulletRows(String text) {
+        List<String[]> rows = new ArrayList<>();
+        for (String line : text.split("\n")) {
+            java.util.regex.Matcher mm = BULLET_ROW.matcher(line.trim());
+            if (mm.matches())
+                rows.add(new String[]{mm.group(1).trim(), mm.group(2).trim(), mm.group(3).trim()});
+        }
+        return rows.size() >= 2 ? rows : null;
+    }
+
+    private int[] findBulletBlockRange(String[] lines) {
+        int start = -1, end = -1;
+        for (int i = 0; i < lines.length; i++) {
+            if (BULLET_ROW.matcher(lines[i].trim()).matches()) {
+                if (start == -1) start = i;
+                end = i + 1;
+            }
+        }
+        return new int[]{start, end};
+    }
+
+    /**
+     * Real bordered table — cells wrap their own content instead of breaking column
+     * alignment on a narrow chat bubble like the old monospace text did.
+     */
+    private View buildTableView(String[] header, List<String[]> rows) {
+        android.widget.TableLayout table = new android.widget.TableLayout(this);
+        table.setStretchAllColumns(true);
+        table.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        table.addView(buildTableRow(header, true));
+        for (String[] r : rows) table.addView(buildTableRow(r, false));
+        return table;
+    }
+
+    private android.widget.TableRow buildTableRow(String[] cells, boolean isHeader) {
+        android.widget.TableRow tr = new android.widget.TableRow(this);
+        for (String cellText : cells) {
+            TextView tv = new TextView(this);
+            tv.setText(cellText);
+            tv.setPadding(dp(8), dp(6), dp(8), dp(6));
+            tv.setTextSize(13);
+            if (isHeader) tv.setTypeface(null, android.graphics.Typeface.BOLD);
+
+            android.graphics.drawable.GradientDrawable cellBg = new android.graphics.drawable.GradientDrawable();
+            cellBg.setColor(isHeader ? android.graphics.Color.parseColor("#E8EAF0") : android.graphics.Color.TRANSPARENT);
+            cellBg.setStroke(1, android.graphics.Color.parseColor("#33000000"));
+            tv.setBackground(cellBg);
+
+            android.widget.TableRow.LayoutParams lp =
+                    new android.widget.TableRow.LayoutParams(0, android.widget.TableRow.LayoutParams.WRAP_CONTENT, 1f);
+            tv.setLayoutParams(lp);
+            tr.addView(tv);
+        }
+        return tr;
+    }
+
+    /**
+     * Error bubble that always offers a one-tap Retry — no dead ends.
+     */
     private View addErrorBubble(String message) {
         LinearLayout col = bubbleColumn(false);
         TextView tv = textBubble("⚠ " + (message == null ? "Something went wrong." : message), false);
@@ -544,13 +766,15 @@ public class ChatActivity extends AppCompatActivity {
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
     }
+
     // ── Candidate chain (multi-model / multi-key, active provider first) ──
     private java.util.List<AiCandidate> buildCandidates() {
         java.util.List<AiCandidate> out = new ArrayList<>();
-        String active = null;
         try {
             AiConfigStore.AiConfig cfg = new AiConfigStore(this).load();
-            active = cfg.activeProvider;
+            // Priority = drag order in Config (cfg.models already reflects it).
+            // No "active provider" override — that used to force one provider
+            // to the front regardless of drag order.
             for (AiModelConfig m : cfg.models) {
                 int i = 0;
                 for (AiKeyConfig k : m.keys) {
@@ -558,30 +782,33 @@ public class ChatActivity extends AppCompatActivity {
                     out.add(new AiCandidate(m.provider, m.model, k.key, k.desc, i++));
                 }
             }
-        } catch (Throwable ignored) { }
+        } catch (Throwable ignored) {
+        }
         // Legacy per-provider single-key slots, so an un-migrated install still works.
         try {
             AppConfig cfg = AppConfig.get(this);
-            String[] provs = { AppConfig.PROVIDER_GEMINI, AppConfig.PROVIDER_OPENAI,
-                    AppConfig.PROVIDER_GROK, AppConfig.PROVIDER_CLAUDE, AppConfig.PROVIDER_GENSPARK };
+            String[] provs = {AppConfig.PROVIDER_GEMINI, AppConfig.PROVIDER_OPENAI,
+                    AppConfig.PROVIDER_GROK, AppConfig.PROVIDER_CLAUDE, AppConfig.PROVIDER_GENSPARK};
             for (String p : provs) {
                 String key = cfg.getAiKey(p);
                 String model = cfg.getAiModel(p);
                 if (key == null || key.isBlank() || model == null || model.isBlank()) continue;
                 boolean dup = false;
                 for (AiCandidate c : out)
-                    if (c.provider.equals(p) && c.model.equals(model) && c.apiKey.equals(key)) dup = true;
+                    if (c.provider().equals(p) && c.model().equals(model) && c.apiKey().equals(key)) {
+                        dup = true;
+                        break;
+                    }
                 if (!dup) out.add(new AiCandidate(p, model, key, "", 0));
             }
-        } catch (Throwable ignored) { }
-        if (active == null) return out;
-        java.util.List<AiCandidate> ordered = new ArrayList<>();
-        for (AiCandidate c : out) if (active.equals(c.provider)) ordered.add(c);
-        for (AiCandidate c : out) if (!active.equals(c.provider)) ordered.add(c);
-        return ordered;
+        } catch (Throwable ignored) {
+        }
+        return out;
     }
 
-    /** Real error detail — kind + message, never a generic "no response". */
+    /**
+     * Real error detail — kind + message, never a generic "no response".
+     */
     private String describeFailure(AiException e) {
         if (e == null) return "Unknown AI error.";
         String kind = e.kind != null ? e.kind.name() : "ERROR";

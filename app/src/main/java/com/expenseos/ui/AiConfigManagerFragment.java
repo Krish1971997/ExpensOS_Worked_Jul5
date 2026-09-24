@@ -7,12 +7,10 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,25 +29,20 @@ import com.expenseos.util.AiKeyConfig;
 import com.expenseos.util.AiModelConfig;
 import com.expenseos.util.AppConfig;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Redesigned AI Assistant configuration:
- *   Provider spinner (default provider)
- *     └ model cards — drag to reorder priority, edit model name, remove
- *         └ key rows — masked key + description, edit/remove, add key
- *     └ add model
- *   Save persists everything (AiConfigStore v2) without losing legacy slots.
+ * Provider spinner (default provider)
+ * └ model cards — drag to reorder priority, edit model name, remove
+ * └ key rows — masked key + description, edit/remove, add key
+ * └ add model
+ * Save persists everything (AiConfigStore v2) without losing legacy slots.
  */
 public class AiConfigManagerFragment extends Fragment {
 
     private AiConfigStore store;
     private AiConfigStore.AiConfig config;
     private ModelAdapter adapter;
-    private Spinner spProvider;
     private ItemTouchHelper dragHelper;
-    private static final String[] AI_PROVIDERS = {"gemini", "openai", "grok", "claude", "genspark"};
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inf, ViewGroup pg, Bundle s) {
@@ -61,15 +54,11 @@ public class AiConfigManagerFragment extends Fragment {
         super.onViewCreated(v, s);
         store = new AiConfigStore(requireContext());
         config = store.load().copy();
-
-        spProvider = v.findViewById(R.id.spAiMgrProvider);
-        ArrayAdapter<String> sa = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_dropdown_item, AI_PROVIDERS);
-        spProvider.setAdapter(sa);
-        int idx = java.util.Arrays.asList(AI_PROVIDERS).indexOf(config.activeProvider);
-        spProvider.setSelection(idx >= 0 ? idx : 0);
+        // No manual "default provider" picker — drag order sets failover priority,
+        // and AiFailoverManager auto-records whichever provider last answered.
 
         RecyclerView rv = v.findViewById(R.id.rvAiModels);
+
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new ModelAdapter();
         rv.setAdapter(adapter);
@@ -103,7 +92,6 @@ public class AiConfigManagerFragment extends Fragment {
     }
 
     private void save() {
-        config.activeProvider = AI_PROVIDERS[spProvider.getSelectedItemPosition()];
         store.save(config);
         Toast.makeText(requireContext(), "✓ AI Config saved!", Toast.LENGTH_SHORT).show();
     }
@@ -277,6 +265,7 @@ public class AiConfigManagerFragment extends Fragment {
         class KVH extends RecyclerView.ViewHolder {
             final EditText etKey, etDesc;
             final ImageButton btnToggle, btnEdit, btnRemove;
+            android.text.TextWatcher keyWatcher, descWatcher;
 
             KVH(@NonNull View v) {
                 super(v);
@@ -295,25 +284,54 @@ public class AiConfigManagerFragment extends Fragment {
             return new KVH(v);
         }
 
-        @Override
         public void onBindViewHolder(@NonNull KVH h, @SuppressLint("RecyclerView") int pos) {
             AiKeyConfig k = model.keys.get(pos);
+
+            // Recycled row — drop the previous key's watchers first, else typing here
+            // also silently patches whichever key this view held earlier.
+            if (h.keyWatcher != null) h.etKey.removeTextChangedListener(h.keyWatcher);
+            if (h.descWatcher != null) h.etDesc.removeTextChangedListener(h.descWatcher);
+
             h.etKey.setText(k.key);
             h.etKey.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
             h.etDesc.setText(k.desc);
 
-            h.etKey.setOnFocusChangeListener((v, hasFocus) -> {
-                if (!hasFocus) {
-                    int p = h.getBindingAdapterPosition();
-                    if (p != RecyclerView.NO_POSITION) model.keys.get(p).key = h.etKey.getText().toString().trim();
+            // Write-through on every keystroke, not just focus-loss — tapping Save
+            // right after typing a description can never lose it now.
+            h.keyWatcher = new android.text.TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
                 }
-            });
-            h.etDesc.setOnFocusChangeListener((v, hasFocus) -> {
-                if (!hasFocus) {
-                    int p = h.getBindingAdapterPosition();
-                    if (p != RecyclerView.NO_POSITION) model.keys.get(p).desc = h.etDesc.getText().toString().trim();
+
+                @Override
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
                 }
-            });
+
+                @Override
+                public void afterTextChanged(android.text.Editable e) {
+                    int p = h.getBindingAdapterPosition();
+                    if (p != RecyclerView.NO_POSITION && p < model.keys.size())
+                        model.keys.get(p).key = e.toString().trim();
+                }
+            };
+            h.descWatcher = new android.text.TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                @Override
+                public void onTextChanged(CharSequence s, int a, int b, int c) {
+                }
+
+                @Override
+                public void afterTextChanged(android.text.Editable e) {
+                    int p = h.getBindingAdapterPosition();
+                    if (p != RecyclerView.NO_POSITION && p < model.keys.size())
+                        model.keys.get(p).desc = e.toString().trim();
+                }
+            };
+            h.etKey.addTextChangedListener(h.keyWatcher);
+            h.etDesc.addTextChangedListener(h.descWatcher);
 
             h.btnToggle.setOnClickListener(x -> {
                 boolean masked = (h.etKey.getInputType() & InputType.TYPE_TEXT_VARIATION_PASSWORD) != 0;

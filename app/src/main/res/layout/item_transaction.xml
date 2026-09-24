@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- item_transaction.xml — premium list row.
+<?xml version="1.0" encoding="utf-8"?><!-- item_transaction.xml — premium list row.
      IDs preserved: viewTypeBadge, tvTxnCat, tvTxnSubCat, tvTxnPaymentType,
      tvTxnAmount, tvTxnNote, tvTxnBalance, tvTxnAttachments,
      tvTxnSettleStatus, tvTxnDate, tvTxnSyncDot -->
@@ -27,7 +26,7 @@
         android:paddingEnd="@dimen/space_3"
         android:paddingBottom="@dimen/space_3">
 
-        <!-- Type accent capsule (colour set in TransactionAdapter) -->
+        <!-- Type accent capsule -->
         <View
             android:id="@+id/viewTypeBadge"
             android:layout_width="6dp"
@@ -40,22 +39,38 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- Row 1: amount (leading, scannable) .......... balance -->
+            <!-- Row 1: Badges (Left) & Balance (Right) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/tvTxnAmount"
-                    style="@style/Text.Amount"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    tools:text="−₹1,250.00" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvTxnCat"
+                        style="@style/Badge.Primary"
+                        android:text="" />
+
+                    <TextView
+                        android:id="@+id/tvTxnSubCat"
+                        style="@style/Badge.Warning"
+                        android:layout_marginStart="@dimen/space_1"
+                        android:visibility="gone"
+                        tools:text="Fuel" />
+
+                    <TextView
+                        android:id="@+id/tvTxnPaymentType"
+                        style="@style/Badge"
+                        android:layout_marginStart="@dimen/space_1"
+                        tools:text="UPI" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvTxnBalance"
@@ -63,60 +78,54 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_2"
+                    android:gravity="end"
                     android:text="Balance: " />
             </LinearLayout>
 
-            <!-- Row 2: category badges -->
+            <!-- Row 2: Description (Left) & Amount (Right) - Same Row Alignment -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_2"
-                android:gravity="center_vertical"
+                android:gravity="bottom"
                 android:orientation="horizontal">
 
                 <TextView
-                    android:id="@+id/tvTxnCat"
-                    style="@style/Badge.Primary"
-                    android:text="" />
+                    android:id="@+id/tvTxnNote"
+                    style="@style/Text.BodyMuted"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    tools:text="Domino's Pizza" />
 
                 <TextView
-                    android:id="@+id/tvTxnSubCat"
-                    style="@style/Badge.Warning"
-                    android:layout_marginStart="@dimen/space_1"
-                    android:visibility="gone"
-                    tools:text="Fuel" />
-
-                <TextView
-                    android:id="@+id/tvTxnPaymentType"
-                    style="@style/Badge"
-                    android:layout_marginStart="@dimen/space_1"
-                    tools:text="UPI" />
+                    android:id="@+id/tvTxnAmount"
+                    style="@style/Text.Amount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_2"
+                    android:ellipsize="end"
+                    android:gravity="end"
+                    android:maxLines="1"
+                    tools:text="−₹1,250.00" />
             </LinearLayout>
 
-            <!-- Row 3: remark -->
-            <TextView
-                android:id="@+id/tvTxnNote"
-                style="@style/Text.BodyMuted"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_2"
-                android:ellipsize="end"
-                android:maxLines="1" />
-
-            <!-- Row 4: meta strip -->
+            <!-- Row 3: Meta Strip (Date, Attachments, Sync) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_1"
+                android:layout_marginTop="@dimen/space_2"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvTxnDate"
-                    android:textColor="@color/text"
                     style="@style/Text.Caption"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text" />
 
                 <TextView
                     android:id="@+id/tvTxnAttachments"
