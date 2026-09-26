@@ -295,7 +295,7 @@ public class SchedulerWorker extends Worker {
     // ── CASHBOOK: create this month's set of 3 books if they don't exist ────
     private CashBookResult runCashBook(Context ctx) {
         java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
-        java.time.LocalDate nextMonth = thisMonth.plusMonths(1);
+        java.time.LocalDate nextMonth = thisMonth.plusMonths(2);
 
         String thisMonthName = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
         String nextMonthName = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
@@ -418,6 +418,16 @@ public class SchedulerWorker extends Worker {
             } catch (Exception e) {
                 failures.add(label + ": " + (e.getMessage() != null ? e.getMessage() : e.toString()));
             }
+        }
+
+        // Separate email — last month's Food tracker report. Counted in the
+        // same sent/skipped/failures tally so this scheduler's one log entry
+        // reflects everything it sent this run.
+        try {
+            if (sendLastMonthFoodReport(ctx, alertEmail)) sent++;
+            else skipped++; // no "<Month> <Year> Food" book existed for last month
+        } catch (Exception e) {
+            failures.add("Food: " + (e.getMessage() != null ? e.getMessage() : e.toString()));
         }
 
         if (!failures.isEmpty()) {
@@ -603,5 +613,165 @@ public class SchedulerWorker extends Worker {
                 .setInputData(input)
                 .build();
         WorkManager.getInstance(ctx).enqueue(req);
+    }
+
+    // ── FOOD TRACKER REPORT — last month's "<Month> <Year> Food" book
+// (SchedulerWorker.runCashBook() creates one every month, same convention
+// as the other 3 series). Generated headlessly here — no Activity/UI
+// involved — since a scheduled tick has no screen to read from. PDF
+// attachment = full day-by-day breakdown (same layout as
+// FoodTrackerActivity.writeFoodTrackerPdf()); email body = just the
+// Breakfast/Lunch/Dinner totals + a highlighted grand total, so the email
+// itself stays short and the detail lives in the PDF.
+    private boolean sendLastMonthFoodReport(Context ctx, String alertEmail) throws Exception {
+        java.time.LocalDate lastMonth = java.time.LocalDate.now().minusMonths(1).withDayOfMonth(1);
+        String bookName = lastMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")) + " Food";
+
+        com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);
+        com.expenseos.model.CashBook foodBook = null;
+        for (com.expenseos.model.CashBook b : bookDao.findAll())
+            if (bookName.equalsIgnoreCase(b.getName())) {
+                foodBook = b;
+                break;
+            }
+        if (foodBook == null) return false; // e.g. first month ever running this scheduler
+
+        com.expenseos.dao.CategoryDao catDao = new com.expenseos.dao.CategoryDao(ctx);
+        List<com.expenseos.model.Category> matches = catDao.findByName("Food", "EXPENSE", null, null);
+        if (matches.isEmpty()) return false; // Food category was never created
+        int foodCategoryId = matches.get(0).getId();
+
+        com.expenseos.dao.TransactionDao txnDao = new com.expenseos.dao.TransactionDao(ctx);
+        java.util.Map<String, com.expenseos.model.Transaction> existing =
+                txnDao.findFoodEntriesForBook(foodBook.getId(), foodCategoryId);
+
+        java.time.YearMonth ym = java.time.YearMonth.from(lastMonth);
+        List<FoodDayRow> rows = new ArrayList<>();
+        for (int day = 1; day <= ym.lengthOfMonth(); day++) {
+            java.time.LocalDate date = ym.atDay(day);
+            FoodDayRow row = new FoodDayRow();
+            row.date = date;
+            row.breakfast = amt(existing.get(date + "|BREAKFAST"));
+            row.lunch = amt(existing.get(date + "|LUNCH"));
+            row.dinner = amt(existing.get(date + "|DINNER"));
+            rows.add(row);
+        }
+
+        java.io.ByteArrayOutputStream pdfBytes = new java.io.ByteArrayOutputStream();
+        writeFoodReportPdf(bookName, rows, pdfBytes);
+
+        String html = buildFoodReportEmailHtml(bookName, rows);
+        com.expenseos.util.GmailSender.Attachment attachment = new com.expenseos.util.GmailSender.Attachment(
+                "food_tracker.pdf", pdfBytes.toByteArray(), "application/pdf");
+        com.expenseos.util.GmailSender.send(ctx, alertEmail, bookName, html, attachment);
+        return true;
+    }
+
+    private static java.math.BigDecimal amt(com.expenseos.model.Transaction t) {
+        return t != null ? t.getAmount() : java.math.BigDecimal.ZERO;
+    }
+
+    private static class FoodDayRow {
+        java.time.LocalDate date;
+        java.math.BigDecimal breakfast = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal lunch = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal dinner = java.math.BigDecimal.ZERO;
+    }
+
+    // PDF attachment — same table layout as FoodTrackerActivity.writeFoodTrackerPdf().
+    private void writeFoodReportPdf(String title, List<FoodDayRow> rows, java.io.OutputStream out) throws Exception {
+        com.itextpdf.text.Document doc = new com.itextpdf.text.Document(com.itextpdf.text.PageSize.A4, 24, 24, 32, 32);
+        com.itextpdf.text.pdf.PdfWriter.getInstance(doc, out);
+        doc.open();
+
+        com.itextpdf.text.Font titleFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 16, com.itextpdf.text.Font.BOLD);
+        com.itextpdf.text.Font headFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 9, com.itextpdf.text.Font.BOLD, com.itextpdf.text.BaseColor.WHITE);
+        com.itextpdf.text.Font cellFont = new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 9, com.itextpdf.text.Font.NORMAL);
+
+        com.itextpdf.text.Paragraph titleP = new com.itextpdf.text.Paragraph(title, titleFont);
+        titleP.setAlignment(com.itextpdf.text.Element.ALIGN_CENTER);
+        titleP.setSpacingAfter(16);
+        doc.add(titleP);
+
+        com.itextpdf.text.pdf.PdfPTable table = new com.itextpdf.text.pdf.PdfPTable(new float[]{0.6f, 1.6f, 1.4f, 1f, 1f, 1f, 1f});
+        table.setWidthPercentage(100);
+        for (String h : new String[]{"#", "Date", "Day", "Breakfast", "Lunch", "Dinner", "Total"}) {
+            com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Paragraph(h, headFont));
+            cell.setBackgroundColor(new com.itextpdf.text.BaseColor(37, 99, 235));
+            cell.setPadding(5);
+            table.addCell(cell);
+        }
+
+        com.itextpdf.text.BaseColor weekendBg = new com.itextpdf.text.BaseColor(0xE3, 0xF2, 0xFD);
+        com.itextpdf.text.BaseColor amountBg = new com.itextpdf.text.BaseColor(0xFF, 0xF9, 0xC4);
+
+        java.math.BigDecimal grand = java.math.BigDecimal.ZERO;
+        for (int i = 0; i < rows.size(); i++) {
+            FoodDayRow row = rows.get(i);
+            java.math.BigDecimal total = row.breakfast.add(row.lunch).add(row.dinner);
+            grand = grand.add(total);
+
+            boolean isWeekend = row.date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY
+                    || row.date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY;
+            com.itextpdf.text.BaseColor rowBg = isWeekend ? weekendBg : null;
+
+            addFoodPdfCell(table, String.valueOf(i + 1), cellFont, rowBg);
+            addFoodPdfCell(table, row.date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")), cellFont, rowBg);
+            addFoodPdfCell(table, row.date.getDayOfWeek().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH), cellFont, rowBg);
+            addFoodPdfCell(table, row.breakfast.toPlainString(), cellFont, row.breakfast.compareTo(java.math.BigDecimal.ZERO) > 0 ? amountBg : rowBg);
+            addFoodPdfCell(table, row.lunch.toPlainString(), cellFont, row.lunch.compareTo(java.math.BigDecimal.ZERO) > 0 ? amountBg : rowBg);
+            addFoodPdfCell(table, row.dinner.toPlainString(), cellFont, row.dinner.compareTo(java.math.BigDecimal.ZERO) > 0 ? amountBg : rowBg);
+            addFoodPdfCell(table, total.toPlainString(), cellFont, rowBg);
+        }
+        doc.add(table);
+
+        com.itextpdf.text.Paragraph totalP = new com.itextpdf.text.Paragraph("Month Total: ₹" + grand.toPlainString(),
+                new com.itextpdf.text.Font(com.itextpdf.text.Font.FontFamily.HELVETICA, 12, com.itextpdf.text.Font.BOLD));
+        totalP.setSpacingBefore(12);
+        doc.add(totalP);
+        doc.close();
+    }
+
+    private void addFoodPdfCell(com.itextpdf.text.pdf.PdfPTable table, String text, com.itextpdf.text.Font font, com.itextpdf.text.BaseColor bg) {
+        com.itextpdf.text.pdf.PdfPCell cell = new com.itextpdf.text.pdf.PdfPCell(new com.itextpdf.text.Paragraph(text, font));
+        cell.setPadding(5);
+        if (bg != null) cell.setBackgroundColor(bg);
+        table.addCell(cell);
+    }
+
+    // Email body — just the totals, highlighted grand total. The day-by-day
+// breakdown lives in the PDF attachment instead, so the email stays short.
+    private String buildFoodReportEmailHtml(String title, List<FoodDayRow> rows) {
+        java.math.BigDecimal totalBreakfast = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal totalLunch = java.math.BigDecimal.ZERO;
+        java.math.BigDecimal totalDinner = java.math.BigDecimal.ZERO;
+        for (FoodDayRow row : rows) {
+            totalBreakfast = totalBreakfast.add(row.breakfast);
+            totalLunch = totalLunch.add(row.lunch);
+            totalDinner = totalDinner.add(row.dinner);
+        }
+        java.math.BigDecimal grandTotal = totalBreakfast.add(totalLunch).add(totalDinner);
+
+        String sb = "<html><body style='font-family:Arial,sans-serif;'>" +
+                "<h2>" + title + "</h2>" +
+                "<table style='border-collapse:collapse;width:100%;max-width:360px;'>" +
+                foodSummaryRow("Breakfast", totalBreakfast, false) +
+                foodSummaryRow("Lunch", totalLunch, false) +
+                foodSummaryRow("Dinner", totalDinner, false) +
+                foodSummaryRow("Total", grandTotal, true) +
+                "</table>" +
+                "<p style='color:#888;font-size:12px;margin-top:16px;'>Full day-by-day breakdown is attached as a PDF.</p>" +
+                "</body></html>";
+        return sb;
+    }
+
+    private String foodSummaryRow(String label, java.math.BigDecimal amount, boolean highlight) {
+        String rowStyle = highlight
+                ? "background:#2563EB;color:#fff;font-weight:bold;"
+                : "border-bottom:1px solid #eee;";
+        return "<tr style='" + rowStyle + "'>"
+                + "<td style='padding:8px;'>" + label + "</td>"
+                + "<td style='padding:8px;text-align:right;'>₹" + amount.toPlainString() + "</td>"
+                + "</tr>";
     }
 }

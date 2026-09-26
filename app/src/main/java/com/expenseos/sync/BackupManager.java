@@ -101,6 +101,7 @@ public class BackupManager {
                 backup.put("recycle_bin", tableToJson(db, "recycle_bin"));
                 backup.put("app_config", tableToJson(db, "app_config"));
                 backup.put("ai_chat_messages", tableToJson(db, "ai_chat_messages"));
+                backup.put("settlement_links", tableToJson(db, "settlement_links"));
 
                 String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 String fileName = "backup_" + ts + ".zip";
@@ -240,17 +241,35 @@ public class BackupManager {
             restoreTable(db, "schedulers", backup.optJSONArray("schedulers"));
             restoreTable(db, "scheduler_log", backup.optJSONArray("scheduler_log"));
             restoreTable(db, "deleted_records", backup.optJSONArray("deleted_records"));
+            restoreTable(db, "payment_types", backup.optJSONArray("payment_types"));
+            restoreTable(db, "keyword_mappings", backup.optJSONArray("keyword_mappings"));
+            restoreTable(db, "events", backup.optJSONArray("events"));
+            restoreTable(db, "reminders", backup.optJSONArray("reminders"));
+            restoreTable(db, "event_reminders", backup.optJSONArray("event_reminders"));
+            restoreTable(db, "tasks", backup.optJSONArray("tasks"));
+            restoreTable(db, "task_events", backup.optJSONArray("task_events"));
+            restoreTable(db, "task_alarms", backup.optJSONArray("task_alarms"));
 
             restoreTable(db, "passbook_entries", backup.optJSONArray("passbook_entries"));
             restoreTable(db, "budget_allocation_template", backup.optJSONArray("budget_allocation_template"));
             restoreTable(db, "recycle_bin", backup.optJSONArray("recycle_bin"));
             restoreTable(db, "app_config", backup.optJSONArray("app_config"));
             restoreTable(db, "ai_chat_messages", backup.optJSONArray("ai_chat_messages"));
+            restoreTable(db, "settlement_links", backup.optJSONArray("settlement_links"));
 
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
             db.execSQL("PRAGMA foreign_keys = ON");   // restore FK enforcement for normal app use
+            com.expenseos.db.LocalDB.getInstance(ctx).resyncSequences(
+                    "cash_books", "categories", "sub_categories", "column_definitions",
+                    "transactions", "transaction_custom_values", "deleted_records",
+                    "transaction_audit_log", "transaction_receipts", "schedulers",
+                    "scheduler_log", "budgets", "budget_categories", "payment_types",
+                    "keyword_mappings", "events", "reminders", "event_reminders", "tasks",
+                    "task_events", "task_alarms", "recycle_bin", "budget_allocation_template",
+                    "settlement_links", "ai_chat_messages"
+            );
         }
 
         // second pass — fill in receipt BLOBs from the zip's Receipts/ entries

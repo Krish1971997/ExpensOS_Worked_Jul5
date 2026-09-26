@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
@@ -28,8 +30,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:paddingStart="4dp"
             android:text="PDF Preview"
             android:textColor="@color/text"
@@ -40,113 +40,123 @@
             android:id="@+id/tvPdfPreviewPageIndicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:paddingHorizontal="4dp"
             android:textColor="@color/text_muted"
             android:textSize="12sp"
-            android:visibility="gone" />
+            android:visibility="gone"
+            tools:text="Page 1 / 3" />
     </LinearLayout>
 
-    <LinearLayout
-        android:id="@+id/pdfPreviewPlaceholder"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical">
-
-        <ProgressBar
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Rendering PDF…"
-            android:textColor="@color/text_muted"
-            android:textSize="13sp" />
-    </LinearLayout>
-
+    <!-- Content area -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvPdfPreviewPages"
+        <LinearLayout
+            android:id="@+id/pdfPreviewPlaceholder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ProgressBar
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Preparing preview…"
+                android:textColor="@color/text_muted"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <WebView
+            android:id="@+id/wvPdfViewer"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:visibility="gone" />
 
-        <!-- Manual zoom controls — pinch venaam-nu irundhaalum idhu vachi zoom pannalam -->
-        <LinearLayout
+        <!-- Floating zoom controls, bottom-right over the WebView -->
+        <androidx.cardview.widget.CardView
             android:id="@+id/zoomControls"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="16dp"
-            android:background="@drawable/bg_zoom_controls"
-            android:elevation="4dp"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="4dp">
 
-            <TextView
-                android:id="@+id/btnZoomIn"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center"
-                android:text="+"
-                android:textColor="@color/text"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#22000000" />
+                <TextView
+                    android:id="@+id/btnZoomIn"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="+"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/btnZoomOut"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:gravity="center"
-                android:text="−"
-                android:textColor="@color/text"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/border" />
+
+                <TextView
+                    android:id="@+id/btnZoomOut"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="−"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
     </FrameLayout>
 
-    <!-- Bottom action bar -->
+    <!-- Save / Share action bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/nav_bg"
+        android:background="@color/surface"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="12dp">
 
         <Button
             android:id="@+id/btnPdfPreviewSave"
             style="@style/BtnPrimary"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:minHeight="46dp"
-            android:paddingVertical="10dp"
-            android:layout_marginEnd="6dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:maxLines="1"
-            android:text="⬇ Save" />
+            android:layout_marginEnd="8dp"
+            android:text="↓ Save" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnPdfPreviewShare"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:minHeight="46dp"
-            android:paddingVertical="10dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
-            android:maxLines="1"
-            android:text="Share" />
+            android:text="SHARE"
+            android:textColor="@color/primary"
+            app:strokeColor="@color/border"
+            app:strokeWidth="1dp" />
     </LinearLayout>
+
 </LinearLayout>

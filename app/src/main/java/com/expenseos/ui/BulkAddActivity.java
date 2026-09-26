@@ -24,6 +24,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListPopupWindow;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -32,6 +33,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
+import com.expenseos.adapter.NoteSuggestionAdapter;
 import com.expenseos.dao.CategoryDao;
 import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.KeywordMappingDao;
@@ -204,6 +206,9 @@ public class BulkAddActivity extends AppCompatActivity {
                         row.etAmount.setText(resultText)));
 
         row.btnDel.setOnClickListener(x -> {
+            if (row.noteSuggestPopup != null && row.noteSuggestPopup.isShowing()) {
+                row.noteSuggestPopup.dismiss();
+            }
             rows.remove(row);
             rowContainer.removeView(v);
             updateSummary();
@@ -299,16 +304,17 @@ public class BulkAddActivity extends AppCompatActivity {
             row.spSubCategory.setVisibility(View.GONE);
         } else {
             row.spSubCategory.setVisibility(View.VISIBLE);
-            if (row.cachedSubCats.size() > 1) {
-                row.cachedSubCats.add(0, new SubCategory(0, "Select Sub Category", catId));
+            List<SubCategory> spinnerItems = new ArrayList<>(row.cachedSubCats);
+            if (spinnerItems.size() > 1) {
+                spinnerItems.add(0, new SubCategory(0, "Select Sub Category", catId));
             }
-            ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, row.cachedSubCats);
+            ArrayAdapter<SubCategory> adp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, spinnerItems);
             adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             row.spSubCategory.setAdapter(adp);
 
             if (row.pendingSubCategoryId != null) {
-                for (int i = 0; i < row.cachedSubCats.size(); i++) {
-                    if (row.cachedSubCats.get(i).getId() == row.pendingSubCategoryId) {
+                for (int i = 0; i < spinnerItems.size(); i++) {
+                    if (spinnerItems.get(i).getId() == row.pendingSubCategoryId) {
                         row.spSubCategory.setSelection(i);
                         break;
                     }
@@ -336,10 +342,16 @@ public class BulkAddActivity extends AppCompatActivity {
     }
 
     // ══════════════════════════════════════════════════════
-    // Keyword auto-suggest (per row, same tap-to-apply flow as
-    // TransactionEntryActivity's wireDescriptionAutoSuggest)
+    // Keyword auto-suggest & Past Note autocomplete (per row)
     // ══════════════════════════════════════════════════════
     private void wireDescriptionAutoSuggest(BulkRow row) {
+        row.noteSuggestAdapter = new NoteSuggestionAdapter(this, new ArrayList<>());
+        row.noteSuggestPopup = new ListPopupWindow(this);
+        row.noteSuggestPopup.setAnchorView(row.etNote);
+        row.noteSuggestPopup.setAdapter(row.noteSuggestAdapter);
+        row.noteSuggestPopup.setModal(false);
+        row.noteSuggestPopup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);
+
         row.etNote.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {
@@ -351,24 +363,66 @@ public class BulkAddActivity extends AppCompatActivity {
 
             @Override
             public void afterTextChanged(Editable e) {
+                if (row.suppressNoteSuggestion) {
+                    row.suppressNoteSuggestion = false;
+                    return;
+                }
                 if (row.suggestRunnable != null) mainHandler.removeCallbacks(row.suggestRunnable);
                 String text = e.toString();
-                row.suggestRunnable = () -> showKeywordSuggestion(row, text);
-                mainHandler.postDelayed(row.suggestRunnable, 350);
+                row.suggestRunnable = () -> {
+                    showKeywordSuggestion(row, text);
+                    showNoteSuggestions(row, text);
+                };
+                mainHandler.postDelayed(row.suggestRunnable, 250);
             }
         });
+
+        row.noteSuggestPopup.setOnItemClickListener((parent, view, position, id) -> {
+            String picked = row.noteSuggestAdapter.getItem(position);
+            if (picked != null) {
+                row.suppressNoteSuggestion = true;
+                row.etNote.setText(picked);
+                row.etNote.setSelection(picked.length());
+            }
+            row.noteSuggestPopup.dismiss();
+        });
+
+        row.etNote.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus && row.noteSuggestPopup != null) {
+                row.noteSuggestPopup.dismiss();
+            }
+        });
+
         row.tvKwSuggestion.setOnClickListener(v -> applyPendingSuggestion(row));
     }
 
+    private boolean suggestionMatchesCurrentSelection(BulkRow row, KeywordMapping match) {
+        if (row.spCategory.getSelectedItem() == null || row.spCategory.getSelectedItemPosition() == 0) {
+            return false;
+        }
+        Category selCat = (Category) row.spCategory.getSelectedItem();
+        if (selCat.getId() != match.getCategoryId()) return false;
+
+        if (match.getSubCategoryId() == null) {
+            if (row.spSubCategory.getVisibility() != View.VISIBLE) return true;
+            SubCategory selSub = (SubCategory) row.spSubCategory.getSelectedItem();
+            return selSub == null || selSub.getId() == 0;
+        } else {
+            if (row.spSubCategory.getVisibility() != View.VISIBLE) return false;
+            SubCategory selSub = (SubCategory) row.spSubCategory.getSelectedItem();
+            return selSub != null && selSub.getId() == match.getSubCategoryId();
+        }
+    }
+
     private void showKeywordSuggestion(BulkRow row, String note) {
-        if (note == null || note.trim().length() < 3 || row.spCategory.getSelectedItemPosition() != 0) {
+        if (note == null || note.trim().length() < 3) {
             row.pendingSuggestion = null;
             row.tvKwSuggestion.setVisibility(View.GONE);
             return;
         }
         String type = row.spType.getSelectedItemPosition() == 1 ? "INCOME" : "EXPENSE";
         KeywordMapping match = kwDao.suggest(note.trim(), type, bookId);
-        if (match == null) {
+        if (match == null || suggestionMatchesCurrentSelection(row, match)) {
             row.pendingSuggestion = null;
             row.tvKwSuggestion.setVisibility(View.GONE);
             return;
@@ -380,13 +434,40 @@ public class BulkAddActivity extends AppCompatActivity {
         row.tvKwSuggestion.setVisibility(View.VISIBLE);
     }
 
+    private void showNoteSuggestions(BulkRow row, String text) {
+        String trimmed = text.trim();
+        if (trimmed.length() < 2 || !row.etNote.hasFocus()) {
+            if (row.noteSuggestPopup != null) row.noteSuggestPopup.dismiss();
+            return;
+        }
+        List<String> matches = txnDao.findDistinctNotesContaining(trimmed, bookId, 8);
+        if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(trimmed))) {
+            if (row.noteSuggestPopup != null) row.noteSuggestPopup.dismiss();
+            return;
+        }
+        row.noteSuggestAdapter.clear();
+        row.noteSuggestAdapter.addAll(matches);
+        row.noteSuggestAdapter.setQuery(trimmed);
+        row.noteSuggestAdapter.notifyDataSetChanged();
+        row.noteSuggestPopup.show();
+    }
+
     private void applyPendingSuggestion(BulkRow row) {
         if (row.pendingSuggestion == null) return;
         row.pendingSubCategoryId = row.pendingSuggestion.getSubCategoryId();
+        int targetCatId = row.pendingSuggestion.getCategoryId();
+        int targetPos = 0;
         for (int i = 0; i < row.cachedCats.size(); i++) {
-            if (row.cachedCats.get(i).getId() == row.pendingSuggestion.getCategoryId()) {
-                row.spCategory.setSelection(i + 1);
+            if (row.cachedCats.get(i).getId() == targetCatId) {
+                targetPos = i + 1;
                 break;
+            }
+        }
+        if (targetPos > 0) {
+            if (row.spCategory.getSelectedItemPosition() == targetPos) {
+                loadSubCategoriesForRow(row, targetCatId);
+            } else {
+                row.spCategory.setSelection(targetPos);
             }
         }
         row.tvKwSuggestion.setVisibility(View.GONE);
@@ -649,6 +730,11 @@ public class BulkAddActivity extends AppCompatActivity {
     }
 
     private void clearAll() {
+        for (BulkRow r : rows) {
+            if (r.noteSuggestPopup != null && r.noteSuggestPopup.isShowing()) {
+                r.noteSuggestPopup.dismiss();
+            }
+        }
         rows.clear();
         rowContainer.removeAllViews();
         addRow();
@@ -762,6 +848,11 @@ public class BulkAddActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        for (BulkRow r : rows) {
+            if (r.noteSuggestPopup != null && r.noteSuggestPopup.isShowing()) {
+                r.noteSuggestPopup.dismiss();
+            }
+        }
         exec.shutdown();
     }
 
@@ -775,6 +866,10 @@ public class BulkAddActivity extends AppCompatActivity {
         EditText etAmount, etNote;
         View btnCalc, btnAttach, btnDel;
         LinearLayout expandPanel, attachmentList, customFieldsContainer;
+
+        ListPopupWindow noteSuggestPopup;
+        NoteSuggestionAdapter noteSuggestAdapter;
+        boolean suppressNoteSuggestion = false;
 
         LocalDate date = LocalDate.now();
         LocalTime time = LocalTime.now();

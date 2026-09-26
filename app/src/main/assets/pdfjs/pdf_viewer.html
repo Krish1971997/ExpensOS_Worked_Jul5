@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <title>PDF Preview</title>
+    <style>
+        html, body {
+          margin: 0;
+          padding: 0;
+          background: #e8e8e8;
+          height: 100%;
+          overflow-x: hidden;
+        }
+        #pagesContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 16px 32px 16px;   /* 16px breathing room on left/right like a real viewer */
+    box-sizing: border-box;
+}
+        .pdfPage {
+          position: relative;
+          background: #ffffff;
+          margin-bottom: 12px;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+        .pdfPage canvas {
+          display: block;
+        }
+        /* Standard pdf.js text-layer positioning — invisible spans placed exactly
+           over the glyphs the canvas already drew, so the user can select/copy
+           real text instead of just looking at a picture of it. */
+        .textLayer {
+          position: absolute;
+          top: 0;
+          left: 0;
+          overflow: hidden;
+          line-height: 1;
+          opacity: 1;
+        }
+        .textLayer span,
+        .textLayer br {
+          color: transparent;
+          position: absolute;
+          white-space: pre;
+          cursor: text;
+          transform-origin: 0% 0%;
+        }
+        .textLayer ::selection {
+          background: rgba(0, 120, 215, 0.35);
+        }
+        #loadError {
+          display: none;
+          padding: 32px 24px;
+          text-align: center;
+          color: #888;
+          font-family: sans-serif;
+        }
+    </style>
+    <script src="pdf.min.js"></script>
+</head>
+<body>
+<div id="pagesContainer"></div>
+<div id="loadError">Couldn't render this PDF.</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+
+    let pdfDoc = null;
+let scale = 1.0;               // placeholder — real value computed to fit width before first render
+let MIN_SCALE = 0.5;           // dynamic now — lowered below if the page needs a smaller fit scale
+const MAX_SCALE = 4.0;
+    let pageViews = [];            // [{ page, pageDiv, canvas, textLayerDiv }]
+    let currentVisiblePage = 1;
+
+    function notifyError(message) {
+      document.getElementById('loadError').style.display = 'block';
+      if (window.AndroidBridge && AndroidBridge.onError) {
+        AndroidBridge.onError(String(message));
+      }
+    }
+
+    function base64ToBytes(base64) {
+      const raw = atob(base64);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return bytes;
+    }
+
+    async function init() {
+      try {
+        if (!window.AndroidBridge || !AndroidBridge.getPdfBase64) {
+          throw new Error('AndroidBridge not available');
+        }
+        const base64 = AndroidBridge.getPdfBase64();
+        if (!base64) throw new Error('No PDF data received');
+
+        const loadingTask = pdfjsLib.getDocument({ data: base64ToBytes(base64) });
+pdfDoc = await loadingTask.promise;
+
+const firstPage = await pdfDoc.getPage(1);
+scale = computeFitWidthScale(firstPage);   // set default zoom = fit width
+
+// The user's zoomOut() floor must never sit above the fit-to-width scale,
+// or a wide page (like this one) can't zoom back out to its own fitted
+// size — it was getting stuck wider than the screen and clipping at both
+// edges. Give a little extra headroom below fit so "zoom out" still feels
+// like it does something even once you're already at fit width.
+MIN_SCALE = Math.min(MIN_SCALE, scale * 0.8);
+
+await renderAllPages();
+setupPageTracking();
+      } catch (e) {
+        notifyError(e && e.message ? e.message : e);
+      }
+    }
+
+    async function renderAllPages() {
+      const container = document.getElementById('pagesContainer');
+      container.innerHTML = '';
+      pageViews = [];
+
+      for (let num = 1; num <= pdfDoc.numPages; num++) {
+        const page = await pdfDoc.getPage(num);
+
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdfPage';
+        pageDiv.dataset.pageNumber = String(num);
+
+        const canvas = document.createElement('canvas');
+        const textLayerDiv = document.createElement('div');
+        textLayerDiv.className = 'textLayer';
+
+        pageDiv.appendChild(canvas);
+        pageDiv.appendChild(textLayerDiv);
+        container.appendChild(pageDiv);
+
+        const pv = { page, pageDiv, canvas, textLayerDiv };
+        pageViews.push(pv);
+        await renderPage(pv);
+      }
+
+      if (window.AndroidBridge && AndroidBridge.onPageChanged) {
+        AndroidBridge.onPageChanged(1, pdfDoc.numPages);
+      }
+    }
+
+    async function renderPage(pv) {
+      // Render the canvas at device-pixel-ratio resolution for crisp output,
+      // but size the CSS box (and the text layer) at the plain "scale" so
+      // text stays aligned with the glyphs drawn on the canvas.
+      const dpr = window.devicePixelRatio || 1;
+      const cssViewport = pv.page.getViewport({ scale });
+      const renderViewport = pv.page.getViewport({ scale: scale * dpr });
+
+      const canvas = pv.canvas;
+      const ctx = canvas.getContext('2d');
+      canvas.width = renderViewport.width;
+      canvas.height = renderViewport.height;
+      canvas.style.width = cssViewport.width + 'px';
+      canvas.style.height = cssViewport.height + 'px';
+
+      pv.pageDiv.style.width = cssViewport.width + 'px';
+      pv.pageDiv.style.height = cssViewport.height + 'px';
+
+      await pv.page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+
+      pv.textLayerDiv.innerHTML = '';
+      pv.textLayerDiv.style.width = cssViewport.width + 'px';
+      pv.textLayerDiv.style.height = cssViewport.height + 'px';
+
+      const textContent = await pv.page.getTextContent();
+      pdfjsLib.renderTextLayer({
+        textContentSource: textContent,
+        container: pv.textLayerDiv,
+        viewport: cssViewport,
+        textDivs: []
+      });
+    }
+
+    async function rerenderAll() {
+      for (const pv of pageViews) {
+        await renderPage(pv);
+      }
+    }
+
+    // Called from Android via webView.evaluateJavascript("zoomIn();", null)
+    function zoomIn() {
+      scale = Math.min(MAX_SCALE, +(scale + 0.25).toFixed(2));
+      rerenderAll();
+    }
+
+    function zoomOut() {
+  scale = Math.max(MIN_SCALE, +(scale - 0.25).toFixed(2));
+  rerenderAll();
+}
+    window.zoomIn = zoomIn;
+    window.zoomOut = zoomOut;
+
+    // Tracks which page is mostly on-screen and reports it back to Android
+    // for the "Page X / N" indicator — same contract as before.
+    function setupPageTracking() {
+      const observer = new IntersectionObserver((entries) => {
+        let best = null;
+        for (const entry of entries) {
+          if (entry.isIntersecting && (!best || entry.intersectionRatio > best.intersectionRatio)) {
+            best = entry;
+          }
+        }
+        if (best) {
+          const num = parseInt(best.target.dataset.pageNumber, 10);
+          if (num !== currentVisiblePage) {
+            currentVisiblePage = num;
+            if (window.AndroidBridge && AndroidBridge.onPageChanged) {
+              AndroidBridge.onPageChanged(num, pdfDoc.numPages);
+            }
+          }
+        }
+      }, { threshold: [0.25, 0.5, 0.75] });
+
+      pageViews.forEach(pv => observer.observe(pv.pageDiv));
+    }
+
+    window.addEventListener('load', init);
+
+    // Fit the page to the screen width on first load instead of opening at a
+// fixed 140% zoom that spills off both edges of the screen.
+function computeFitWidthScale(page) {
+  const baseViewport = page.getViewport({ scale: 1 });
+  const deviceWidthPx = (window.AndroidBridge && AndroidBridge.getViewportWidthDp)
+    ? AndroidBridge.getViewportWidthDp()
+    : document.documentElement.clientWidth;
+  const availableWidth = deviceWidthPx - 32;
+  const fit = availableWidth / baseViewport.width;
+  // No MIN_SCALE floor here — MIN_SCALE is a limit for the user's manual
+  // zoomOut() button, not for the initial fit-to-width render. A wide
+  // report page (lots of columns) can genuinely need a scale below 0.5 to
+  // actually fit the screen; clamping it up to 0.5 was forcing the page
+  // wider than the viewport, which is what got clipped on both edges.
+  return Math.min(MAX_SCALE, fit);
+}
+</script>
+</body>
+</html>

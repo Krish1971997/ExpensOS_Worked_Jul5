@@ -457,18 +457,22 @@ public class FoodTrackerActivity extends AppCompatActivity {
     private void exportPdf() {
         exec.execute(() -> {
             try {
-                File dir = new File(getCacheDir(), "reports");
+                // report_previews (not the shared "reports" dir) — matches
+                // ReportPdfPreviewActivity's own convention; that screen owns
+                // moving the file to Downloads when the user taps Save.
+                File dir = new File(getCacheDir(), "report_previews");
                 if (!dir.exists()) dir.mkdirs();
-                File pdfFile = new File(dir, "food_tracker_" + System.currentTimeMillis() + ".pdf");
+                File pdfFile = new File(dir, "preview_" + System.currentTimeMillis() + ".pdf");
                 try (FileOutputStream out = new FileOutputStream(pdfFile)) {
                     writeFoodTrackerPdf(out);
                 }
-                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
+                String downloadFileName = "food_tracker_" + System.currentTimeMillis() + ".pdf";
                 runOnUiThread(() -> {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setDataAndType(uri, "application/pdf");
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(intent);
+                    Intent i = new Intent(this, ReportPdfPreviewActivity.class);
+                    i.putExtra("pdfPath", pdfFile.getAbsolutePath());
+                    i.putExtra("suggestedFileName", downloadFileName);
+                    i.putExtra("title", monthTitle());
+                    startActivity(i);
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(this, "PDF failed: " + e.getMessage(), Toast.LENGTH_LONG).show());

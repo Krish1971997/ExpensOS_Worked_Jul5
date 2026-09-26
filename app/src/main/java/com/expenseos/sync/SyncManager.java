@@ -153,6 +153,27 @@ public class SyncManager {
                     log.info("Starting deleted_records push...");
                     totalRows += pushDeletedRecords(local, remote, fromStr);
 
+                    try {
+                        log.info("Starting settlement_links push...");
+                        totalRows += pushSettlementLinks(local, remote);
+                    } catch (Exception e) {
+                        log.warn("pushSettlementLinks skipped/failed: " + e.getMessage());
+                    }
+
+                    try {
+                        log.info("Starting passbook_entries push...");
+                        totalRows += pushPassbookEntries(local, remote);
+                    } catch (Exception e) {
+                        log.warn("pushPassbookEntries skipped/failed: " + e.getMessage());
+                    }
+
+                    try {
+                        log.info("Starting ai_chat_messages push...");
+                        totalRows += pushAiChatMessages(local, remote);
+                    } catch (Exception e) {
+                        log.warn("pushAiChatMessages skipped/failed: " + e.getMessage());
+                    }
+
                     remote.commit();
                     String summary = "Pushed " + totalRows + " rows across all tables";
                     log.success("═══ PUSH DONE — " + summary + " ═══");
@@ -219,13 +240,32 @@ public class SyncManager {
                 totalRows += pullRecycleBin(remote, local, fromStr);
                 totalRows += pullDeletedRecords(remote, local, fromStr);
 
+                try {
+                    totalRows += pullSettlementLinks(remote, local);
+                } catch (Exception e) {
+                    log.warn("pullSettlementLinks skipped/failed: " + e.getMessage());
+                }
+
+                try {
+                    totalRows += pullPassbookEntries(remote, local);
+                } catch (Exception e) {
+                    log.warn("pullPassbookEntries skipped/failed: " + e.getMessage());
+                }
+
+                try {
+                    totalRows += pullAiChatMessages(remote, local);
+                } catch (Exception e) {
+                    log.warn("pullAiChatMessages skipped/failed: " + e.getMessage());
+                }
+
                 com.expenseos.db.LocalDB.getInstance(ctx).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
                         "transactions", "transaction_custom_values", "deleted_records",
                         "transaction_audit_log", "transaction_receipts", "schedulers",
                         "scheduler_log", "budgets", "budget_categories", "payment_types",
                         "keyword_mappings", "events", "reminders", "event_reminders", "tasks",
-                        "task_events", "task_alarms", "recycle_bin", "budget_allocation_template"
+                        "task_events", "task_alarms", "recycle_bin", "budget_allocation_template",
+                        "settlement_links", "passbook_entries", "ai_chat_messages"
                 );
 
                 String summary = "Pulled " + totalRows + " rows across all tables";
@@ -316,15 +356,16 @@ public class SyncManager {
     }
 
     private int pushCategories(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
-        String sel = "SELECT id, name, type, created_at, updated_at FROM categories"
+        String sel = "SELECT id, name, type, created_at, updated_at, book_id FROM categories"
                 + (fromStr != null ? " WHERE updated_at>=?" : "");
 
-        String sql = "INSERT INTO categories (id, name, type, created_at, updated_at) "
-                + "VALUES (?, ?, ?::txn_type, ?::timestamp, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+        String sql = "INSERT INTO categories (id, name, type, created_at, updated_at, book_id) "
+                + "VALUES (?, ?, ?::txn_type, ?::timestamp, ?::timestamp, ?) ON CONFLICT (id) DO UPDATE SET "
                 + "name=EXCLUDED.name, "
                 + "type=EXCLUDED.type, "
                 + "created_at=EXCLUDED.created_at, "
-                + "updated_at=EXCLUDED.updated_at";
+                + "updated_at=EXCLUDED.updated_at, "
+                + "book_id=EXCLUDED.book_id";
 
         try (Cursor c = rawQuery(local, sel, fromStr); PreparedStatement ps = remote.prepareStatement(sql)) {
             int n = 0;
@@ -347,6 +388,12 @@ public class SyncManager {
                     ps.setNull(5, java.sql.Types.TIMESTAMP);
                 } else {
                     ps.setString(5, updatedAt);
+                }
+
+                if (c.isNull(5)) {
+                    ps.setNull(6, java.sql.Types.BIGINT);
+                } else {
+                    ps.setLong(6, c.getLong(5));
                 }
 
                 ps.executeUpdate();
@@ -1254,7 +1301,16 @@ public class SyncManager {
      */
     private Cursor rawQueryBigWindow(SQLiteDatabase db, String sql, String fromStr) {
         SQLiteCursor cursor = (SQLiteCursor) rawQuery(db, sql, fromStr);
-        cursor.setWindow(new CursorWindow("bigWindow", 50L * 1024 * 1024)); // 50MB
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            cursor.setWindow(new CursorWindow("bigWindow", 50L * 1024 * 1024)); // 50MB
+        } else {
+            try {
+                java.lang.reflect.Field field = CursorWindow.class.getDeclaredField("sCursorWindowSize");
+                field.setAccessible(true);
+                field.set(null, 50 * 1024 * 1024);
+            } catch (Exception ignored) {
+            }
+        }
         return cursor;
     }
 
@@ -1875,6 +1931,148 @@ public class SyncManager {
             }
         }
         log.info("deleted_records: pulled " + n);
+        return n;
+    }
+
+    private int pushSettlementLinks(SQLiteDatabase local, Connection remote) throws Exception {
+        String sel = "SELECT id, settlement_txn_id, linked_txn_id, amount, created_at FROM settlement_links";
+        String sql = "INSERT INTO settlement_links (id, settlement_txn_id, linked_txn_id, amount, created_at) "
+                + "VALUES (?, ?, ?, ?, ?::timestamp) ON CONFLICT (id) DO UPDATE SET "
+                + "settlement_txn_id=EXCLUDED.settlement_txn_id, linked_txn_id=EXCLUDED.linked_txn_id, "
+                + "amount=EXCLUDED.amount, created_at=EXCLUDED.created_at";
+        try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setLong(2, c.getLong(1));
+                ps.setLong(3, c.getLong(2));
+                ps.setDouble(4, c.getDouble(3));
+                ps.setString(5, safeTs(c.getString(4)));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("settlement_links: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pullSettlementLinks(Connection remote, SQLiteDatabase local) throws Exception {
+        String sql = "SELECT id, settlement_txn_id, linked_txn_id, amount, created_at FROM settlement_links";
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("settlement_txn_id", rs.getInt("settlement_txn_id"));
+                cv.put("linked_txn_id", rs.getInt("linked_txn_id"));
+                cv.put("amount", rs.getDouble("amount"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                local.insertWithOnConflict("settlement_links", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("settlement_links: pulled " + n);
+        return n;
+    }
+
+    private int pushPassbookEntries(SQLiteDatabase local, Connection remote) throws Exception {
+        String sel = "SELECT sms_id, type, amount, sender, raw_body, remark, payment_type, timestamp_millis, copied FROM passbook_entries";
+        String sql = "INSERT INTO passbook_entries (sms_id, type, amount, sender, raw_body, remark, payment_type, timestamp_millis, copied) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (sms_id) DO UPDATE SET "
+                + "type=EXCLUDED.type, amount=EXCLUDED.amount, sender=EXCLUDED.sender, raw_body=EXCLUDED.raw_body, "
+                + "remark=EXCLUDED.remark, payment_type=EXCLUDED.payment_type, timestamp_millis=EXCLUDED.timestamp_millis, "
+                + "copied=EXCLUDED.copied";
+        try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setString(3, c.getString(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.setString(7, c.getString(6));
+                ps.setLong(8, c.getLong(7));
+                ps.setInt(9, c.getInt(8));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("passbook_entries: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pullPassbookEntries(Connection remote, SQLiteDatabase local) throws Exception {
+        String sql = "SELECT sms_id, type, amount, sender, raw_body, remark, payment_type, timestamp_millis, copied FROM passbook_entries";
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("sms_id", rs.getLong("sms_id"));
+                cv.put("type", rs.getString("type"));
+                cv.put("amount", rs.getString("amount"));
+                cv.put("sender", rs.getString("sender"));
+                cv.put("raw_body", rs.getString("raw_body"));
+                cv.put("remark", rs.getString("remark"));
+                cv.put("payment_type", rs.getString("payment_type"));
+                cv.put("timestamp_millis", rs.getLong("timestamp_millis"));
+                cv.put("copied", rs.getInt("copied"));
+                local.insertWithOnConflict("passbook_entries", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("passbook_entries: pulled " + n);
+        return n;
+    }
+
+    private int pushAiChatMessages(SQLiteDatabase local, Connection remote) throws Exception {
+        String sel = "SELECT id, role, content, attachment_path, attachment_name, chart_path, provider, created_at, session_id FROM ai_chat_messages";
+        String sql = "INSERT INTO ai_chat_messages (id, role, content, attachment_path, attachment_name, chart_path, provider, created_at, session_id) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?::timestamp, ?) ON CONFLICT (id) DO UPDATE SET "
+                + "role=EXCLUDED.role, content=EXCLUDED.content, attachment_path=EXCLUDED.attachment_path, "
+                + "attachment_name=EXCLUDED.attachment_name, chart_path=EXCLUDED.chart_path, "
+                + "provider=EXCLUDED.provider, created_at=EXCLUDED.created_at, session_id=EXCLUDED.session_id";
+        try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, c.getString(1));
+                ps.setString(3, c.getString(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, safeTs(c.getString(7)));
+                ps.setString(9, c.getString(8) != null ? c.getString(8) : "default");
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("ai_chat_messages: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pullAiChatMessages(Connection remote, SQLiteDatabase local) throws Exception {
+        String sql = "SELECT id, role, content, attachment_path, attachment_name, chart_path, provider, created_at, session_id FROM ai_chat_messages";
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getInt("id"));
+                cv.put("role", rs.getString("role"));
+                cv.put("content", rs.getString("content"));
+                cv.put("attachment_path", rs.getString("attachment_path"));
+                cv.put("attachment_name", rs.getString("attachment_name"));
+                cv.put("chart_path", rs.getString("chart_path"));
+                cv.put("provider", rs.getString("provider"));
+                cv.put("created_at", strTs(rs, "created_at"));
+                String sessId = rs.getString("session_id");
+                cv.put("session_id", sessId != null ? sessId : "default");
+                local.insertWithOnConflict("ai_chat_messages", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("ai_chat_messages: pulled " + n);
         return n;
     }
 

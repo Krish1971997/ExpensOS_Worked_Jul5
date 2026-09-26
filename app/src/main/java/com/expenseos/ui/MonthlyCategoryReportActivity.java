@@ -8,13 +8,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -248,19 +246,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
     // ── Exports ──────────────────────────────────────────────
     private void exportPdf() {
         if (currentResult == null) return;
-
-        EditText etTitle = new EditText(this);
-        etTitle.setHint("Report title (optional)");
-        etTitle.setText("Monthly Category Report");
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        etTitle.setPadding(pad, pad, pad, pad);
-
-        new AlertDialog.Builder(this)
-                .setTitle("PDF title")
-                .setView(etTitle)
-                .setPositiveButton("Generate", (d, w) -> generatePdf(etTitle.getText().toString()))
-                .setNegativeButton("Cancel", null)
-                .show();
+        generatePdf("Monthly Category Report");   // no title prompt — straight to preview
     }
 
     private void generatePdf(String customTitle) {

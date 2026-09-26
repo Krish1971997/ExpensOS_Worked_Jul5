@@ -1,31 +1,27 @@
 package com.expenseos.ui;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.Color;
-import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.view.View;
-import android.view.ViewGroup;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
 import com.expenseos.util.DownloadsSaver;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -33,10 +29,21 @@ import java.util.concurrent.Executors;
  * Generic PDF preview screen for GENERATED reports (not DB attachments —
  * see AttachmentPreviewActivity for that one). Takes the path to an
  * already-written PDF file (report generators write to the cache dir
- * first) and renders every page via Android's built-in PdfRenderer, same
- * approach as AttachmentPreviewActivity.renderAllPdfPages(). "Save to
- * Downloads" copies the same bytes via DownloadsSaver; "Share" hands it
- * off via FileProvider.
+ * first) and renders it with PDF.js inside a WebView — real pinch zoom
+ * (WebView's built-in zoom controls), crisper +/- zoom buttons that
+ * re-render the page at a higher resolution, and an actual text layer so
+ * the user can select & copy text out of the report, same as any normal
+ * PDF viewer app.
+ * <p>
+ * This replaces the earlier PdfRenderer + Bitmap + RecyclerView approach:
+ * that one only ever produces a picture of each page, so nothing on it can
+ * be selected or copied — fine for pinch-zooming a scanned page, not
+ * enough for a real "PDF viewer" experience on a text report like this one.
+ * <p>
+ * Requires the pdf.js assets bundled at
+ * app/src/main/assets/pdfjs/pdf_viewer.html (+ pdf.min.js, pdf.worker.min.js)
+ * shipped alongside this file — everything is loaded from local assets, no
+ * network access needed.
  * <p>
  * Intent extras:
  * pdfPath           — absolute path to the source PDF (required)
@@ -47,6 +54,8 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
 
     private String pdfPath;
     private String suggestedFileName;
+    private String pdfBase64 = "";
+    private WebView webView;
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -71,136 +80,118 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
         findViewById(R.id.btnPdfPreviewBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnPdfPreviewSave).setOnClickListener(v -> saveToDownloads());
         findViewById(R.id.btnPdfPreviewShare).setOnClickListener(v -> shareReport());
-        findViewById(R.id.btnZoomIn).setOnClickListener(v -> zoomCurrentPage(true));
-        findViewById(R.id.btnZoomOut).setOnClickListener(v -> zoomCurrentPage(false));
+        findViewById(R.id.btnZoomIn).setOnClickListener(v -> {
+            if (webView != null) webView.evaluateJavascript("zoomIn();", null);
+        });
+        findViewById(R.id.btnZoomOut).setOnClickListener(v -> {
+            if (webView != null) webView.evaluateJavascript("zoomOut();", null);
+        });
 
-        renderAllPages();
+        setupWebView();
+        loadPdfFile();
     }
 
-    // new
-    // Currently visible page-oda ZoomableImageView-ah kandupidichu, andha
-    // page mattum +/− button click-ku zoom in/out pannudhu.
-    //
-    // NOTE: findViewHolderForAdapterPosition(pos) use pannirundhom munnadi
-    // — adhu chill RecyclerView internal states-la (pending layout/animation)
-    // null return pannudhu, adhunala button silently no-op-ah irundhuchu.
-    // LayoutManager.findViewByPosition(pos) andha position-oda ACTUAL
-    // attached View-ah directly kudukkum — reliable-ah irukkum. Ithoda item
-    // root view-ye ZoomableImageView (PdfPageAdapter-la VH wrap pannala),
-    // so direct cast pannikkalam.
-    private void zoomCurrentPage(boolean in) {
-        RecyclerView rv = findViewById(R.id.rvPdfPreviewPages);
-        LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
-        if (lm == null) return;
-        int pos = lm.findFirstVisibleItemPosition();
-        if (pos < 0) return;
-        View child = lm.findViewByPosition(pos);
-        if (child instanceof ZoomableImageView iv) {
-            if (in) iv.zoomIn();
-            else iv.zoomOut();
+    @SuppressLint("SetJavaScriptEnabled")
+    private void setupWebView() {
+        webView = findViewById(R.id.wvPdfViewer);
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+
+        // pdf.js runs its parsing on a Web Worker (pdf.worker.min.js) that it
+        // loads relative to the page's own file:// URL. WebView blocks that
+        // by default for local files, so it needs to be explicitly allowed —
+        // everything stays inside the app's own bundled assets, nothing
+        // reaches out to the network.
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        //noinspection deprecation — still required for file:// worker loads on WebView
+        settings.setAllowFileAccessFromFileURLs(true);
+        //noinspection deprecation
+        settings.setAllowUniversalAccessFromFileURLs(true);
+
+        // Native pinch-to-zoom (two-finger gesture) on top of the JS
+        // zoomIn()/zoomOut() buttons, which re-render at a sharper resolution.
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        settings.setSupportZoom(true);
+
+// wideViewport ON so WebView doesn't clamp local content to its fake
+// ~980px "ideal viewport"; overview mode OFF because we compute the exact
+// fit-to-width scale ourselves in JS using the real device width below —
+// letting WebView ALSO auto-zoom on top of that is what was fighting our
+// calculation and cropping/scrolling the page.
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(false);
+
+        webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                findViewById(R.id.pdfPreviewPlaceholder).setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
+                findViewById(R.id.zoomControls).setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void loadPdfFile() {
+        exec.execute(() -> {
+            try {
+                File file = new File(pdfPath);
+                if (!file.exists() || file.length() == 0) throw new Exception("File empty");
+
+                try (FileInputStream fis = new FileInputStream(file);
+                     ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = fis.read(buf)) > 0) bos.write(buf, 0, n);
+                    pdfBase64 = android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP);
+                }
+
+                mainHandler.post(() -> webView.loadUrl("file:///android_asset/pdfjs/pdf_viewer.html"));
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    Toast.makeText(this, "Failed to load PDF: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+        });
+    }
+
+    /**
+     * Bridge exposed to pdf_viewer.html as `AndroidBridge`.
+     */
+    public class AndroidBridge {
+        @JavascriptInterface
+        public String getPdfBase64() {
+            return pdfBase64;
+        }
+
+        @JavascriptInterface
+        public void onPageChanged(int current, int total) {
+            mainHandler.post(() -> {
+                TextView pageIndicator = findViewById(R.id.tvPdfPreviewPageIndicator);
+                pageIndicator.setVisibility(total > 1 ? View.VISIBLE : View.GONE);
+                pageIndicator.setText("Page " + current + " / " + total);
+            });
+        }
+
+        @JavascriptInterface
+        public void onError(String error) {
+            mainHandler.post(() ->
+                    Toast.makeText(ReportPdfPreviewActivity.this, "PDF Error: " + error, Toast.LENGTH_SHORT).show()
+            );
         }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (webView != null) {
+            webView.destroy();
+        }
         exec.shutdown();
-    }
-
-    private void renderAllPages() {
-        View placeholder = findViewById(R.id.pdfPreviewPlaceholder);
-        RecyclerView rv = findViewById(R.id.rvPdfPreviewPages);
-        TextView pageIndicator = findViewById(R.id.tvPdfPreviewPageIndicator);
-
-        new Thread(() -> {
-            List<Bitmap> pages = new ArrayList<>();
-            try (ParcelFileDescriptor pfd = ParcelFileDescriptor.open(new File(pdfPath), ParcelFileDescriptor.MODE_READ_ONLY);
-                 PdfRenderer renderer = new PdfRenderer(pfd)) {
-
-                int count = renderer.getPageCount();
-                if (count <= 0) throw new IllegalStateException("Empty PDF");
-
-                for (int i = 0; i < count; i++) {
-                    try (PdfRenderer.Page page = renderer.openPage(i)) {
-                        int width = page.getWidth() * 2;
-                        int height = page.getHeight() * 2;
-                        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-                        bitmap.eraseColor(Color.WHITE);
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                        pages.add(bitmap);
-                    }
-                }
-
-                int totalPages = pages.size();
-                runOnUiThread(() -> {
-                    rv.setLayoutManager(new LinearLayoutManager(this));
-                    rv.setAdapter(new PdfPageAdapter(pages));
-                    rv.setVisibility(View.VISIBLE);
-                    placeholder.setVisibility(View.GONE);
-                    findViewById(R.id.zoomControls).setVisibility(View.VISIBLE);
-
-                    pageIndicator.setVisibility(totalPages > 1 ? View.VISIBLE : View.GONE);
-
-                    pageIndicator.setText("Page 1 / " + totalPages);
-                    rv.addOnScrollListener(new RecyclerView.OnScrollListener() {
-                        @Override
-                        public void onScrolled(@NonNull RecyclerView r, int dx, int dy) {
-                            LinearLayoutManager lm = (LinearLayoutManager) r.getLayoutManager();
-                            if (lm == null) return;
-                            int pos = lm.findFirstVisibleItemPosition();
-                            if (pos >= 0)
-                                pageIndicator.setText("Page " + (pos + 1) + " / " + totalPages);
-                        }
-                    });
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Couldn't render PDF preview", Toast.LENGTH_SHORT).show();
-                    finish();
-                });
-            }
-        }).start();
-    }
-
-    // One full-width page per row. ZoomableImageView adds pinch-zoom/pan —
-    // at 1x, vertical drag still passes through so page-to-page scroll works.
-    private static class PdfPageAdapter extends RecyclerView.Adapter<PdfPageAdapter.VH> {
-        private final List<Bitmap> pages;
-
-        PdfPageAdapter(List<Bitmap> pages) {
-            this.pages = pages;
-        }
-
-        static class VH extends RecyclerView.ViewHolder {
-            ZoomableImageView iv;
-
-            VH(ZoomableImageView v) {
-                super(v);
-                iv = v;
-            }
-        }
-
-        @NonNull
-        @Override
-        public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            ZoomableImageView iv = new ZoomableImageView(parent.getContext());
-            iv.setLayoutParams(new RecyclerView.LayoutParams(
-                    RecyclerView.LayoutParams.MATCH_PARENT, RecyclerView.LayoutParams.WRAP_CONTENT));
-            iv.setAdjustViewBounds(true);
-            int pad = (int) (4 * parent.getResources().getDisplayMetrics().density);
-            iv.setPadding(0, pad, 0, pad);
-            return new VH(iv);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull VH h, int pos) {
-            h.iv.setImageBitmap(pages.get(pos));
-        }
-
-        @Override
-        public int getItemCount() {
-            return pages.size();
-        }
     }
 
     private void saveToDownloads() {
@@ -241,4 +232,14 @@ public class ReportPdfPreviewActivity extends AppCompatActivity {
             Toast.makeText(this, "Share failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
+
+    @JavascriptInterface
+    public float getViewportWidthDp() {
+        // Real, unambiguous device width — sidesteps WebView's viewport
+        // heuristics entirely instead of trusting document.clientWidth.
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        return dm.widthPixels / dm.density;
+    }
+
+
 }

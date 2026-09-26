@@ -580,18 +580,19 @@ public class StatsActivity extends AppCompatActivity {
         Bitmap chartBmp = capturePieChart();
         exec.execute(() -> {
             try {
-                File dir = new File(getCacheDir(), "reports");
+                File dir = new File(getCacheDir(), "report_previews");
                 if (!dir.exists()) dir.mkdirs();
-                File pdfFile = new File(dir, "stats_" + System.currentTimeMillis() + ".pdf");
+                File pdfFile = new File(dir, "preview_" + System.currentTimeMillis() + ".pdf");
                 try (FileOutputStream out = new FileOutputStream(pdfFile)) {
                     writeStatsPdf(out, chartBmp);
                 }
-                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdfFile);
+                String downloadFileName = "stats_" + System.currentTimeMillis() + ".pdf";
                 runOnUiThread(() -> {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setDataAndType(uri, "application/pdf");
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(intent);
+                    Intent i = new Intent(this, ReportPdfPreviewActivity.class);
+                    i.putExtra("pdfPath", pdfFile.getAbsolutePath());
+                    i.putExtra("suggestedFileName", downloadFileName);
+                    i.putExtra("title", reportTitle());
+                    startActivity(i);
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(this, "PDF failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
