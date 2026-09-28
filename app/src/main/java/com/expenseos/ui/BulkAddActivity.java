@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
@@ -25,6 +26,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListPopupWindow;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,6 +51,7 @@ import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
 import com.expenseos.util.AppConfig;
+import com.google.android.material.button.MaterialButtonToggleGroup;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -74,7 +77,7 @@ import java.util.concurrent.Executors;
  */
 public class BulkAddActivity extends AppCompatActivity {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("hh:mm a");
 
     private static final int REQ_ATTACH = 2001;
@@ -90,11 +93,18 @@ public class BulkAddActivity extends AppCompatActivity {
     private PaymentTypeDao payDao;
     private KeywordMappingDao kwDao;
 
-    private LinearLayout rowContainer;
-    private TextView tvSummary, tvResult;
+    private LinearLayout previewContainer;
+    private TextView tvIncome, tvExpense, tvNet, tvCount, tvPreviewCount, tvResult, tvCancelEdit, btnAddMore;
     private Button btnSaveAll;
+    private ScrollView svBulk;
+    private MaterialButtonToggleGroup typeToggle;
+    private boolean typeSwitching = false;
 
-    private final List<BulkRow> rows = new ArrayList<>();
+    // One entry form (a BulkRow, so every existing helper keeps working) + the
+    // transactions already added to the preview. editingIndex >= 0 = edit mode.
+    private BulkRow form;
+    private final List<BulkItem> items = new ArrayList<>();
+    private int editingIndex = -1;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
 
@@ -118,119 +128,321 @@ public class BulkAddActivity extends AppCompatActivity {
         payDao = new PaymentTypeDao(this);
         kwDao = new KeywordMappingDao(this);
 
-        rowContainer = findViewById(R.id.llBulkRows);
-        tvSummary = findViewById(R.id.tvBulkSummary);
+        svBulk = findViewById(R.id.svBulk);
+        previewContainer = findViewById(R.id.llBulkPreview);
+        tvIncome = findViewById(R.id.tvBulkIncome);
+        tvExpense = findViewById(R.id.tvBulkExpense);
+        tvNet = findViewById(R.id.tvBulkNet);
+        tvCount = findViewById(R.id.tvBulkCount);
+        tvPreviewCount = findViewById(R.id.tvBulkPreviewCount);
         tvResult = findViewById(R.id.tvBulkResult);
-        btnSaveAll = findViewById(R.id.btnBulkSaveAll);
+        tvCancelEdit = findViewById(R.id.tvBulkCancelEdit);
+        btnAddMore = findViewById(R.id.btnBulkAddMore);
+        btnSaveAll = findViewById(R.id.btnBulkSaveAllBottom);
+        typeToggle = findViewById(R.id.toggleBulkType);
 
         findViewById(R.id.btnBulkBack).setOnClickListener(v -> finish());
-        findViewById(R.id.btnBulkAddRow).setOnClickListener(v -> addRow());
-        findViewById(R.id.btnBulkAdd5).setOnClickListener(v -> {
-            for (int i = 0; i < 5; i++) addRow();
+        findViewById(R.id.btnBulkCancel).setOnClickListener(v -> finish());
+        findViewById(R.id.btnBulkClear).setOnClickListener(v -> confirmClearAll());
+        btnAddMore.setOnClickListener(v -> onAddMoreClicked());
+        tvCancelEdit.setOnClickListener(v -> {
+            editingIndex = -1;
+            resetForm();
+            refreshPreview();
         });
-        findViewById(R.id.btnBulkClear).setOnClickListener(v -> clearAll());
         btnSaveAll.setOnClickListener(v -> saveAll());
-        findViewById(R.id.btnBulkSaveAllBottom).setOnClickListener(v -> saveAll());
 
-        addRow();
-        addRow();
-        addRow();
+        bindForm();
+        refreshPreview();
     }
 
     // ══════════════════════════════════════════════════════
-    // ADD ROW
+    // Single entry form — every helper below runs against `form`
     // ══════════════════════════════════════════════════════
-    private void addRow() {
-        View v = LayoutInflater.from(this).inflate(R.layout.item_bulk_row, rowContainer, false);
+    private void bindForm() {
+        form = new BulkRow();
+        form.tvDateTime = findViewById(R.id.tvBulkDateTime);
+        form.etAmount = findViewById(R.id.etBulkAmount);
+        form.spCategory = findViewById(R.id.spBulkCategory);
+        form.subWrap = findViewById(R.id.llBulkSubWrap);
+        form.spSubCategory = findViewById(R.id.spBulkSubCategory);
+        form.spPaymentType = findViewById(R.id.spBulkPaymentType);
+        form.etNote = findViewById(R.id.etBulkNote);
+        form.btnMic = findViewById(R.id.btnBulkMic);
+        form.tvKwSuggestion = findViewById(R.id.tvBulkKwSuggestion);
+        form.btnAttach = findViewById(R.id.btnBulkAttach);
+        form.btnCalc = findViewById(R.id.btnBulkCalc);
+        form.attachmentList = findViewById(R.id.llBulkAttachList);
+        form.customFieldsContainer = findViewById(R.id.llBulkCustomFields);
 
-        BulkRow row = new BulkRow();
-        row.rootView = v;
-        row.spType = v.findViewById(R.id.spBulkType);
-        row.tvDateTime = v.findViewById(R.id.tvBulkDateTime);
-        row.etAmount = v.findViewById(R.id.etBulkAmount);
-        row.spCategory = v.findViewById(R.id.spBulkCategory);
-        row.btnExpandToggle = v.findViewById(R.id.btnBulkExpand);
-        row.btnDel = v.findViewById(R.id.btnBulkRowDel);
-        row.expandPanel = v.findViewById(R.id.llBulkExpand);
-        row.spSubCategory = v.findViewById(R.id.spBulkSubCategory);
-        row.spPaymentType = v.findViewById(R.id.spBulkPaymentType);
-        row.etNote = v.findViewById(R.id.etBulkNote);
-        row.btnMic = v.findViewById(R.id.btnBulkMic);
-        row.tvKwSuggestion = v.findViewById(R.id.tvBulkKwSuggestion);
-        row.btnAttach = v.findViewById(R.id.btnBulkAttach);
-        row.btnCalc = v.findViewById(R.id.btnBulkCalc);
-        row.attachmentList = v.findViewById(R.id.llBulkAttachList);
-        row.customFieldsContainer = v.findViewById(R.id.llBulkCustomFields);
+        form.date = LocalDate.now();
+        form.time = LocalTime.now();
+        updateRowDateTimeText(form);
+        form.tvDateTime.setOnClickListener(x -> showDatePicker(form));
 
-        // Type spinner
-        ArrayAdapter<String> typeAdp = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, new String[]{"EXPENSE", "INCOME"});
-        typeAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        row.spType.setAdapter(typeAdp);
-
-        row.date = LocalDate.now();
-        row.time = LocalTime.now();
-        updateRowDateTimeText(row);
-
-        row.tvDateTime.setOnClickListener(x -> showDatePicker(row));
-
-        row.spType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> p, View vw, int pos, long id) {
-                String type = pos == 1 ? "INCOME" : "EXPENSE";
-                loadCategoriesForRow(row, type);
-                clearCustomFieldsForRow(row);
-                loadCustomFieldsForRow(row, type);
-                loadPaymentTypesForRow(row);
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {
-            }
+        typeToggle.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (typeSwitching || !isChecked) return;
+            applyType(checkedId == R.id.btnBulkTypeIncome ? "INCOME" : "EXPENSE");
         });
-        loadCategoriesForRow(row, "EXPENSE"); // default
-        loadCustomFieldsForRow(row, "EXPENSE");
-        loadPaymentTypesForRow(row);
-        wireDescriptionAutoSuggest(row);
+        applyType("EXPENSE");
+        loadPaymentTypesForRow(form);
+        wireDescriptionAutoSuggest(form);
 
-        row.btnExpandToggle.setOnClickListener(x -> {
-            row.expanded = !row.expanded;
-            row.expandPanel.setVisibility(row.expanded ? View.VISIBLE : View.GONE);
-            row.btnExpandToggle.setText(row.expanded ? "▴" : "▾");
-        });
+        form.btnMic.setOnClickListener(x -> startVoiceInput(form));
+        form.btnAttach.setOnClickListener(x -> pickAttachment(form));
+        form.btnCalc.setOnClickListener(x ->
+                CalculatorDialog.show(this, form.etAmount.getText().toString(), resultText ->
+                        form.etAmount.setText(resultText)));
+    }
 
-        row.btnMic.setOnClickListener(x -> startVoiceInput(row));
-        row.btnAttach.setOnClickListener(x -> pickAttachment(row));
-        row.btnCalc.setOnClickListener(x ->
-                CalculatorDialog.show(this, row.etAmount.getText().toString(), resultText ->
-                        row.etAmount.setText(resultText)));
+    /**
+     * Type changed: reload categories + custom fields. Payment type is left alone (carry-over).
+     */
+    private void applyType(String type) {
+        form.type = type;
+        loadCategoriesForRow(form, type);
+        setSubVisible(form, false);
+        clearCustomFieldsForRow(form);
+        loadCustomFieldsForRow(form, type);
+    }
 
-        row.btnDel.setOnClickListener(x -> {
-            if (row.noteSuggestPopup != null && row.noteSuggestPopup.isShowing()) {
-                row.noteSuggestPopup.dismiss();
+    private void setTypeProgrammatic(String type) {
+        typeSwitching = true;
+        typeToggle.check("INCOME".equals(type) ? R.id.btnBulkTypeIncome : R.id.btnBulkTypeExpense);
+        typeSwitching = false;
+        applyType(type);
+    }
+
+    private void setSubVisible(BulkRow row, boolean visible) {
+        int v = visible ? View.VISIBLE : View.GONE;
+        row.spSubCategory.setVisibility(v);
+        if (row.subWrap != null) row.subWrap.setVisibility(v);
+    }
+
+    private void selectPaymentByName(BulkRow row, String name) {
+        if (name == null) return;
+        for (int i = 0; i < row.spPaymentType.getCount(); i++) {
+            Object o = row.spPaymentType.getItemAtPosition(i);
+            if (o instanceof PaymentType && name.equals(((PaymentType) o).getName())) {
+                row.spPaymentType.setSelection(i);
+                return;
             }
-            rows.remove(row);
-            rowContainer.removeView(v);
-            updateSummary();
-        });
+        }
+    }
 
-        row.etAmount.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void afterTextChanged(Editable e) {
-                updateSummary();
+    private void toast(String m) {
+        Toast.makeText(this, m, Toast.LENGTH_SHORT).show();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // Add / edit / delete / preview
+    // ══════════════════════════════════════════════════════
+    private void onAddMoreClicked() {
+        BulkItem item = buildItemFromForm();
+        if (item == null) return; // validation toast already shown
+        if (editingIndex >= 0) items.set(editingIndex, item);
+        else items.add(item);
+        editingIndex = -1;
+        resetForm(); // carries date/time + payment type of the LAST item into the next entry
+        refreshPreview();
+    }
+
+    private BulkItem buildItemFromForm() {
+        String amtText = form.etAmount.getText().toString().trim();
+        if (amtText.isEmpty()) {
+            toast("Enter amount");
+            return null;
+        }
+        try {
+            new BigDecimal(amtText);
+        } catch (Exception e) {
+            toast("Enter a valid amount");
+            return null;
+        }
+        Category cat = (Category) form.spCategory.getSelectedItem();
+        if (cat == null || cat.getId() == 0) {
+            toast("Select category");
+            return null;
+        }
+        SubCategory sub = null;
+        if (form.spSubCategory.getVisibility() == View.VISIBLE) {
+            sub = (SubCategory) form.spSubCategory.getSelectedItem();
+            if (sub == null || sub.getId() == 0) {
+                toast("Select sub-category");
+                return null;
             }
+        }
+        PaymentType pt = (PaymentType) form.spPaymentType.getSelectedItem();
+        if (pt == null) {
+            toast("Select payment type");
+            return null;
+        }
 
-            @Override
-            public void beforeTextChanged(CharSequence s, int st, int c, int a) {
+        BulkItem it = new BulkItem();
+        it.type = form.type;
+        it.date = form.date;
+        it.time = form.time;
+        it.amount = amtText;
+        it.categoryId = cat.getId();
+        it.categoryName = String.valueOf(cat);
+        it.subCategoryId = sub != null ? sub.getId() : 0;
+        it.subCategoryName = sub != null ? String.valueOf(sub) : null;
+        it.paymentType = pt.getName();
+        it.note = form.etNote.getText().toString().trim();
+        for (Map.Entry<String, EditText> e : form.customFieldInputs.entrySet())
+            it.customValues.put(e.getKey(), e.getValue().getText().toString().trim());
+        it.attachments = new ArrayList<>(form.pendingAttachments);
+        return it;
+    }
+
+    /**
+     * Blank form; type + date/time + payment type come from the last added item.
+     */
+    private void resetForm() {
+        BulkItem base = items.isEmpty() ? null : items.get(items.size() - 1);
+        setTypeProgrammatic(base != null ? base.type : form.type); // also clears category/sub/custom fields
+        if (base != null) {
+            form.date = base.date;
+            form.time = base.time;
+            selectPaymentByName(form, base.paymentType);
+        } else {
+            form.date = LocalDate.now();
+            form.time = LocalTime.now();
+            loadPaymentTypesForRow(form);
+        }
+        updateRowDateTimeText(form);
+
+        form.etAmount.setText("");
+        form.etNote.setText("");
+        form.tvKwSuggestion.setVisibility(View.GONE);
+        form.pendingSuggestion = null;
+        form.pendingSubCategoryId = null;
+        form.pendingAttachments.clear();
+        form.attachmentList.removeAllViews();
+
+        btnAddMore.setText("+  Add More Transaction");
+        tvCancelEdit.setVisibility(View.GONE);
+        form.etAmount.requestFocus();
+    }
+
+    /**
+     * Preview card tapped → load that transaction back into the form.
+     */
+    private void startEdit(int index) {
+        BulkItem it = items.get(index);
+        editingIndex = index;
+
+        setTypeProgrammatic(it.type);
+        form.date = it.date;
+        form.time = it.time;
+        updateRowDateTimeText(form);
+        selectPaymentByName(form, it.paymentType);
+
+        form.etAmount.setText(it.amount);
+        form.suppressNoteSuggestion = true;
+        form.etNote.setText(it.note);
+        form.tvKwSuggestion.setVisibility(View.GONE);
+        form.pendingSuggestion = null;
+
+        // category → sub-category cascade (same mechanism keyword-suggest uses)
+        form.pendingSubCategoryId = it.subCategoryId > 0 ? it.subCategoryId : null;
+        for (int i = 0; i < form.cachedCats.size(); i++) {
+            if (form.cachedCats.get(i).getId() == it.categoryId) {
+                form.spCategory.setSelection(i + 1);
+                break;
             }
+        }
 
-            @Override
-            public void onTextChanged(CharSequence s, int st, int b, int c) {
-            }
-        });
+        for (Map.Entry<String, String> e : it.customValues.entrySet()) {
+            EditText et = form.customFieldInputs.get(e.getKey());
+            if (et != null) et.setText(e.getValue());
+        }
 
-        rows.add(row);
-        rowContainer.addView(v);
+        form.pendingAttachments.clear();
+        form.attachmentList.removeAllViews();
+        for (PendingAttachment pa : it.attachments) {
+            form.pendingAttachments.add(pa);
+            addPendingAttachmentRow(form, pa);
+        }
+
+        btnAddMore.setText("✓  Update Transaction");
+        tvCancelEdit.setVisibility(View.VISIBLE);
+        refreshPreview();
+        svBulk.post(() -> svBulk.smoothScrollTo(0, 0));
+    }
+
+    private void confirmDelete(int idx) {
+        if (idx < 0 || idx >= items.size()) return;
+        BulkItem it = items.get(idx);
+        String summary = ("INCOME".equals(it.type) ? "+₹" : "−₹") + it.amount + "  •  " + it.categoryName
+                + (it.subCategoryName != null ? " ▸ " + it.subCategoryName : "");
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setTitle("Delete transaction?")
+                .setMessage("#" + (idx + 1) + "  " + summary + "\n\nThis will be removed from the list.")
+                .setPositiveButton("Delete", (d, w) -> deleteItem(idx))
+                .setNegativeButton("Cancel", null)
+                .create();
+        dlg.setOnShowListener(d ->
+                dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getColor(R.color.red)));
+        dlg.show();
+    }
+
+    private void deleteItem(int idx) {
+        items.remove(idx);
+        if (editingIndex == idx) {
+            editingIndex = -1;
+            resetForm();
+        } else if (editingIndex > idx) {
+            editingIndex--;
+        }
+        refreshPreview();
+    }
+
+    private void refreshPreview() {
+        previewContainer.removeAllViews();
+        for (int i = 0; i < items.size(); i++) {
+            final int idx = i;
+            BulkItem it = items.get(i);
+            View card = LayoutInflater.from(this).inflate(R.layout.item_bulk_preview, previewContainer, false);
+
+            ((TextView) card.findViewById(R.id.tvPrevIndex)).setText(String.valueOf(i + 1));
+
+            boolean income = "INCOME".equals(it.type);
+
+            // Left accent capsule — same drawables TransactionAdapter uses
+            card.findViewById(R.id.viewPrevTypeBadge).setBackgroundResource(
+                    income ? R.drawable.bg_badge_income : R.drawable.bg_badge_expense);
+
+            TextView tvAmt = card.findViewById(R.id.tvPrevAmount);
+            tvAmt.setText((income ? "+₹" : "−₹") + it.amount);
+            tvAmt.setTextColor(getColor(income ? R.color.green : R.color.red));
+
+            // Chips: Category / SubCategory / Payment type
+            ((TextView) card.findViewById(R.id.tvPrevCategory)).setText(it.categoryName);
+
+            TextView tvSub = card.findViewById(R.id.tvPrevSubCategory);
+            boolean hasSub = it.subCategoryName != null && !it.subCategoryName.isEmpty();
+            tvSub.setText(hasSub ? it.subCategoryName : "");
+            tvSub.setVisibility(hasSub ? View.VISIBLE : View.GONE);
+
+            TextView tvPay = card.findViewById(R.id.tvPrevPayment);
+            boolean hasPay = it.paymentType != null && !it.paymentType.isEmpty();
+            tvPay.setText(hasPay ? it.paymentType : "");
+            tvPay.setVisibility(hasPay ? View.VISIBLE : View.GONE);
+
+            ((TextView) card.findViewById(R.id.tvPrevNote)).setText(it.note.isEmpty() ? "—" : it.note);
+
+            // Payment type chip-ku poyiduchu, so meta-la date/time + attachments mattum
+            ((TextView) card.findViewById(R.id.tvPrevMeta)).setText(
+                    it.date.format(DATE_FMT) + " " + it.time.format(TIME_FMT)
+                            + (it.attachments.isEmpty() ? "" : "  •  📎 " + it.attachments.size()));
+
+            card.setAlpha(idx == editingIndex ? 0.5f : 1f);
+            card.setOnClickListener(v -> startEdit(idx)); // tap anywhere on the card = edit mode
+            card.findViewById(R.id.btnPrevDelete).setOnClickListener(v -> confirmDelete(idx));
+            previewContainer.addView(card);
+        }
+        tvPreviewCount.setText(items.size() + " items");
         updateSummary();
     }
 
@@ -286,7 +498,7 @@ public class BulkAddActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 if (pos == 0) {
-                    row.spSubCategory.setVisibility(View.GONE);
+                    setSubVisible(row, false);
                 } else if (pos - 1 < row.cachedCats.size()) {
                     loadSubCategoriesForRow(row, row.cachedCats.get(pos - 1).getId());
                 }
@@ -301,9 +513,9 @@ public class BulkAddActivity extends AppCompatActivity {
     private void loadSubCategoriesForRow(BulkRow row, int catId) {
         row.cachedSubCats = subCatDao.findByCategoryId(catId);
         if (row.cachedSubCats.isEmpty()) {
-            row.spSubCategory.setVisibility(View.GONE);
+            setSubVisible(row, false);
         } else {
-            row.spSubCategory.setVisibility(View.VISIBLE);
+            setSubVisible(row, true);
             List<SubCategory> spinnerItems = new ArrayList<>(row.cachedSubCats);
             if (spinnerItems.size() > 1) {
                 spinnerItems.add(0, new SubCategory(0, "Select Sub Category", catId));
@@ -420,7 +632,7 @@ public class BulkAddActivity extends AppCompatActivity {
             row.tvKwSuggestion.setVisibility(View.GONE);
             return;
         }
-        String type = row.spType.getSelectedItemPosition() == 1 ? "INCOME" : "EXPENSE";
+        String type = row.type;
         KeywordMapping match = kwDao.suggest(note.trim(), type, bookId);
         if (match == null || suggestionMatchesCurrentSelection(row, match)) {
             row.pendingSuggestion = null;
@@ -713,98 +925,78 @@ public class BulkAddActivity extends AppCompatActivity {
         return attRow;
     }
 
-    // ══════════════════════════════════════════════════════
-    // Summary / Clear / Save
-    // ══════════════════════════════════════════════════════
     private void updateSummary() {
         double income = 0, expense = 0;
-        for (BulkRow r : rows) {
-            double amt = parseAmt(r.etAmount.getText().toString());
-            String type = r.spType.getSelectedItemPosition() == 1 ? "INCOME" : "EXPENSE";
-            if ("INCOME".equals(type)) income += amt;
+        for (BulkItem it : items) {
+            double amt = parseAmt(it.amount);
+            if ("INCOME".equals(it.type)) income += amt;
             else expense += amt;
         }
-        tvSummary.setText(rows.size() + " rows  |  ↑₹" + String.format("%.2f", income) +
-                "  ↓₹" + String.format("%.2f", expense) +
-                "  Net₹" + String.format("%.2f", income - expense));
+        double net = income - expense;
+        tvIncome.setText("↑ ₹" + String.format("%.2f", income));
+        tvExpense.setText("↓ ₹" + String.format("%.2f", expense));
+        tvNet.setText("₹" + String.format("%.2f", net));
+        tvNet.setTextColor(getColor(net >= 0 ? R.color.green : R.color.red));
+        tvCount.setText("Total Items : " + items.size());
     }
 
     private void clearAll() {
-        for (BulkRow r : rows) {
-            if (r.noteSuggestPopup != null && r.noteSuggestPopup.isShowing()) {
-                r.noteSuggestPopup.dismiss();
-            }
+        if (form.noteSuggestPopup != null && form.noteSuggestPopup.isShowing()) {
+            form.noteSuggestPopup.dismiss();
         }
-        rows.clear();
-        rowContainer.removeAllViews();
-        addRow();
-        addRow();
-        addRow();
-        updateSummary();
+        items.clear();
+        editingIndex = -1;
+        resetForm();
+        refreshPreview();
     }
 
     private void saveAll() {
-        for (BulkRow r : rows) {
-            if (r.etAmount.getText().toString().trim().isEmpty()) {
-                Toast.makeText(this, "Fill all Amount fields", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (r.spCategory.getSelectedItem() == null || ((Category) r.spCategory.getSelectedItem()).getId() == 0) {
-                Toast.makeText(this, "Select category for each row", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (r.spSubCategory.getVisibility() == View.VISIBLE) {
-                SubCategory sub = (SubCategory) r.spSubCategory.getSelectedItem();
-                if (sub == null || sub.getId() == 0) {
-                    Toast.makeText(this, "Select sub-category for each row that needs one", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-            if (r.spPaymentType.getSelectedItem() == null) {
-                Toast.makeText(this, "Select payment type for each row", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        // A filled-in form that was never "added" still counts — add it first.
+        if (!form.etAmount.getText().toString().trim().isEmpty()) {
+            BulkItem pending = buildItemFromForm();
+            if (pending == null) return;
+            if (editingIndex >= 0) items.set(editingIndex, pending);
+            else items.add(pending);
+            editingIndex = -1;
+            resetForm();
+            refreshPreview();
+        }
+        if (items.isEmpty()) {
+            toast("Add at least one transaction");
+            return;
         }
 
         btnSaveAll.setEnabled(false);
         btnSaveAll.setText("Saving…");
         tvResult.setVisibility(View.GONE);
 
+        final List<BulkItem> order = new ArrayList<>(items);
         List<Transaction> toSave = new ArrayList<>();
-        List<BulkRow> rowOrder = new ArrayList<>(rows);
-        for (BulkRow r : rowOrder) {
-            String type = r.spType.getSelectedItemPosition() == 1 ? "INCOME" : "EXPENSE";
-            Category cat = (Category) r.spCategory.getSelectedItem();
-            SubCategory sub = (r.spSubCategory.getVisibility() == View.VISIBLE) ? (SubCategory) r.spSubCategory.getSelectedItem() : null;
-
+        for (BulkItem it : order) {
             Transaction t = new Transaction();
-            t.setType(Transaction.Type.valueOf(type));
-            t.setDateTime(LocalDateTime.of(r.date, r.time));
-            t.setAmount(new BigDecimal(r.etAmount.getText().toString().trim()));
-            t.setCategoryId(cat.getId());
-            t.setSubCategoryId(sub != null ? sub.getId() : 0);
-            t.setNote(r.etNote.getText().toString().trim());
+            t.setType(Transaction.Type.valueOf(it.type));
+            t.setDateTime(LocalDateTime.of(it.date, it.time));
+            t.setAmount(new BigDecimal(it.amount));
+            t.setCategoryId(it.categoryId);
+            t.setSubCategoryId(it.subCategoryId);
+            t.setNote(it.note);
             t.setBookId(bookId);
-            t.setPaymentType(((PaymentType) r.spPaymentType.getSelectedItem()).getName());
-
-            Map<String, String> customValues = new LinkedHashMap<>();
-            for (Map.Entry<String, EditText> e : r.customFieldInputs.entrySet())
-                customValues.put(e.getKey(), e.getValue().getText().toString().trim());
-            t.setCustomValues(customValues);
-
+            t.setPaymentType(it.paymentType);
+            t.setCustomValues(new LinkedHashMap<>(it.customValues));
             toSave.add(t);
         }
 
         exec.execute(() -> {
-            int saved = 0, failed = 0;
+            List<BulkItem> failedItems = new ArrayList<>();
+            int saved = 0;
             for (int i = 0; i < toSave.size(); i++) {
                 Transaction t = toSave.get(i);
-                BulkRow r = rowOrder.get(i);
+                BulkItem it = order.get(i);
                 try {
                     long newId = txnDao.insert(t);
                     if (newId == -1) throw new RuntimeException("insert failed");
                     txnDao.saveCustomValues((int) newId, t.getCustomValues());
-                    for (PendingAttachment pa : r.pendingAttachments) {
+                    for (PendingAttachment pa : it.attachments) {
                         Receipt rec = new Receipt();
                         rec.setTransactionId((int) newId);
                         rec.setFileName(pa.name);
@@ -815,20 +1007,23 @@ public class BulkAddActivity extends AppCompatActivity {
                     }
                     saved++;
                 } catch (Exception e) {
-                    failed++;
+                    failedItems.add(it);
                 }
             }
-            final int s = saved, f = failed;
+            final int s = saved, f = failedItems.size();
             mainHandler.post(() -> {
                 btnSaveAll.setEnabled(true);
                 btnSaveAll.setText("✓ Save All");
                 tvResult.setVisibility(View.VISIBLE);
                 tvResult.setText(s + " saved" + (f > 0 ? ", " + f + " failed" : ""));
                 tvResult.setTextColor(getColor(f == 0 ? R.color.green : R.color.red));
-                if (f == 0) {
-                    clearAll();
-                    Toast.makeText(this, "All saved!", Toast.LENGTH_SHORT).show();
-                }
+                // Only failed ones stay in the preview, so a retry never duplicates saved rows.
+                items.clear();
+                items.addAll(failedItems);
+                editingIndex = -1;
+                resetForm();
+                refreshPreview();
+                if (f == 0) Toast.makeText(this, "All saved!", Toast.LENGTH_SHORT).show();
             });
         });
     }
@@ -848,10 +1043,8 @@ public class BulkAddActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        for (BulkRow r : rows) {
-            if (r.noteSuggestPopup != null && r.noteSuggestPopup.isShowing()) {
-                r.noteSuggestPopup.dismiss();
-            }
+        if (form != null && form.noteSuggestPopup != null && form.noteSuggestPopup.isShowing()) {
+            form.noteSuggestPopup.dismiss();
         }
         exec.shutdown();
     }
@@ -859,9 +1052,28 @@ public class BulkAddActivity extends AppCompatActivity {
     private record PendingAttachment(String name, String mimeType, byte[] bytes) {
     }
 
+    /**
+     * One transaction already added to the preview list.
+     */
+    static class BulkItem {
+        String type = "EXPENSE";
+        LocalDate date;
+        LocalTime time;
+        String amount = "";
+        int categoryId;
+        String categoryName = "";
+        int subCategoryId;          // 0 = none
+        String subCategoryName;     // null = none
+        String paymentType = "";
+        String note = "";
+        Map<String, String> customValues = new LinkedHashMap<>();
+        List<PendingAttachment> attachments = new ArrayList<>();
+    }
+
     static class BulkRow {
-        View rootView;
-        Spinner spType, spCategory, spSubCategory, spPaymentType;
+        View rootView, subWrap;
+        String type = "EXPENSE";
+        Spinner spCategory, spSubCategory, spPaymentType;
         TextView tvDateTime, btnMic, tvKwSuggestion, btnExpandToggle;
         EditText etAmount, etNote;
         View btnCalc, btnAttach, btnDel;
@@ -881,5 +1093,20 @@ public class BulkAddActivity extends AppCompatActivity {
         Integer pendingSubCategoryId;
         Runnable suggestRunnable;
         boolean expanded = true;
+    }
+
+    private void confirmClearAll() {
+        // Nothing to clear — no need to bother the user with a popup
+        if (items.isEmpty() && form.etAmount.getText().toString().trim().isEmpty()) return;
+
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setTitle("Clear all transactions?")
+                .setMessage("All " + items.size() + " item(s) in the preview will be removed.\n\nThis can't be undone.")
+                .setPositiveButton("Clear all", (d, w) -> clearAll())
+                .setNegativeButton("Cancel", null)
+                .create();
+        dlg.setOnShowListener(d ->
+                dlg.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getColor(R.color.red)));
+        dlg.show();
     }
 }
