@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Side drawer surface: soft elevated card look with a rounded
+     top-right edge (modern Android drawer treatment). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/bg_card" />
+    <corners
+        android:topRightRadius="24dp"
+        android:bottomRightRadius="0dp" />
+</shape>

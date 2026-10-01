@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
@@ -104,10 +105,13 @@
                 android:layout_height="match_parent"
                 android:layout_marginEnd="8dp"
                 android:layout_weight="1"
-                android:background="@color/bg"
+                android:background="@drawable/bg_search_field"
                 android:hint="Search books…"
-                android:paddingHorizontal="10dp"
-                android:textSize="12sp" />
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingHorizontal="16dp"
+                android:textSize="13sp" />
 
             <ImageButton
                 android:id="@+id/btnBookSort"
@@ -126,200 +130,102 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
+            android:layoutAnimation="@anim/layout_animation_fall_down"
             android:padding="6dp" />
     </LinearLayout>
 
-    <!-- Bottom nav — Cashbooks / Stats / PassBook / AI Assistant / Settings / Integrations -->
+    <!-- Bottom nav — Android standard: 4 top-level tabs.
+         Cashbooks / Stats / AI Bot / More (PassBook, Food Tracker,
+         Integrations, All Txns, Restore live in the "More" sheet). -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:background="@color/bg_card"
-        android:elevation="8dp"
+        android:layout_height="@dimen/bottom_nav_height"
+        android:background="@color/nav_bg"
+        android:elevation="@dimen/elevation_2"
         android:orientation="horizontal">
 
         <LinearLayout
             android:id="@+id/navCashbooks"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
+            style="@style/NavItem">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="📖"
-                android:textSize="18sp" />
+            <ImageView
+                android:id="@+id/navCashbooksIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_book"
+                app:tint="@color/primary" />
 
             <TextView
                 android:id="@+id/navCashbooksLabel"
+                style="@style/NavLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Cashbooks"
-                android:textColor="@color/primary"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textColor="@color/primary" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/navStats"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
+            style="@style/NavItem">
 
             <ImageView
+                android:id="@+id/navStatsIcon"
                 android:layout_width="22dp"
                 android:layout_height="22dp"
-                android:src="@drawable/ic_stats" />
+                android:contentDescription="@null"
+                android:src="@drawable/ic_stats"
+                app:tint="@color/text_muted" />
 
             <TextView
                 android:id="@+id/navStatsLabel"
+                style="@style/NavLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
                 android:text="Stats"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
-        
-        <LinearLayout
-            android:id="@+id/navPassbook"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="💳"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/navPassbookLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="PassBook"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
+                android:textColor="@color/text_muted" />
         </LinearLayout>
 
-        <!-- ── NEW: AI Assistant Tab ── -->
         <LinearLayout
             android:id="@+id/navAiAssistant"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
+            style="@style/NavItem">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🤖"
-                android:textSize="18sp" />
+            <ImageView
+                android:id="@+id/navAiIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_ai"
+                app:tint="@color/text_muted" />
 
             <TextView
                 android:id="@+id/navAiAssistantLabel"
+                style="@style/NavLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="AI Bot"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
-        </LinearLayout>
-
-        <!--<LinearLayout
-            android:id="@+id/navSettings"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚙"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/navSettingsLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Settings"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
-        </LinearLayout>-->
-
-        <!-- REPLACE navSettings WITH navFoodTracker IN activity_main.xml -->
-        <LinearLayout
-            android:id="@+id/navFoodTracker"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🍽"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/navFoodTrackerLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Food Tracker"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
+                android:textColor="@color/text_muted" />
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/navIntegrations"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:id="@+id/navMore"
+            style="@style/NavItem">
+
+            <ImageView
+                android:id="@+id/navMoreIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_more"
+                app:tint="@color/text_muted" />
 
             <TextView
+                android:id="@+id/navMoreLabel"
+                style="@style/NavLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🔗"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/navIntegrationsLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Integrations"
-                android:textColor="@color/text_muted"
-                android:textSize="10sp" />
+                android:text="More"
+                android:textColor="@color/text_muted" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

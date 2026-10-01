@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -25,10 +26,8 @@ public class HomeActivity extends AppCompatActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private static final int NAV_HOME = 0;
-    //    private static final int NAV_REPORTS = 1;
-    private static final int NAV_LOG = 1;           // <-- replaces Reports slot
-
-    private static final int NAV_BACKUP = 2;
+    private static final int NAV_LOG = 1;           // Sync Console tab
+    private static final int NAV_BACKUP = 2;        // Scheduler tab
     private static final int NAV_CONFIG = 3;
     private int currentNav = NAV_HOME;
 
@@ -63,9 +62,46 @@ public class HomeActivity extends AppCompatActivity {
         setupBottomNav();
         setupDrawer();
         setupCalendarButton();
+        setupFab();
 
         // Load HOME tab by default
         loadTab(NAV_HOME);
+    }
+
+    // ── FAB — quick add entry (Income / Expense sheet) ────
+    private void setupFab() {
+        com.google.android.material.floatingactionbutton.FloatingActionButton fab =
+                findViewById(R.id.fabAdd);
+        if (fab == null) return;
+
+        fab.setOnClickListener(v -> {
+            View sheetView = LayoutInflater.from(this)
+                    .inflate(R.layout.sheet_add_choice, null);
+
+            com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                    new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+            sheet.setContentView(sheetView);
+
+            View btnIncome = sheetView.findViewById(R.id.btnPickIncome);
+            View btnExpense = sheetView.findViewById(R.id.btnPickExpense);
+
+            if (btnIncome != null) btnIncome.setOnClickListener(ic -> {
+                sheet.dismiss();
+                openEntryScreen("INCOME");
+            });
+            if (btnExpense != null) btnExpense.setOnClickListener(ec -> {
+                sheet.dismiss();
+                openEntryScreen("EXPENSE");
+            });
+
+            sheet.show();
+        });
+    }
+
+    private void openEntryScreen(String type) {
+        Intent i = new Intent(this, TransactionEntryActivity.class);
+        i.putExtra("type", type);
+        startActivity(i);
     }
 
     // ── Bottom Navigation ─────────────────────────────────
@@ -74,7 +110,7 @@ public class HomeActivity extends AppCompatActivity {
 //        findViewById(R.id.navReports).setOnClickListener(v -> loadTab(NAV_REPORTS));
         findViewById(R.id.navLog).setOnClickListener(v -> loadTab(NAV_LOG));               // <-- new
         findViewById(R.id.navBackup).setOnClickListener(v ->
-                startActivity(new Intent(this, SchedulerActivity.class)));
+                startActivity(new Intent(this, SchedulerActivity.class)));  // Scheduler tab
         findViewById(R.id.navConfig).setOnClickListener(v -> {
             Intent i = new Intent(this, SettingsActivity.class);
             i.putExtra("bookScoped", true);
@@ -84,6 +120,13 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void loadTab(int tab) {
+        // Re-tapping the already-active tab should NOT reload the fragment
+        // (prevents flicker + scroll position loss on the visible list).
+        if (currentNav == tab && getSupportFragmentManager()
+                .findFragmentById(R.id.fragmentContainer) != null) {
+            updateNavHighlight(tab);
+            return;
+        }
         currentNav = tab;
         updateNavHighlight(tab);
 
@@ -189,7 +232,7 @@ public class HomeActivity extends AppCompatActivity {
         View drawerScheduler = findViewById(R.id.drawerScheduler);
         if (drawerScheduler != null) drawerScheduler.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
-            startActivity(new Intent(this, BackupActivity.class));
+            startActivity(new Intent(this, BackupActivity.class));  // Backup screen
         });
 
         // NEW

@@ -393,6 +393,7 @@
                 android:layout_height="match_parent"
                 android:background="@color/bg"
                 android:clipToPadding="false"
+                android:layoutAnimation="@anim/layout_animation_fall_down"
                 android:paddingHorizontal="@dimen/space_2"
                 android:paddingTop="@dimen/space_2"
                 android:paddingBottom="@dimen/space_3" />

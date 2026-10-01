@@ -127,6 +127,7 @@ public class HomeFragment extends Fragment {
         });
         adapter.setOnSelectionChanged(this::onSelectionChanged);
         rvTransactions.setAdapter(adapter);
+        rvTransactions.scheduleLayoutAnimation(); // staggered entrance on first load
 
         // ── Sticky Date Header Scroll Listener ────────────────────────────
         rvTransactions.addOnScrollListener(new RecyclerView.OnScrollListener() {

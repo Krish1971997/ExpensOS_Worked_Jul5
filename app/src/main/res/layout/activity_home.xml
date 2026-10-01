@@ -56,12 +56,31 @@
                 android:src="@drawable/ic_calendar_check" />
         </LinearLayout>
 
-        <!-- Fragment host -->
+        <!-- Fragment host + FAB -->
         <FrameLayout
-            android:id="@+id/fragmentContainer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1">
+
+            <FrameLayout
+                android:id="@+id/fragmentContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- FAB — Android convention: primary action ("add entry") floats
+                 above the content, above the bottom nav. -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabAdd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="16dp"
+                android:contentDescription="Add entry"
+                android:src="@drawable/ic_add"
+                app:backgroundTint="@color/primary"
+                app:elevation="6dp"
+                app:tint="@color/on_primary" />
+        </FrameLayout>
 
         <!-- Bottom navigation -->
         <LinearLayout
@@ -161,10 +180,12 @@
     <!-- ═══════════ SIDE DRAWER ═══════════ -->
     <LinearLayout
         android:id="@+id/sideDrawer"
-        android:layout_width="284dp"
+        android:layout_width="300dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="@color/bg_card"
+        android:background="@drawable/bg_drawer"
+        android:clickable="true"
+        android:focusable="true"
         android:orientation="vertical">
 
         <!-- Drawer header -->
@@ -181,6 +202,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="ExpenseOS"
+                android:fontFamily="sans-serif-medium"
                 android:textColor="@color/hero_text"
                 android:textSize="@dimen/type_headline" />
 

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- sheet_more_menu.xml — bottom-sheet "More" menu for the book list
+     screen. Lesser-used destinations moved here so the bottom nav
+     stays at the Android-standard 4 tabs. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/bg_card"
+    android:orientation="vertical"
+    android:paddingTop="@dimen/space_4"
+    android:paddingBottom="@dimen/space_6">
+
+    <View
+        android:layout_width="32dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="@dimen/space_3"
+        android:background="@drawable/bg_divider" />
+
+    <TextView
+        style="@style/Text.Overline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="@dimen/space_5"
+        android:text="More tools" />
+
+    <LinearLayout
+        android:id="@+id/rowPassbook"
+        style="@style/DrawerItem">
+
+        <TextView
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="💳"
+            android:textSize="17sp" />
+
+        <TextView
+            style="@style/Text.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="PassBook (SMS)" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowAllTxn"
+        style="@style/DrawerItem">
+
+        <TextView
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="📊"
+            android:textSize="17sp" />
+
+        <TextView
+            style="@style/Text.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="All Transactions" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowFoodTracker"
+        style="@style/DrawerItem">
+
+        <TextView
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="🍽"
+            android:textSize="17sp" />
+
+        <TextView
+            style="@style/Text.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="Food Tracker" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowIntegrations"
+        style="@style/DrawerItem">
+
+        <TextView
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="🔗"
+            android:textSize="17sp" />
+
+        <TextView
+            style="@style/Text.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="Integrations" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/rowRestoreCloud"
+        style="@style/DrawerItem">
+
+        <TextView
+            android:layout_width="28dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="☁"
+            android:textSize="17sp" />
+
+        <TextView
+            style="@style/Text.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:text="Restore from Cloud" />
+    </LinearLayout>
+</LinearLayout>

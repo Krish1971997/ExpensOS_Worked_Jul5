@@ -67,43 +67,30 @@ public class MainActivity extends AppCompatActivity {
         com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
         requestNotificationPermissionIfNeeded();
 
-        // ADD — bottom nav:
+        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);
+
+        // ── Bottom nav: Cashbooks / Stats / AI Bot / More ──
         findViewById(R.id.navCashbooks).setOnClickListener(v -> {
+            // Already on this screen — just refresh and flash the list.
+            scrollToTop();
             loadBooks();
         });
 
-        com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);
-
-        findViewById(R.id.navStats).setOnClickListener(v ->
-                startActivity(new Intent(this, StatsActivity.class)));
-
-        findViewById(R.id.navPassbook).setOnClickListener(v -> {
-            if (ContextCompat.checkSelfPermission(this,
-                    Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
-            } else {
-                startActivity(new Intent(this, PassbookActivity.class));
-            }
+        findViewById(R.id.navStats).setOnClickListener(v -> {
+            markNavSelected(R.id.navStats, R.id.navStatsIcon, R.id.navStatsLabel);
+            startActivity(new Intent(this, StatsActivity.class));
         });
 
-//        findViewById(R.id.navSettings).setOnClickListener(v ->
-//                startActivity(new Intent(this, SettingsActivity.class)));
+        findViewById(R.id.navAiAssistant).setOnClickListener(v -> {
+            markNavSelected(R.id.navAiAssistant, R.id.navAiIcon, R.id.navAiAssistantLabel);
+            startActivity(new Intent(this, ChatActivity.class));
+        });
 
-        findViewById(R.id.navFoodTracker).setOnClickListener(v ->
-                startActivity(new Intent(this, com.expenseos.ui.FoodTrackerActivity.class)));
+        findViewById(R.id.navMore).setOnClickListener(v -> {
+            markNavSelected(R.id.navMore, R.id.navMoreIcon, R.id.navMoreLabel);
+            showMoreSheet();
+        });
 
-        findViewById(R.id.navIntegrations).setOnClickListener(v ->
-                startActivity(new Intent(this, IntegrationsActivity.class)));
-
-        // ── ADDED: AI Assistant Navigation Click Listener ──
-        View navAi = findViewById(R.id.navAiAssistant);
-        if (navAi != null) {
-            navAi.setOnClickListener(v ->
-                    startActivity(new Intent(this, ChatActivity.class)));
-        }
-
-        // Restore from Cloud
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
         findViewById(R.id.btnAllTxn).setOnClickListener(v ->
@@ -133,10 +120,90 @@ public class MainActivity extends AppCompatActivity {
         loadBooks();
     }
 
+    /** Scroll the book list back to the top when the active tab is re-tapped. */
+    private void scrollToTop() {
+        RecyclerView rv = findViewById(R.id.rvBooks);
+        if (rv != null) rv.smoothScrollToPosition(0);
+    }
+
+    /** Momentary highlight on a nav tab while its screen opens. */
+    private void markNavSelected(int tabId, int iconId, int labelId) {
+        View tab = findViewById(tabId);
+        if (tab == null) return;
+        View icon = tab.findViewById(iconId);
+        View label = tab.findViewById(labelId);
+        if (icon != null) icon.animate().alpha(1f).setDuration(120).start();
+        if (label != null) label.animate().alpha(1f).setDuration(120).start();
+        // Reset on the next resume — onResume() re-renders the list anyway,
+        // and the selection colour is restored by the returning animation.
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        resetNavTint();
         loadBooks();
+    }
+
+    private void resetNavTint() {
+        int[][] sets = {
+                {R.id.navStatsIcon, R.id.navStatsLabel},
+                {R.id.navAiIcon, R.id.navAiAssistantLabel},
+                {R.id.navMoreIcon, R.id.navMoreLabel}
+        };
+        for (int[] set : sets) {
+            View icon = findViewById(set[0]);
+            View label = findViewById(set[1]);
+            if (icon != null) icon.setAlpha(0.85f);
+            if (label != null) label.setAlpha(0.85f);
+        }
+    }
+
+    // ── "More" bottom sheet — secondary destinations ──────
+    private void showMoreSheet() {
+        View v = LayoutInflater.from(this).inflate(R.layout.sheet_more_menu, null);
+
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        sheet.setContentView(v);
+
+        View rowPassbook = v.findViewById(R.id.rowPassbook);
+        if (rowPassbook != null) rowPassbook.setOnClickListener(Click -> {
+            sheet.dismiss();
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
+            } else {
+                startActivity(new Intent(this, PassbookActivity.class));
+            }
+        });
+
+        View rowAllTxn = v.findViewById(R.id.rowAllTxn);
+        if (rowAllTxn != null) rowAllTxn.setOnClickListener(Click -> {
+            sheet.dismiss();
+            startActivity(new Intent(this, AllTransactionsActivity.class));
+        });
+
+        View rowFoodTracker = v.findViewById(R.id.rowFoodTracker);
+        if (rowFoodTracker != null) rowFoodTracker.setOnClickListener(Click -> {
+            sheet.dismiss();
+            startActivity(new Intent(this, com.expenseos.ui.FoodTrackerActivity.class));
+        });
+
+        View rowIntegrations = v.findViewById(R.id.rowIntegrations);
+        if (rowIntegrations != null) rowIntegrations.setOnClickListener(Click -> {
+            sheet.dismiss();
+            startActivity(new Intent(this, IntegrationsActivity.class));
+        });
+
+        View rowRestore = v.findViewById(R.id.rowRestoreCloud);
+        if (rowRestore != null) rowRestore.setOnClickListener(Click -> {
+            sheet.dismiss();
+            showRestoreCloudDialog();
+        });
+
+        sheet.show();
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -154,6 +221,7 @@ public class MainActivity extends AppCompatActivity {
         rv.setItemAnimator(new androidx.recyclerview.widget.DefaultItemAnimator());
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setAdapter(new BookAdapter());
+        rv.scheduleLayoutAnimation(); // staggered fall-down entrance
     }
 
     // ── Sort dialog ───────────────────────────────────────
@@ -398,13 +466,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void requestSmsPermissionIfNeeded() {
-        if (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
-        }
-    }
     // ── Premium cold-start loader ────────────────────────────────────
     private void dismissPremiumLoader() {
         if (premiumLoaderGone || premiumLoader == null) return;
