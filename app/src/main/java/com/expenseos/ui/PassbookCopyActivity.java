@@ -25,6 +25,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListPopupWindow;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -34,8 +35,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 
 import com.expenseos.R;
+import com.expenseos.adapter.NoteSuggestionAdapter;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.CategoryDao;
+import com.expenseos.dao.ColumnDefinitionDao;
 import com.expenseos.dao.KeywordMappingDao;
 import com.expenseos.dao.PaymentTypeDao;
 import com.expenseos.dao.ReceiptDao;
@@ -44,6 +47,7 @@ import com.expenseos.dao.TransactionDao;
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.CashBook;
 import com.expenseos.model.Category;
+import com.expenseos.model.ColumnDefinition;
 import com.expenseos.model.KeywordMapping;
 import com.expenseos.model.PassbookEntry;
 import com.expenseos.model.PaymentType;
@@ -63,8 +67,10 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -98,6 +104,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
     private PaymentTypeDao payDao;
     private KeywordMappingDao kwDao;
     private ReceiptDao receiptDao;
+    private ColumnDefinitionDao colDefDao;
 
     private ScrollView svCopy;
     private LinearLayout llCards;
@@ -111,6 +118,10 @@ public class PassbookCopyActivity extends AppCompatActivity {
 
     // Row that launched the in-flight attach / camera / speech intent.
     private CopyRow activeRow;
+
+    private ListPopupWindow notePopup;
+    private NoteSuggestionAdapter noteAdapter;
+    private CopyRow popupRow; // popup ippo ethu row ku
     private Uri pendingCameraUri;
 
     @Override
@@ -124,6 +135,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
         payDao = new PaymentTypeDao(this);
         kwDao = new KeywordMappingDao(this);
         receiptDao = new ReceiptDao(this);
+        colDefDao = new ColumnDefinitionDao(this);
 
         svCopy = findViewById(R.id.svCopy);
         llCards = findViewById(R.id.llCopyCards);
@@ -139,6 +151,21 @@ public class PassbookCopyActivity extends AppCompatActivity {
         findViewById(R.id.btnCopyBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnCopyCancel).setOnClickListener(v -> finish());
         btnSaveAll.setOnClickListener(v -> saveAll());
+
+        noteAdapter = new NoteSuggestionAdapter(this, new ArrayList<>());
+        notePopup = new ListPopupWindow(this);
+        notePopup.setAdapter(noteAdapter);
+        notePopup.setModal(false);
+        notePopup.setInputMethodMode(ListPopupWindow.INPUT_METHOD_NEEDED);
+        notePopup.setOnItemClickListener((p, v, pos, id) -> {
+            String picked = noteAdapter.getItem(pos);
+            if (picked != null && popupRow != null) {
+                popupRow.suppressNote = true; // popup thirumba open aagakoodathu
+                popupRow.etNote.setText(picked);
+                popupRow.etNote.setSelection(picked.length());
+            }
+            notePopup.dismiss();
+        });
 
         bookId = getIntent().getIntExtra(EXTRA_BOOK_ID, 0);
         long[] ids = getIntent().getLongArrayExtra(EXTRA_SMS_IDS);
@@ -217,7 +244,12 @@ public class PassbookCopyActivity extends AppCompatActivity {
                 if (newId == bookId) return; // initial callback / no change
                 bookId = newId;
                 // Categories belong to a book → reload for every card
-                for (CopyRow r : rows) loadCategories(r);
+                for (CopyRow r : rows) {
+                    loadCategories(r);
+                    r.pendingSuggestion = null;
+                    r.tvKw.setVisibility(View.GONE);
+                    showKeywordSuggestion(r, r.etNote.getText().toString()); // pudhu book ku thirumba suggest
+                }
                 toast("Categories reloaded for \"" + books.get(pos).getName() + "\"");
             }
 
@@ -266,6 +298,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
         r.btnAttach = r.root.findViewById(R.id.btnCardAttach);
         r.tvKw = r.root.findViewById(R.id.tvCardKw);
         r.attachList = r.root.findViewById(R.id.llCardAttachList);
+        r.customContainer = r.root.findViewById(R.id.llCardCustomFields);
 
         boolean income = "INCOME".equals(r.type);
         r.tvIndex.setText(String.valueOf(index + 1));
@@ -290,6 +323,9 @@ public class PassbookCopyActivity extends AppCompatActivity {
 
         // ── User-filled fields ──
         loadCategories(r);
+        loadCustomFields(r);
+
+        showKeywordSuggestion(r, remark); // note empty ah irundhalum SMS text vechu 💡 kaattum
         r.spSub.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
@@ -394,7 +430,8 @@ public class PassbookCopyActivity extends AppCompatActivity {
     private void showDatePicker(CopyRow r) {
         new DatePickerDialog(this, (view, y, m, d) -> {
             r.date = LocalDate.of(y, m + 1, d);
-            mainHandler.post(() -> showTimePicker(r)); // wait a frame, same as BulkAdd
+            updateDateTimeText(r); // time dialog cancel pannina kooda display sari aagum
+            mainHandler.post(() -> showTimePicker(r));
         }, r.date.getYear(), r.date.getMonthValue() - 1, r.date.getDayOfMonth()).show();
     }
 
@@ -505,18 +542,29 @@ public class PassbookCopyActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════
     // Description + keyword suggestion
     // ══════════════════════════════════════════════════════
+
     private void wireNote(CopyRow r) {
         r.etNote.addTextChangedListener(new SimpleWatcher(() -> {
             refreshHeader(r);
+            String text = r.etNote.getText().toString();
+
+            // (a) 💡 keyword → category: eppavum run aagum (SMS tap / past-note pick pannalum)
+            if (r.suggestRunnable != null) mainHandler.removeCallbacks(r.suggestRunnable);
+            r.suggestRunnable = () -> showKeywordSuggestion(r, text);
+            mainHandler.postDelayed(r.suggestRunnable, 350);
+
+            // (b) past-notes popup: pick / SMS-tap kku appuram oru thadavai skip
             if (r.suppressNote) {
                 r.suppressNote = false;
                 return;
             }
-            if (r.suggestRunnable != null) mainHandler.removeCallbacks(r.suggestRunnable);
-            String text = r.etNote.getText().toString();
-            r.suggestRunnable = () -> showKeywordSuggestion(r, text);
-            mainHandler.postDelayed(r.suggestRunnable, 250);
+            if (r.noteRunnable != null) mainHandler.removeCallbacks(r.noteRunnable);
+            r.noteRunnable = () -> showNoteSuggestions(r, text);
+            mainHandler.postDelayed(r.noteRunnable, 250);
         }));
+        r.etNote.setOnFocusChangeListener((v, has) -> {
+            if (!has) notePopup.dismiss();
+        });
         r.tvKw.setOnClickListener(v -> applyPendingSuggestion(r));
     }
 
@@ -535,6 +583,8 @@ public class PassbookCopyActivity extends AppCompatActivity {
             return;
         }
         KeywordMapping m = kwDao.suggest(note.trim(), r.type, bookId);
+        android.util.Log.d("KW_DEBUG", "note=[" + note.trim() + "] type=" + r.type + " book=" + bookId
+                + " -> " + (m == null ? "NO MATCH" : m.getCategoryName() + " / sub=" + m.getSubCategoryName()));
         if (m == null || suggestionMatchesCurrent(r, m)) {
             r.pendingSuggestion = null;
             r.tvKw.setVisibility(View.GONE);
@@ -558,6 +608,9 @@ public class PassbookCopyActivity extends AppCompatActivity {
                 break;
             }
         }
+
+        android.util.Log.d("KW_DEBUG", "apply cat=" + targetCatId + " pos=" + targetPos + " bookCats=" + r.cats.size());
+        
         if (targetPos > 0) {
             if (r.spCategory.getSelectedItemPosition() == targetPos)
                 loadSubCategories(r, targetCatId);
@@ -788,6 +841,12 @@ public class PassbookCopyActivity extends AppCompatActivity {
         t.setNote(r.etNote.getText().toString().trim());
         t.setBookId(bookId);
         t.setPaymentType(pt.getName());
+
+        Map<String, String> customValues = new LinkedHashMap<>();
+        for (Map.Entry<String, EditText> e : r.customInputs.entrySet())
+            customValues.put(e.getKey(), e.getValue().getText().toString().trim());
+        t.setCustomValues(customValues);
+
         return t;
     }
 
@@ -906,6 +965,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (notePopup != null) notePopup.dismiss();
         exec.shutdown();
     }
 
@@ -947,5 +1007,62 @@ public class PassbookCopyActivity extends AppCompatActivity {
         Integer pendingSubCategoryId;
         Runnable suggestRunnable;
         boolean suppressNote = false;
+
+        Runnable noteRunnable;
+
+        LinearLayout customContainer;
+        Map<String, EditText> customInputs = new LinkedHashMap<>();
+    }
+
+    private void showNoteSuggestions(CopyRow r, String text) {
+        String t = text.trim();
+        if (t.length() < 2 || !r.etNote.hasFocus()) {
+            notePopup.dismiss();
+            return;
+        }
+        List<String> matches = txnDao.findDistinctNotesContaining(t, bookId, 8);
+        if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(t))) {
+            notePopup.dismiss();
+            return;
+        }
+        popupRow = r;
+        notePopup.setAnchorView(r.etNote);
+        noteAdapter.clear();
+        noteAdapter.addAll(matches);
+        noteAdapter.setQuery(t);
+        noteAdapter.notifyDataSetChanged();
+        notePopup.show();
+    }
+
+    private void loadCustomFields(CopyRow r) {
+        r.customContainer.removeAllViews();
+        r.customInputs.clear();
+        for (ColumnDefinition cd : colDefDao.findByType(r.type)) {
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            blp.topMargin = dp(10);
+            box.setLayoutParams(blp);
+
+            TextView label = new TextView(this);
+            label.setText(cd.getColName());
+            label.setTextColor(getColor(R.color.primary));
+            label.setTextSize(11);
+            box.addView(label);
+
+            EditText input = new EditText(this);
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+            ilp.topMargin = dp(4);
+            input.setLayoutParams(ilp);
+            input.setBackgroundResource(R.drawable.bg_input_box);
+            input.setPadding(dp(12), 0, dp(12), 0);
+            input.setTextSize(14);
+            box.addView(input);
+
+            r.customContainer.addView(box);
+            r.customInputs.put(cd.getColKey(), input);
+        }
     }
 }
