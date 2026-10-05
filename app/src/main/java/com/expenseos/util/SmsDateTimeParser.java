@@ -30,9 +30,12 @@ public class SmsDateTimeParser {
     private static final Pattern PAT_COMPACT_DATETIME =
             Pattern.compile("on\\s+(\\d{1,2}[A-Za-z]{3}\\d{2})\\s+(\\d{1,2}:\\d{2})");
     private static final Pattern PAT_DT_DATETIME =
-            Pattern.compile("Dt\\s+(\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2})");
+            Pattern.compile("\\b(?:Dt\\s+)?(\\d{2}-\\d{2}-\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2})");
     private static final Pattern PAT_DATE_ONLY =
             Pattern.compile("on\\s+(\\d{1,2}-[A-Za-z]{3}-\\d{4})");
+
+    private static final Pattern PAT_SLASH_DATE_ONLY =
+            Pattern.compile("\\bon\\s+(\\d{2}/\\d{2}/(?:\\d{4}|\\d{2}))\\b");
 
     public static LocalDateTime extractDateTime(String body, long smsReceivedMillis) {
         if (body == null) return receivedAt(smsReceivedMillis);
@@ -62,6 +65,19 @@ public class SmsDateTimeParser {
         }
 
         // Nothing matched — fall back entirely to when the SMS was received.
+        Matcher m4 = PAT_SLASH_DATE_ONLY.matcher(body);
+        if (m4.find()) {
+            try {
+                String s = m4.group(1);
+                String fmt = s.length() == 8 ? "dd/MM/yy" : "dd/MM/yyyy";
+                LocalDate d = LocalDate.parse(s, DateTimeFormatter.ofPattern(fmt, Locale.ENGLISH));
+                // date-only → SMS received time of day oda pair
+                return LocalDateTime.of(d, receivedAt(smsReceivedMillis).toLocalTime());
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Nothing matched — fall back entirely to when the SMS was received.
         return receivedAt(smsReceivedMillis);
     }
 
@@ -76,7 +92,7 @@ public class SmsDateTimeParser {
         if (upper.contains("IMPS")) return "IMPS";
         if (upper.contains("RTGS")) return "RTGS";
         if (upper.contains("ATM")) return "ATM";
-        if (upper.contains("POS") || upper.contains("CARD")) return "Card";
+        if (upper.matches("(?s).*\\bPOS\\b.*") || upper.contains("CARD")) return "Card";
         return null; // unrecognized — caller decides the fallback (e.g. "Other")
     }
 

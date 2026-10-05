@@ -1,12 +1,15 @@
 package com.expenseos.ui;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -43,6 +46,8 @@ public class PassbookActivity extends AppCompatActivity {
     private PassbookAdapter adapter;
     private TextView tvCount, tvEmpty;
     private final List<PassbookEntry> entries = new ArrayList<>();
+    private ActivityResultLauncher<Intent> copyLauncher;
+
 
     @Override
     protected void onCreate(Bundle s) {
@@ -57,6 +62,12 @@ public class PassbookActivity extends AppCompatActivity {
         rv.setLayoutManager(new LinearLayoutManager(this));
         tvCount = findViewById(R.id.tvPassbookCount);
         tvEmpty = findViewById(R.id.tvPassbookEmpty);
+
+        copyLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) loadEntries();
+                });
 
         scanSms(); // initial load — also picks up any new SMS since last open
     }
@@ -126,12 +137,18 @@ public class PassbookActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Select Book")
                 .setSingleChoiceItems(names, 0, (d, which) -> pickedIdx[0] = which)
-                .setPositiveButton("Next", (d, w) -> {
-                    CashBook target = books.get(pickedIdx[0]);
-                    confirmAndCopy(selected, target);
-                })
+                .setPositiveButton("Next", (d, w) -> openCopyScreen(selected, books.get(pickedIdx[0])))
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void openCopyScreen(List<PassbookEntry> selected, CashBook target) {
+        long[] ids = new long[selected.size()];
+        for (int i = 0; i < ids.length; i++) ids[i] = selected.get(i).getSmsId();
+        Intent in = new Intent(this, PassbookCopyActivity.class);
+        in.putExtra(PassbookCopyActivity.EXTRA_SMS_IDS, ids);
+        in.putExtra(PassbookCopyActivity.EXTRA_BOOK_ID, target.getId()); // int ah irukkanum
+        copyLauncher.launch(in);
     }
 
     private void confirmAndCopy(List<PassbookEntry> selected, CashBook target) {

@@ -34,11 +34,18 @@ public class SmsParser {
             "\\b(OTP|One Time Password|successfully set the UPI PIN|offer|cashback eligible|win|discount)\\b",
             Pattern.CASE_INSENSITIVE);
 
+    // "Card no. XX8161" (Axis)  |  "Credit Card ending 5068" (SBI)
+    private static final Pattern CARD_LAST4_PATTERN = Pattern.compile(
+            "(?:card\\s*(?:no\\.?|number)?\\s*[:\\-]?\\s*[Xx*]*|ending(?:\\s+with)?\\s*[:\\-]?\\s*[Xx*]*)(\\d{4})\\b",
+            Pattern.CASE_INSENSITIVE);
+
     // Payee extraction — tries each bank's phrasing in turn, first match wins.
     private static final Pattern[] PAYEE_PATTERNS = {
             Pattern.compile("(?:via|thru)\\s+UPI\\s+to\\s+([A-Za-z][A-Za-z .]{1,30}?)\\.", Pattern.CASE_INSENSITIVE), // Federal
             Pattern.compile("\\bto\\s+([A-Za-z][A-Za-z .]{1,30}?)\\s+thru\\s+UPI", Pattern.CASE_INSENSITIVE),          // PNB
             Pattern.compile("Fvg:\\s*([A-Za-z][A-Za-z .]{1,30}?)\\s+Avl", Pattern.CASE_INSENSITIVE),                  // Union Bank
+            Pattern.compile("\\bIST\\s+(.{2,40}?)\\s+Avl", Pattern.CASE_INSENSITIVE | Pattern.DOTALL),                // Axis card
+            Pattern.compile("\\bat\\s+([A-Za-z0-9][A-Za-z0-9 &.*\\-]{1,40}?)\\s+on\\s+\\d", Pattern.CASE_INSENSITIVE), // SBI card
     };
 
     public static PassbookEntry parse(long smsId, String sender, String body, long timestampMillis) {
@@ -72,6 +79,11 @@ public class SmsParser {
         LocalDateTime txnDateTime = SmsDateTimeParser.extractDateTime(body, timestampMillis);
         long txnMillis = txnDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         String paymentType = SmsDateTimeParser.extractPaymentType(body);
+// Cash ku SMS varaadhu → Cash eppavum set aagakoodathu. Detect aagala na UPI.
+        if (paymentType == null || paymentType.trim().isEmpty()
+                || "Cash".equalsIgnoreCase(paymentType.trim())) {
+            paymentType = "UPI";
+        }
 
         PassbookEntry e = new PassbookEntry();
         e.setSmsId(smsId);
@@ -92,5 +104,14 @@ public class SmsParser {
             if (m.find()) return m.group(1).trim();
         }
         return null;
+    }
+
+    /**
+     * Card SMS ku mattum last-4 return pannum, illa na null (a/c ending 1234 UPI SMS-a card nu eduthukka koodathu).
+     */
+    public static String extractCardLast4(String body) {
+        if (body == null || !body.toLowerCase(java.util.Locale.ROOT).contains("card")) return null;
+        Matcher m = CARD_LAST4_PATTERN.matcher(body);
+        return m.find() ? m.group(1) : null;
     }
 }

@@ -62,6 +62,11 @@
         <activity android:name=".ui.AttachmentPreviewActivity" />
         <activity android:name=".ui.SchedulerActivity" />
         <activity android:name=".ui.PassbookActivity" />
+        <activity
+            android:name=".ui.PassbookCopyActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
         <activity android:name=".ui.LogActivity" />
         <activity android:name=".ui.BudgetActivity" />
         <activity android:name=".ui.StatsActivity" />

@@ -1043,6 +1043,15 @@ public class LocalDB extends SQLiteOpenHelper {
         db.execSQL("UPDATE events SET created_at = datetime('now') WHERE created_at = 'datetime(''now'')' OR created_at IS NULL");
         db.execSQL("UPDATE events SET updated_at = datetime('now') WHERE updated_at = 'datetime(''now'')' OR updated_at IS NULL");
 
+        // Card last-4 → payment type name (local only, not synced)
+        db.execSQL("CREATE TABLE IF NOT EXISTS card_mappings (" +
+                "last4        TEXT PRIMARY KEY," +
+                "payment_type TEXT NOT NULL)");
+        
+        db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('8161','AXIS Neo Card')");
+        db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5265','Axis Flipkart Card')");
+        db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5068','SBI Credit Card')");
+
     }
 
     // Helper method: Column இருக்கிறதா இல்லையா என பார்க்க
