@@ -103,4 +103,25 @@ public class SettlementLinkDao {
         }
         return result;
     }
+
+    /**
+     * Same as sumLinkedByCategory(), but keyed by category NAME instead of id —
+     * for CategoryComparisonReport, whose per-month totals (TransactionDao.
+     * expenseByCategory) are grouped by category name, not id (each "virtual
+     * month" is its own CashBook, so category ids aren't comparable across months).
+     */
+    public Map<String, BigDecimal> sumLinkedByCategoryName(int bookId, String type) {
+        Map<String, BigDecimal> result = new HashMap<>();
+        String sql = "SELECT c.name, SUM(sl.amount) FROM settlement_links sl " +
+                "JOIN transactions t ON (t.id = sl.settlement_txn_id OR t.id = sl.linked_txn_id) " +
+                "JOIN categories c ON c.id = t.category_id " +
+                "WHERE t.book_id=? AND t.type=? " +
+                "GROUP BY c.name";
+        try (Cursor c = db.rawQuery(sql, new String[]{String.valueOf(bookId), type})) {
+            while (c.moveToNext()) {
+                result.put(c.getString(0), BigDecimal.valueOf(c.getDouble(1)));
+            }
+        }
+        return result;
+    }
 }

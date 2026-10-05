@@ -294,18 +294,30 @@ public class SchedulerWorker extends Worker {
     // ── CASHBOOK: create next month's cash book if it doesn't exist ────
     // ── CASHBOOK: create this month's set of 3 books if they don't exist ────
     private CashBookResult runCashBook(Context ctx) {
-        java.time.LocalDate thisMonth = java.time.LocalDate.now().withDayOfMonth(1);
+        // This job ticks DAILY now — what actually gets created depends on
+        // today's date: the 3 "regular" books on day 1, the Credit Card
+        // book (for next month) on day 14. Any other day, nothing to do.
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate thisMonth = today.withDayOfMonth(1);
         java.time.LocalDate nextMonth = thisMonth.plusMonths(2);
 
         String thisMonthName = thisMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
         String nextMonthName = nextMonth.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy"));
 
-        String[] namesToCreate = {
-                thisMonthName,                          // e.g. "August 2026"
-                thisMonthName + " Expense",              // e.g. "August 2026 Expense"
-                nextMonthName + " Credit Card",          // e.g. "September 2026 Credit Card"
-                thisMonthName + " Food"                  // e.g. "August 2026 Food" — FoodTrackerActivity idha use pannudhu
-        };
+        List<String> namesToCreate = new ArrayList<>();
+        if (today.getDayOfMonth() >= 1) {
+            namesToCreate.add(thisMonthName);                  // e.g. "August 2026"
+            namesToCreate.add(thisMonthName + " Expense");      // e.g. "August 2026 Expense"
+            namesToCreate.add(thisMonthName + " Food");         // e.g. "August 2026 Food" — FoodTrackerActivity idha use pannudhu
+        }
+        if (today.getDayOfMonth() >= 14) {
+            namesToCreate.add(nextMonthName + " Credit Card");  // e.g. "September 2026 Credit Card"
+        }
+
+//        if (namesToCreate.isEmpty()) {
+//            return new CashBookResult(false,
+//                    "Nothing scheduled for day " + today.getDayOfMonth() + " (books are created on day 1 and day 14)", 0);
+//        }
 
         com.expenseos.dao.CashBookDao bookDao = new com.expenseos.dao.CashBookDao(ctx);
         java.util.List<com.expenseos.model.CashBook> existing = bookDao.findAll();

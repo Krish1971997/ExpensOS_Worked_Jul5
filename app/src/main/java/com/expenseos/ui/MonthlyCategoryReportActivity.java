@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -47,7 +48,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
     private final ExecutorService exec = Executors.newSingleThreadExecutor();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
-    private CheckBox cbIncludeCurrentMonth;
+    private CheckBox cbIncludeCurrentMonth, cbNetSettlements;
     private Spinner spMonthsCount;
 
     @Override
@@ -69,6 +70,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
         cbIncludeCurrentMonth = findViewById(R.id.cbIncludeCurrentMonth);
         spMonthsCount = findViewById(R.id.spMonthsCount);
+        cbNetSettlements = addNetSettlementsCheckbox(cbIncludeCurrentMonth);
 
         List<String> monthOptions = new ArrayList<>();
         for (int i = 2; i <= 12; i++) monthOptions.add(i + " months");
@@ -83,6 +85,26 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         findViewById(R.id.btnExportExcel).setOnClickListener(v -> showExcelOptionsSheet());
     }
 
+    /**
+     * Stats screen-oda "Net Settlements" checkbox-ஐயே idhуலும் add pannуறадு — XML
+     * touch pannாmலே, cbIncludeCurrentMonth-oda parent-la adutha row-ah insert
+     * pannுறோம். Default checked — Stats-la default state matching.
+     */
+    private CheckBox addNetSettlementsCheckbox(View anchor) {
+        ViewGroup parent = (ViewGroup) anchor.getParent();
+        int idx = parent.indexOfChild(anchor);
+
+        CheckBox cb = new CheckBox(this);
+        cb.setId(View.generateViewId());
+        cb.setText("Net Settlements");
+        cb.setChecked(true);
+        cb.setOnCheckedChangeListener((CompoundButton btn, boolean checked) -> {
+            if (currentResult != null) generateReport(); // re-pull with the new flag
+        });
+        parent.addView(cb, idx + 1);
+        return cb;
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -93,7 +115,8 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         int monthsCount = spMonthsCount.getSelectedItemPosition() + 2; // position 0 = "2 months"
         boolean includeCurrent = cbIncludeCurrentMonth.isChecked();
 
-        currentResult = CategoryComparisonReport.build(this, bookId, monthsCount, includeCurrent);
+        boolean netSettlements = cbNetSettlements.isChecked();
+        currentResult = CategoryComparisonReport.build(this, bookId, monthsCount, includeCurrent, netSettlements);
 
         TextView tvRange = findViewById(R.id.tvMcrRange);
         LinearLayout header = findViewById(R.id.rowMcrHeader);
@@ -223,7 +246,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
             CategoryComparisonReport.RowData row = rows.get(pos);
             h.tvCategory.setText(row.category);
             for (int i = 0; i < row.monthlyAmounts.size(); i++)
-                h.tvMonths[i].setText("₹" + row.monthlyAmounts.get(i).toPlainString());
+                h.tvMonths[i].setText("₹" + String.format(Locale.US, "%.2f", row.monthlyAmounts.get(i)));
             h.tvPct.setText(String.format(Locale.US, "%+.1f%%", row.pctChange));
             h.tvPct.setBackgroundColor(getColor(colorFor(row.trend)));
         }
@@ -427,7 +450,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
         totalRow.removeAllViews();
         totalRow.addView(totalCell("Total", COL_CATEGORY_DP, Gravity.START));
         for (BigDecimal amt : result.monthlyTotals)
-            totalRow.addView(totalCell("₹" + amt.toPlainString(), COL_MONTH_DP, Gravity.END));
+            totalRow.addView(totalCell("₹" + String.format(Locale.US, "%.2f", amt), COL_MONTH_DP, Gravity.END));
         totalRow.addView(totalCell("—", COL_PCT_DP, Gravity.END));
     }
 

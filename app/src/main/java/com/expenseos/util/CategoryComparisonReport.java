@@ -68,12 +68,19 @@ public class CategoryComparisonReport {
      * @param includeCurrent true = last N months ending THIS month; false = last N months ending LAST month
      */
     public static Result build(Context ctx, int bookId, int monthsCount, boolean includeCurrent) {
+        return build(ctx, bookId, monthsCount, includeCurrent, true); // net-settlements ON by default
+    }
+
+    /**
+     * @param netSettlements true = subtract settled amounts from each category's total (Stats "Net Settlements" behavior)
+     */
+    public static Result build(Context ctx, int bookId, int monthsCount, boolean includeCurrent, boolean netSettlements) {
         // "bookId" indha app-oda active book — adhoda name-la irukkura
         // series suffix (e.g. "Credit Card") eduthu, andha SERIES-oda
         // report-ah build pannurom (ovvoru month-um thani cashbook-nu).
         com.expenseos.model.CashBook activeBook = new com.expenseos.dao.CashBookDao(ctx).findById(bookId);
         String suffix = activeBook != null ? MonthBookResolver.extractSuffix(activeBook.getName()) : "";
-        return buildForSuffix(ctx, suffix, monthsCount, includeCurrent);
+        return buildForSuffix(ctx, suffix, monthsCount, includeCurrent, netSettlements);
     }
 
     /**
@@ -84,6 +91,13 @@ public class CategoryComparisonReport {
      * @param suffix "" for plain "<Month> <Year>" books, "Expense" / "Credit Card" etc for that series.
      */
     public static Result buildForSuffix(Context ctx, String suffix, int monthsCount, boolean includeCurrent) {
+        return buildForSuffix(ctx, suffix, monthsCount, includeCurrent, true); // net-settlements ON by default
+    }
+
+    /**
+     * @param netSettlements true = subtract settled amounts from each category's total (Stats "Net Settlements" behavior)
+     */
+    public static Result buildForSuffix(Context ctx, String suffix, int monthsCount, boolean includeCurrent, boolean netSettlements) {
         monthsCount = Math.max(2, Math.min(12, monthsCount));
 
         YearMonth anchor = YearMonth.from(includeCurrent ? LocalDate.now() : LocalDate.now().minusMonths(1));
@@ -98,6 +112,7 @@ public class CategoryComparisonReport {
         YearMonth prevMonth = months.get(months.size() - 2);
 
         TransactionDao dao = new TransactionDao(ctx);
+        com.expenseos.dao.SettlementLinkDao settleDao = new com.expenseos.dao.SettlementLinkDao(ctx);
         int resolvedBookId = 0;
 
         // category -> (month -> total)
@@ -115,10 +130,20 @@ public class CategoryComparisonReport {
             if (ym.equals(lastMonth)) resolvedBookId = monthBook.getId();
 
             List<Map<String, Object>> rowsForMonth = dao.expenseByCategory(monthBook.getId());
+            // Stats "Net Settlements" — same per-book subtraction, applied per virtual
+            // month (each month here IS its own CashBook, so this is a per-book call
+            // exactly like StatsActivity's, just repeated across months).
+            Map<String, BigDecimal> linkedByCategoryName = netSettlements
+                    ? settleDao.sumLinkedByCategoryName(monthBook.getId(), "EXPENSE")
+                    : java.util.Collections.emptyMap();
             for (Map<String, Object> r : rowsForMonth) {
                 String cat = (String) r.get("name");
                 BigDecimal total = (BigDecimal) r.get("total");
                 if (total == null) total = BigDecimal.ZERO;
+                if (netSettlements) {
+                    BigDecimal linked = linkedByCategoryName.getOrDefault(cat, BigDecimal.ZERO);
+                    total = total.subtract(linked).max(BigDecimal.ZERO);
+                }
                 byCategory.computeIfAbsent(cat, k -> new LinkedHashMap<>()).put(ym, total);
             }
         }
