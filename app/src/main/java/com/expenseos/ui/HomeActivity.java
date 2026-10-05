@@ -62,7 +62,7 @@ public class HomeActivity extends AppCompatActivity {
         setupBottomNav();
         setupDrawer();
         setupCalendarButton();
-        setupFab();
+//        setupFab();
 
         // Load HOME tab by default
         loadTab(NAV_HOME);

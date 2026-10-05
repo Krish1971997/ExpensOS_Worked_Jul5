@@ -834,6 +834,14 @@ public class TransactionEntryActivity extends AppCompatActivity {
             return;
         }
 
+        String selectedPaymentName = ((PaymentType) spPaymentType.getSelectedItem()).getName();
+        String bookValidationError = AppConfig.validatePaymentTypeForBook(
+                AppConfig.get(this).getActiveBookName(), selectedPaymentName);
+        if (bookValidationError != null) {
+            Toast.makeText(this, bookValidationError, Toast.LENGTH_LONG).show();
+            return;
+        }
+
         BigDecimal amount;
         try {
             amount = new BigDecimal(amtStr);

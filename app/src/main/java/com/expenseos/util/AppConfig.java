@@ -146,6 +146,22 @@ public class AppConfig {
         return prefs.getString(KEY_ACTIVE_BOOK_NAME, "General");
     }
 
+    /**
+     * If the cashbook name contains "credit card" (case-insensitive), the chosen
+     * payment type must itself contain "card" — e.g. a book named "HDFC Credit Card"
+     * shouldn't accept a Cash/UPI payment type. Returns null when valid, else a
+     * user-facing error message.
+     */
+    public static String validatePaymentTypeForBook(String bookName, String paymentType) {
+        if (bookName == null || paymentType == null) return null;
+        boolean isCardBook = bookName.toLowerCase(java.util.Locale.ROOT).contains("credit card");
+        if (!isCardBook) return null;
+        boolean isCardPayment = paymentType.toLowerCase(java.util.Locale.ROOT).contains("card");
+        if (isCardPayment) return null;
+        return "\"" + bookName + "\" is a Credit Card book — payment type must be a card (e.g. \""
+                + bookName + "\"), not \"" + paymentType + "\".";
+    }
+
     // ── Setters ──────────────────────────────────────────────
     public void setDb(String url, String user, String pass) {
         prefs.edit().putString(KEY_DB_URL, url).putString(KEY_DB_USER, user).putString(KEY_DB_PASSWORD, pass).apply();

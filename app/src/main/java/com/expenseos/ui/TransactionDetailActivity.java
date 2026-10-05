@@ -286,7 +286,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
         picker.show(getSupportFragmentManager(), "time_picker");
     }
 
-    
+
     private void updateDateTimeText() {
         tvDetailDate.setText(selectedDate.format(DATE_FMT));
         tvDetailTime.setText(selectedTime.format(TIME_FMT));
@@ -743,6 +743,14 @@ public class TransactionDetailActivity extends AppCompatActivity {
             return false;
         }
 
+        String selectedPaymentName = ((PaymentType) spPaymentType.getSelectedItem()).getName();
+        String detailValidationError = com.expenseos.util.AppConfig.validatePaymentTypeForBook(
+                com.expenseos.util.AppConfig.get(this).getActiveBookName(), selectedPaymentName);
+        if (detailValidationError != null) {
+            Toast.makeText(this, detailValidationError, Toast.LENGTH_LONG).show();
+            return false;
+        }
+
         @SuppressWarnings("unchecked")
         List<CashBook> books = (List<CashBook>) spMoveBook.getTag();
         int newBookId = books != null && spMoveBook.getSelectedItemPosition() >= 0
@@ -844,7 +852,17 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
                     // Current Spinner payment type-ஐ எடுக்க
                     if (spPaymentType.getSelectedItem() != null) {
-                        moved.setPaymentType(((PaymentType) spPaymentType.getSelectedItem()).getName());
+                        String movedPayName = ((PaymentType) spPaymentType.getSelectedItem()).getName();
+                        List<CashBook> movableBooks = (List<CashBook>) spMoveBook.getTag();
+                        int targetBookPos = spMoveBook.getSelectedItemPosition();
+                        String targetBookName = (movableBooks != null && targetBookPos >= 0 && targetBookPos < movableBooks.size())
+                                ? movableBooks.get(targetBookPos).getName() : null;
+                        String moveValidationError = com.expenseos.util.AppConfig.validatePaymentTypeForBook(targetBookName, movedPayName);
+                        if (moveValidationError != null) {
+                            Toast.makeText(this, moveValidationError, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        moved.setPaymentType(movedPayName);
                     } else {
                         moved.setPaymentType(current.getPaymentType());
                     }

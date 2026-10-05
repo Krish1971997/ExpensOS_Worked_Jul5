@@ -277,6 +277,12 @@ public class BulkAddActivity extends AppCompatActivity {
             toast("Select payment type");
             return null;
         }
+        String bookValidationError = AppConfig.validatePaymentTypeForBook(
+                AppConfig.get(this).getActiveBookName(), pt.getName());
+        if (bookValidationError != null) {
+            toast(bookValidationError);
+            return null;
+        }
 
         BulkItem it = new BulkItem();
         it.type = form.type;
