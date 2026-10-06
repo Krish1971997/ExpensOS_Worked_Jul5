@@ -113,6 +113,11 @@
         <activity
             android:name=".ui.RecycleBinActivity"
             android:exported="false" />
+        <!-- Global search — screens + masters + transaction data -->
+        <activity
+            android:name=".ui.GlobalSearchActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <!-- Needed for camera capture in TransactionEntryActivity — the
              camera app writes the photo to a content:// URI we hand it,
              which requires a FileProvider rather than a raw file:// path. -->

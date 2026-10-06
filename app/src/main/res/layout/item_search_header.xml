@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tvSearchGroup"
+    style="@style/Text.Overline"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingHorizontal="@dimen/space_4"
+    android:paddingTop="@dimen/space_4"
+    android:paddingBottom="@dimen/space_2" />

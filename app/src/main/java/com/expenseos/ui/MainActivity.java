@@ -86,10 +86,36 @@ public class MainActivity extends AppCompatActivity {
             startActivity(new Intent(this, ChatActivity.class));
         });
 
+        // Passbook (SMS) — needs the SMS permission before it can parse the inbox.
+        findViewById(R.id.navPassbook).setOnClickListener(v -> {
+            markNavSelected(R.id.navPassbook, R.id.navPassbookIcon, R.id.navPassbookLabel);
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
+            } else {
+                startActivity(new Intent(this, PassbookActivity.class));
+            }
+        });
+
+        findViewById(R.id.navFoodTracker).setOnClickListener(v -> {
+            markNavSelected(R.id.navFoodTracker, R.id.navFoodIcon, R.id.navFoodLabel);
+            startActivity(new Intent(this, FoodTrackerActivity.class));
+        });
+
+        findViewById(R.id.navIntegrations).setOnClickListener(v -> {
+            markNavSelected(R.id.navIntegrations, R.id.navIntegrationsIcon, R.id.navIntegrationsLabel);
+            startActivity(new Intent(this, IntegrationsActivity.class));
+        });
+
         findViewById(R.id.navMore).setOnClickListener(v -> {
             markNavSelected(R.id.navMore, R.id.navMoreIcon, R.id.navMoreLabel);
             showMoreSheet();
         });
+
+        // Global search — screens, masters and transactions in one box.
+        findViewById(R.id.btnGlobalSearch).setOnClickListener(v ->
+                startActivity(new Intent(this, GlobalSearchActivity.class)));
 
         findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
 
@@ -149,6 +175,9 @@ public class MainActivity extends AppCompatActivity {
         int[][] sets = {
                 {R.id.navStatsIcon, R.id.navStatsLabel},
                 {R.id.navAiIcon, R.id.navAiAssistantLabel},
+                {R.id.navPassbookIcon, R.id.navPassbookLabel},
+                {R.id.navFoodIcon, R.id.navFoodLabel},
+                {R.id.navIntegrationsIcon, R.id.navIntegrationsLabel},
                 {R.id.navMoreIcon, R.id.navMoreLabel}
         };
         for (int[] set : sets) {

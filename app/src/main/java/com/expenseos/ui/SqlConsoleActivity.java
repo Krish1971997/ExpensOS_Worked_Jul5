@@ -88,9 +88,13 @@ public class SqlConsoleActivity extends AppCompatActivity {
     // ── Autocomplete ─────────────────────────────────────
     private static final String[] SQL_KEYWORDS = {"SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "AND", "OR", "NOT", "NULL", "IN", "LIKE", "LIMIT", "OFFSET", "ORDER", "BY", "GROUP", "ASC", "DESC", "AS", "JOIN", "LEFT", "INNER", "ON", "DISTINCT", "COUNT", "SUM", "AVG", "MAX", "MIN"};
     private final List<String> tableNames = new ArrayList<>();
+    // table -> its own columns, read live from PRAGMA table_info. Nothing is
+    // hardcoded: the app ships new tables/columns, this map just re-reads them.
+    private final java.util.Map<String, List<String>> tableColumns = new java.util.LinkedHashMap<>();
     private final List<String> allColumns = new ArrayList<>(); // deduped, across every table
     private HorizontalScrollView scrollSuggestions;
     private LinearLayout llSuggestions;
+    private TextView tvSchemaHint;   // "transactions · 11 columns"
 
     @Override
     protected void onCreate(Bundle s) {
@@ -123,6 +127,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
 
         scrollSuggestions = findViewById(R.id.scrollSqlSuggestions);
         llSuggestions = findViewById(R.id.llSqlSuggestions);
+        tvSchemaHint = findViewById(R.id.tvSqlSchemaHint);
 
         scrollHistory = findViewById(R.id.scrollSqlHistory);
         llHistory = findViewById(R.id.llSqlHistory);
@@ -186,13 +191,67 @@ public class SqlConsoleActivity extends AppCompatActivity {
 
         Set<String> cols = new LinkedHashSet<>();
         for (String table : tableNames) {
+            List<String> own = new ArrayList<>();
             try (Cursor c = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
                 int nameIdx = c.getColumnIndex("name");
-                while (c.moveToNext()) cols.add(c.getString(nameIdx));
+                while (c.moveToNext()) {
+                    own.add(c.getString(nameIdx));
+                    cols.add(c.getString(nameIdx));
+                }
             } catch (Exception ignored) {
             }
+            tableColumns.put(table, own);
         }
         allColumns.addAll(cols);
+    }
+
+    /**
+     * Which table is the cursor currently sitting in? Two forms are handled:
+     * <p>
+     * • <b>qualified</b> — {@code transactions.am|} → "transactions"<br>
+     * • <b>contextual</b> — the nearest {@code FROM / JOIN / UPDATE / INTO <table>}
+     *   before the cursor → that table.
+     * <p>
+     * Returns null when the cursor isn't inside a known table's context, in
+     * which case the suggestion row falls back to tables + all columns.
+     */
+    private String activeTableFor(String text, int cursor) {
+        int end = Math.min(cursor, text.length());
+        if (end < 0) return null;
+        String before = text.substring(0, end);
+
+        // ── qualified form: "<table>.<partial>" ──
+        int wordStart = end;
+        while (wordStart > 0 && isWordChar(text.charAt(wordStart - 1))) wordStart--;
+        int dot = wordStart - 1;
+        if (dot >= 0 && text.charAt(dot) == '.') {
+            int q = dot;
+            while (q > 0 && isWordChar(text.charAt(q - 1))) q--;
+            String resolved = resolveTable(text.substring(q, dot));
+            if (resolved != null) return resolved;
+        }
+
+        // ── contextual form: last FROM/JOIN/UPDATE/INTO <table> ──
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?i)\\b(FROM|JOIN|UPDATE|INTO)\\s+([A-Za-z_][A-Za-z_0-9]*)")
+                .matcher(before);
+        String found = null;
+        while (m.find()) {
+            String resolved = resolveTable(m.group(2));
+            if (resolved != null) found = resolved;
+        }
+        return found;
+    }
+
+    private String resolveTable(String name) {
+        if (name == null) return null;
+        for (String t : tableNames) if (t.equalsIgnoreCase(name)) return t;
+        return null;
+    }
+
+    private boolean containsIgnoreCase(List<String> list, String value) {
+        for (String s : list) if (s.equalsIgnoreCase(value)) return true;
+        return false;
     }
 
     // ── Suggestion chips — filtered by whatever word the cursor is
@@ -226,18 +285,43 @@ public class SqlConsoleActivity extends AppCompatActivity {
         while (start > 0 && isWordChar(text.charAt(start - 1))) start--;
         String prefix = text.substring(start, cursor);
 
+        // Nothing typed yet → offer the schema itself, so you can browse
+        // tables without remembering a single name.
         if (prefix.isEmpty()) {
-            hideSuggestions();
+            tvSchemaHint.setText(tableNames.size() + " tables — tap one to start a query");
+            showSuggestions(new ArrayList<>(tableNames), start, cursor);
             return;
         }
 
         List<String> matches = new ArrayList<>();
         String prefixUpper = prefix.toUpperCase(Locale.ROOT);
         for (String kw : SQL_KEYWORDS) if (kw.startsWith(prefixUpper)) matches.add(kw);
-        for (String t : tableNames)
-            if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)) matches.add(t);
-        for (String col : allColumns)
-            if (col.toUpperCase(Locale.ROOT).startsWith(prefixUpper)) matches.add(col);
+
+        // Once a table is in play (FROM/JOIN/UPDATE/INTO, or a "table."
+        // qualifier), the column list narrows to THAT table's columns only —
+        // no more wading through every column in the database.
+        String activeTable = activeTableFor(text, cursor);
+        if (activeTable != null) {
+            List<String> own = tableColumns.get(activeTable);
+            if (own != null) {
+                for (String col : own)
+                    if (col.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
+                            && !containsIgnoreCase(matches, col)) matches.add(col);
+            }
+            // tables stay listed so a JOIN can still be typed
+            for (String t : tableNames)
+                if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
+                        && !containsIgnoreCase(matches, t)) matches.add(t);
+            tvSchemaHint.setText(activeTable + " · "
+                    + (own == null ? 0 : own.size()) + " columns");
+        } else {
+            for (String t : tableNames)
+                if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)) matches.add(t);
+            for (String col : allColumns)
+                if (col.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
+                        && !containsIgnoreCase(matches, col)) matches.add(col);
+            tvSchemaHint.setText("all tables + columns");
+        }
 
         if (matches.isEmpty() || (matches.size() == 1 && matches.get(0).equalsIgnoreCase(prefix))) {
             hideSuggestions();
@@ -296,8 +380,14 @@ public class SqlConsoleActivity extends AppCompatActivity {
 
         chip.setOnClickListener(v -> {
             String text = etSql.getText().toString();
-            String expansion = KEYWORD_EXPANSIONS.get(word.toUpperCase(Locale.ROOT));
-            String replacement = expansion != null ? expansion : word + " ";
+            String replacement;
+            if (text.trim().isEmpty() && resolveTable(word) != null) {
+                // Empty box + a table name → drop in a ready-to-run query.
+                replacement = "SELECT * FROM " + word + " LIMIT 20;";
+            } else {
+                String expansion = KEYWORD_EXPANSIONS.get(word.toUpperCase(Locale.ROOT));
+                replacement = expansion != null ? expansion : word + " ";
+            }
             String newText = text.substring(0, wordStart) + replacement + text.substring(wordEnd);
             etSql.setText(newText);
             etSql.setSelection(wordStart + replacement.length());

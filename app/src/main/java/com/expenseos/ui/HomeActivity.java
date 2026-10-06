@@ -50,6 +50,13 @@ public class HomeActivity extends AppCompatActivity {
             return;
         }
 
+        // Global search — reachable from every tab of the shell.
+        View searchBtn = findViewById(R.id.btnGlobalSearch);
+        if (searchBtn != null) {
+            searchBtn.setOnClickListener(v ->
+                    startActivity(new Intent(this, GlobalSearchActivity.class)));
+        }
+
         drawerLayout = findViewById(R.id.drawerLayout);
         ((TextView) findViewById(R.id.tvBookTitle)).setText(bookName);
         ((TextView) findViewById(R.id.drawerBookName)).setText("📒 " + bookName);

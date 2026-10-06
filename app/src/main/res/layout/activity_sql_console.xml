@@ -68,6 +68,18 @@
                 android:padding="10dp"
                 android:textSize="13sp" />
 
+            <!-- Live schema context: which table the cursor is in, and how
+                 many columns that table has. Driven by PRAGMA table_info,
+                 never a hardcoded list. -->
+            <TextView
+                android:id="@+id/tvSqlSchemaHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Schema loading…"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
+
             <HorizontalScrollView
                 android:id="@+id/scrollSqlHistory"
                 android:layout_width="match_parent"

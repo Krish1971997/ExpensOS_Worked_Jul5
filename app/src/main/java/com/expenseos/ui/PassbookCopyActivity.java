@@ -283,6 +283,10 @@ public class PassbookCopyActivity extends AppCompatActivity {
         r.badge = r.root.findViewById(R.id.viewCardBadge);
         r.tvIndex = r.root.findViewById(R.id.tvCardIndex);
         r.tvAmountHead = r.root.findViewById(R.id.tvCardAmount);
+        r.tvHeadMeta = r.root.findViewById(R.id.tvCardHeadMeta);
+        r.tvCat = r.root.findViewById(R.id.tvCardCat);
+        r.tvSub = r.root.findViewById(R.id.tvCardSub);
+        r.tvPay = r.root.findViewById(R.id.tvCardPay);
         r.tvSummary = r.root.findViewById(R.id.tvCardSummary);
         r.tvStatus = r.root.findViewById(R.id.tvCardStatus);
         r.tvChevron = r.root.findViewById(R.id.tvCardChevron);
@@ -336,6 +340,16 @@ public class PassbookCopyActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> p) {
             }
         });
+        r.spPayment.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                updateHeaderMeta(r);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
         wireNote(r);
         r.etAmount.addTextChangedListener(new SimpleWatcher(() -> {
             refreshHeader(r);
@@ -367,16 +381,25 @@ public class PassbookCopyActivity extends AppCompatActivity {
         String note = r.etNote.getText().toString().trim();
 
         if (cat == null) {
+            r.tvCat.setVisibility(View.GONE);
+            r.tvSub.setVisibility(View.GONE);
+            r.tvSummary.setVisibility(View.VISIBLE);
             r.tvSummary.setText("Category needed");
             r.tvSummary.setTextColor(getColor(R.color.red));
         } else {
-            StringBuilder sb = new StringBuilder(String.valueOf(cat));
-            if (sub != null) sb.append(" ▸ ").append(sub);
-            else if (r.spSub.getVisibility() == View.VISIBLE) sb.append(" ▸ sub-category needed");
-            if (!note.isEmpty()) sb.append(" • ").append(note);
-            r.tvSummary.setText(sb.toString());
+            r.tvCat.setText(String.valueOf(cat));
+            r.tvCat.setVisibility(View.VISIBLE);
+            r.tvSub.setText(sub != null ? String.valueOf(sub) : "");
+            r.tvSub.setVisibility(sub != null ? View.VISIBLE : View.GONE);
+
+            boolean subNeeded = sub == null && r.spSub.getVisibility() == View.VISIBLE;
+            String line = subNeeded ? "sub-category needed" : note;
+            if (subNeeded && !note.isEmpty()) line += " • " + note;
+            r.tvSummary.setText(line);
+            r.tvSummary.setVisibility(line.isEmpty() ? View.GONE : View.VISIBLE);
             r.tvSummary.setTextColor(getColor(complete ? R.color.text_secondary : R.color.red));
         }
+        
         r.tvStatus.setText(complete ? "✓" : "⚠");
         r.tvStatus.setTextColor(getColor(complete ? R.color.green : R.color.red));
         updateSummary();
@@ -444,6 +467,16 @@ public class PassbookCopyActivity extends AppCompatActivity {
 
     private void updateDateTimeText(CopyRow r) {
         r.tvDateTime.setText(r.date.format(DATE_FMT) + " " + r.time.format(TIME_FMT));
+        updateHeaderMeta(r);
+    }
+
+    // Collapsed header: line 1 = date/time, line 2 = payment chip
+    private void updateHeaderMeta(CopyRow r) {
+        r.tvHeadMeta.setText(r.date.format(DATE_FMT) + " " + r.time.format(TIME_FMT));
+        Object sel = r.spPayment.getSelectedItem();
+        String pay = sel instanceof PaymentType ? ((PaymentType) sel).getName() : "";
+        r.tvPay.setText(pay);
+        r.tvPay.setVisibility(pay.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     // ══════════════════════════════════════════════════════
@@ -610,7 +643,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
         }
 
         android.util.Log.d("KW_DEBUG", "apply cat=" + targetCatId + " pos=" + targetPos + " bookCats=" + r.cats.size());
-        
+
         if (targetPos > 0) {
             if (r.spCategory.getSelectedItemPosition() == targetPos)
                 loadSubCategories(r, targetCatId);
@@ -996,7 +1029,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
         boolean expanded;
 
         View root, header, body, badge, subWrap;
-        TextView tvIndex, tvAmountHead, tvSummary, tvStatus, tvChevron, tvSms, tvDateTime, btnMic, btnAttach, tvKw;
+        TextView tvIndex, tvAmountHead, tvHeadMeta, tvCat, tvSub, tvPay, tvSummary, tvStatus, tvChevron, tvSms, tvDateTime, btnMic, btnAttach, tvKw;
         EditText etAmount, etNote;
         Spinner spPayment, spCategory, spSub;
         LinearLayout attachList;

@@ -38,17 +38,61 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/tvCardAmount"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvCardAmount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvCardHeadMeta"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvCardCat"
+                    style="@style/Badge.Primary"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvCardSub"
+                    style="@style/Badge.Warning"
+                    android:layout_marginStart="@dimen/space_1"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/tvCardPay"
+                    style="@style/Badge"
+                    android:layout_marginStart="@dimen/space_1"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tvCardSummary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
                 android:ellipsize="end"
                 android:singleLine="true"
                 android:textSize="12sp" />
@@ -91,7 +135,7 @@
             android:textColor="@color/text_muted"
             android:textSize="11sp" />
 
-        <!-- Date & Time | Payment Type -->
+        <!-- Date & Time | Amount | Payment Type -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -101,8 +145,8 @@
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1.4"
                 android:orientation="vertical">
 
                 <TextView
@@ -119,15 +163,43 @@
                     android:layout_marginTop="4dp"
                     android:background="@drawable/bg_input_box"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="10dp"
+                    android:paddingHorizontal="8dp"
                     android:textColor="@color/text"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Amount *"
+                    android:textColor="@color/primary"
+                    android:textSize="11sp" />
+
+                <EditText
+                    android:id="@+id/etCardAmount"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/bg_input_box"
+                    android:inputType="numberDecimal"
+                    android:paddingHorizontal="8dp"
+                    android:textColor="@color/text"
+                    android:textSize="13sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="4dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -153,38 +225,12 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Amount | Category -->
+        <!-- Category -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Amount *"
-                    android:textColor="@color/primary"
-                    android:textSize="11sp" />
-
-                <EditText
-                    android:id="@+id/etCardAmount"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/bg_input_box"
-                    android:inputType="numberDecimal"
-                    android:paddingHorizontal="12dp"
-                    android:textColor="@color/text"
-                    android:textSize="14sp" />
-            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="0dp"

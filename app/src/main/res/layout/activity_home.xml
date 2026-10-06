@@ -49,6 +49,13 @@
             </LinearLayout>
 
             <ImageButton
+                android:id="@+id/btnGlobalSearch"
+                style="@style/IconButton"
+                android:contentDescription="Global search"
+                android:src="@drawable/ic_search"
+                app:tint="@color/text" />
+
+            <ImageButton
                 android:id="@+id/btnCalendarView"
                 style="@style/IconButton"
                 android:contentDescription="Calendar view"

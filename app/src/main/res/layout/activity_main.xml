@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- activity_main.xml — Cash Books list + bottom navigation.
+     Bottom nav now carries all six top-level destinations the app needs:
+     Cashbooks · Stats · AI Bot · Passbook (SMS) · Food Tracker · Integrations.
+     Six items do not fit a weight-distributed bar, so the bar is a
+     horizontally scrollable strip of fixed-width items. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -24,6 +29,17 @@
             android:textColor="@color/primary"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btnGlobalSearch"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Global search"
+            android:padding="7dp"
+            android:src="@drawable/ic_search"
+            app:tint="@color/primary" />
 
         <Button
             android:id="@+id/btnRestoreCloud"
@@ -134,98 +150,182 @@
             android:padding="6dp" />
     </LinearLayout>
 
-    <!-- Bottom nav — Android standard: 4 top-level tabs.
-         Cashbooks / Stats / AI Bot / More (PassBook, Food Tracker,
-         Integrations, All Txns, Restore live in the "More" sheet). -->
-    <LinearLayout
+    <!-- Bottom nav — six destinations. HorizontalScrollView because six
+         fixed-width items cannot share the width of a phone screen
+         without the labels truncating. -->
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="@dimen/bottom_nav_height"
         android:background="@color/nav_bg"
         android:elevation="@dimen/elevation_2"
-        android:orientation="horizontal">
+        android:fillViewport="true"
+        android:scrollbars="none">
 
         <LinearLayout
-            android:id="@+id/navCashbooks"
-            style="@style/NavItem">
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
 
-            <ImageView
-                android:id="@+id/navCashbooksIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_book"
-                app:tint="@color/primary" />
+            <LinearLayout
+                android:id="@+id/navCashbooks"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
 
-            <TextView
-                android:id="@+id/navCashbooksLabel"
-                style="@style/NavLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Cashbooks"
-                android:textColor="@color/primary" />
+                <ImageView
+                    android:id="@+id/navCashbooksIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_book"
+                    app:tint="@color/primary" />
+
+                <TextView
+                    android:id="@+id/navCashbooksLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Cashbooks"
+                    android:textColor="@color/primary" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navStats"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navStatsIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_stats"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navStatsLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Stats"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navAiAssistant"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navAiIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_ai"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navAiAssistantLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AI Bot"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navPassbook"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navPassbookIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_passbook"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navPassbookLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Passbook"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navFoodTracker"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navFoodIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_food"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navFoodLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Food"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navIntegrations"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navIntegrationsIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_link"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navIntegrationsLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Integrations"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/navMore"
+                style="@style/NavItem"
+                android:layout_width="78dp"
+                android:layout_weight="0">
+
+                <ImageView
+                    android:id="@+id/navMoreIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_more"
+                    app:tint="@color/text_muted" />
+
+                <TextView
+                    android:id="@+id/navMoreLabel"
+                    style="@style/NavLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="More"
+                    android:textColor="@color/text_muted" />
+            </LinearLayout>
         </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navStats"
-            style="@style/NavItem">
-
-            <ImageView
-                android:id="@+id/navStatsIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_stats"
-                app:tint="@color/text_muted" />
-
-            <TextView
-                android:id="@+id/navStatsLabel"
-                style="@style/NavLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Stats"
-                android:textColor="@color/text_muted" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navAiAssistant"
-            style="@style/NavItem">
-
-            <ImageView
-                android:id="@+id/navAiIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_ai"
-                app:tint="@color/text_muted" />
-
-            <TextView
-                android:id="@+id/navAiAssistantLabel"
-                style="@style/NavLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="AI Bot"
-                android:textColor="@color/text_muted" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navMore"
-            style="@style/NavItem">
-
-            <ImageView
-                android:id="@+id/navMoreIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_more"
-                app:tint="@color/text_muted" />
-
-            <TextView
-                android:id="@+id/navMoreLabel"
-                style="@style/NavLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="More"
-                android:textColor="@color/text_muted" />
-        </LinearLayout>
-    </LinearLayout>
+    </HorizontalScrollView>
 </LinearLayout>
