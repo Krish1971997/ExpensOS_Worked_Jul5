@@ -210,7 +210,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
      * <p>
      * • <b>qualified</b> — {@code transactions.am|} → "transactions"<br>
      * • <b>contextual</b> — the nearest {@code FROM / JOIN / UPDATE / INTO <table>}
-     *   before the cursor → that table.
+     * before the cursor → that table.
      * <p>
      * Returns null when the cursor isn't inside a known table's context, in
      * which case the suggestion row falls back to tables + all columns.
@@ -234,19 +234,30 @@ public class SqlConsoleActivity extends AppCompatActivity {
         // ── contextual form: last FROM/JOIN/UPDATE/INTO <table> ──
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("(?i)\\b(FROM|JOIN|UPDATE|INTO)\\s+([A-Za-z_][A-Za-z_0-9]*)")
-                .matcher(before);
-        String found = null;
+                .matcher(text);
+        String found = null, firstAfter = null;
         while (m.find()) {
             String resolved = resolveTable(m.group(2));
-            if (resolved != null) found = resolved;
+            if (resolved == null) continue;
+            if (m.start() < end) found = resolved;            // nearest before cursor
+            else if (firstAfter == null) firstAfter = resolved; // "select a, b| from t"
         }
-        return found;
+        return found != null ? found : firstAfter;
     }
 
     private String resolveTable(String name) {
         if (name == null) return null;
         for (String t : tableNames) if (t.equalsIgnoreCase(name)) return t;
         return null;
+    }
+
+    // Word just before the one being typed, upper-cased ("" after a comma/start).
+    private String previousWord(String text, int wordStart) {
+        int i = wordStart;
+        while (i > 0 && Character.isWhitespace(text.charAt(i - 1))) i--;
+        int end = i;
+        while (i > 0 && isWordChar(text.charAt(i - 1))) i--;
+        return text.substring(i, end).toUpperCase(Locale.ROOT);
     }
 
     private boolean containsIgnoreCase(List<String> list, String value) {
@@ -285,11 +296,28 @@ public class SqlConsoleActivity extends AppCompatActivity {
         while (start > 0 && isWordChar(text.charAt(start - 1))) start--;
         String prefix = text.substring(start, cursor);
 
-        // Nothing typed yet → offer the schema itself, so you can browse
-        // tables without remembering a single name.
+        String activeTable = activeTableFor(text, cursor);
+        String prev = previousWord(text, start);
+        boolean wantsTable = prev.equals("FROM") || prev.equals("JOIN")
+                || prev.equals("INTO") || prev.equals("UPDATE");
+
+        // Nothing typed yet
         if (prefix.isEmpty()) {
-            tvSchemaHint.setText(tableNames.size() + " tables — tap one to start a query");
-            showSuggestions(new ArrayList<>(tableNames), start, cursor);
+            if (activeTable == null || wantsTable) {
+                // no table in play yet → browse tables
+                tvSchemaHint.setText(tableNames.size() + " tables — tap one to start a query");
+                showSuggestions(new ArrayList<>(tableNames), start, cursor);
+            } else if (resolveTable(prev) != null) {
+                // "FROM transactions " → next clause
+                tvSchemaHint.setText(activeTable + " · next clause");
+                showSuggestions(new ArrayList<>(java.util.Arrays.asList(
+                        "WHERE", "ORDER", "GROUP", "LIMIT", "JOIN")), start, cursor);
+            } else {
+                // "WHERE |", "SELECT | FROM t", "id, |" → that table's columns only
+                List<String> own = tableColumns.get(activeTable);
+                tvSchemaHint.setText(activeTable + " · " + (own == null ? 0 : own.size()) + " columns");
+                showSuggestions(own == null ? new ArrayList<>() : new ArrayList<>(own), start, cursor);
+            }
             return;
         }
 
@@ -300,18 +328,20 @@ public class SqlConsoleActivity extends AppCompatActivity {
         // Once a table is in play (FROM/JOIN/UPDATE/INTO, or a "table."
         // qualifier), the column list narrows to THAT table's columns only —
         // no more wading through every column in the database.
-        String activeTable = activeTableFor(text, cursor);
-        if (activeTable != null) {
+        if (wantsTable) {
+            // right after FROM / JOIN / INTO / UPDATE → table names only
+            for (String t : tableNames)
+                if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
+                        && !containsIgnoreCase(matches, t)) matches.add(t);
+            tvSchemaHint.setText("tables");
+        } else if (activeTable != null) {
             List<String> own = tableColumns.get(activeTable);
             if (own != null) {
                 for (String col : own)
                     if (col.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
                             && !containsIgnoreCase(matches, col)) matches.add(col);
             }
-            // tables stay listed so a JOIN can still be typed
-            for (String t : tableNames)
-                if (t.toUpperCase(Locale.ROOT).startsWith(prefixUpper)
-                        && !containsIgnoreCase(matches, t)) matches.add(t);
+            // that table's columns only — no other tables
             tvSchemaHint.setText(activeTable + " · "
                     + (own == null ? 0 : own.size()) + " columns");
         } else {

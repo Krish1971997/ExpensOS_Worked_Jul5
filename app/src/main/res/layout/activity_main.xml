@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- activity_main.xml — Cash Books list + bottom navigation.
+<?xml version="1.0" encoding="utf-8"?><!-- activity_main.xml — Cash Books list + bottom navigation.
      Bottom nav now carries all six top-level destinations the app needs:
      Cashbooks · Stats · AI Bot · Passbook (SMS) · Food Tracker · Integrations.
      Six items do not fit a weight-distributed bar, so the bar is a
@@ -24,7 +23,9 @@
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
+            android:maxLines="1"
             android:text="📈 ExpenseOS"
             android:textColor="@color/primary"
             android:textSize="18sp"
@@ -34,29 +35,12 @@
             android:id="@+id/btnGlobalSearch"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Global search"
             android:padding="7dp"
             android:src="@drawable/ic_search"
             app:tint="@color/primary" />
 
-        <Button
-            android:id="@+id/btnRestoreCloud"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="☁ Restore"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btnAllTxn"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginEnd="8dp"
-            android:text="📊 All Txns"
-            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Middle content: header, search, book list -->
@@ -278,29 +262,6 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Food"
-                    android:textColor="@color/text_muted" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/navIntegrations"
-                style="@style/NavItem"
-                android:layout_width="78dp"
-                android:layout_weight="0">
-
-                <ImageView
-                    android:id="@+id/navIntegrationsIcon"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_link"
-                    app:tint="@color/text_muted" />
-
-                <TextView
-                    android:id="@+id/navIntegrationsLabel"
-                    style="@style/NavLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Integrations"
                     android:textColor="@color/text_muted" />
             </LinearLayout>
 

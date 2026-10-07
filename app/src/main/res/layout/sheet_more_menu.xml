@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- sheet_more_menu.xml — bottom-sheet "More" menu for the book list
+<?xml version="1.0" encoding="utf-8"?><!-- sheet_more_menu.xml — bottom-sheet "More" menu for the book list
      screen. Lesser-used destinations moved here so the bottom nav
      stays at the Android-standard 4 tabs. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -25,25 +24,6 @@
         android:text="More tools" />
 
     <LinearLayout
-        android:id="@+id/rowPassbook"
-        style="@style/DrawerItem">
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="💳"
-            android:textSize="17sp" />
-
-        <TextView
-            style="@style/Text.Body"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/space_3"
-            android:text="PassBook (SMS)" />
-    </LinearLayout>
-
-    <LinearLayout
         android:id="@+id/rowAllTxn"
         style="@style/DrawerItem">
 
@@ -60,25 +40,6 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/space_3"
             android:text="All Transactions" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/rowFoodTracker"
-        style="@style/DrawerItem">
-
-        <TextView
-            android:layout_width="28dp"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="🍽"
-            android:textSize="17sp" />
-
-        <TextView
-            style="@style/Text.Body"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/space_3"
-            android:text="Food Tracker" />
     </LinearLayout>
 
     <LinearLayout

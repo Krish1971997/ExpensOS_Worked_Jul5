@@ -53,14 +53,18 @@
 
                 <TextView
                     android:id="@+id/tvCardHeadMeta"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
-                    android:layout_weight="1"
-                    android:ellipsize="end"
                     android:singleLine="true"
                     android:textColor="@color/text_muted"
                     android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tvCardPay"
+                    style="@style/Badge"
+                    android:layout_marginStart="@dimen/space_1"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -82,20 +86,15 @@
                     android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/tvCardPay"
-                    style="@style/Badge"
-                    android:layout_marginStart="@dimen/space_1"
-                    android:visibility="gone" />
+                    android:id="@+id/tvCardSummary"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textSize="12sp" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvCardSummary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:ellipsize="end"
-                android:singleLine="true"
-                android:textSize="12sp" />
         </LinearLayout>
 
         <TextView

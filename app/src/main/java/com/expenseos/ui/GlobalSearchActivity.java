@@ -53,16 +53,10 @@ public class GlobalSearchActivity extends AppCompatActivity {
 
     private static final int REQ_SMS_PERMISSION = 101;
 
-    /** One entry in the static screen/page registry. */
-    private static final class ScreenEntry {
-        final String title, subtitle, keywords, action;
-
-        ScreenEntry(String title, String subtitle, String keywords, String action) {
-            this.title = title;
-            this.subtitle = subtitle;
-            this.keywords = keywords;
-            this.action = action;
-        }
+    /**
+     * One entry in the static screen/page registry.
+     */
+    private record ScreenEntry(String title, String subtitle, String keywords, String action) {
     }
 
     private static final List<ScreenEntry> SCREENS = new ArrayList<>();
@@ -108,6 +102,14 @@ public class GlobalSearchActivity extends AppCompatActivity {
                 "bulk add multiple import batch", "bulkadd"));
         SCREENS.add(new ScreenEntry("Generate Report", "Build a PDF / Excel report",
                 "generate report pdf excel export download", "genreport"));
+        SCREENS.add(new ScreenEntry("Configuration", "App configuration and preferences",
+                "configuration config configure setup preferences options", "config"));
+        SCREENS.add(new ScreenEntry("Configure Budget", "Set up budget categories and limits",
+                "configure budget config setup limits categories allocation", "budgetconfig"));
+        SCREENS.add(new ScreenEntry("Monthly Category Report", "Category-wise totals for each month",
+                "monthly category report month wise breakdown", "monthlyreport"));
+        SCREENS.add(new ScreenEntry("Sequence", "Entry sequence and numbering",
+                "sequence number numbering order series", "sequence"));
     }
 
     private SQLiteDatabase db;
@@ -160,7 +162,9 @@ public class GlobalSearchActivity extends AppCompatActivity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
     }
 
-    /** 220 ms debounce — one DB pass per pause in typing, not per keystroke. */
+    /**
+     * 220 ms debounce — one DB pass per pause in typing, not per keystroke.
+     */
     private void scheduleSearch(String q) {
         if (pending != null) main.removeCallbacks(pending);
         final String query = q;
@@ -313,11 +317,14 @@ public class GlobalSearchActivity extends AppCompatActivity {
     }
 
     private static boolean matches(String query, String... haystacks) {
-        String q = query.toLowerCase(Locale.ROOT);
-        for (String h : haystacks) {
-            if (h != null && h.toLowerCase(Locale.ROOT).contains(q)) return true;
+        StringBuilder sb = new StringBuilder();
+        for (String h : haystacks) if (h != null) sb.append(h).append(' ');
+        String all = sb.toString().toLowerCase(Locale.ROOT);
+        // every word typed must appear somewhere in title / subtitle / keywords
+        for (String word : query.toLowerCase(Locale.ROOT).trim().split("\\s+")) {
+            if (!word.isEmpty() && !all.contains(word)) return false;
         }
-        return false;
+        return true;
     }
 
     private void render(List<SearchResult> out, String query) {
@@ -425,6 +432,21 @@ public class GlobalSearchActivity extends AppCompatActivity {
                 return;
             case "genreport":
                 startActivity(new Intent(this, GenerateReportActivity.class));
+                return;
+            case "config":
+                startActivity(new Intent(this, ConfigActivity.class));
+                return;
+            case "budgetconfig":
+                startActivity(new Intent(this, BudgetConfigActivity.class));
+                return;
+            case "monthlyreport": {
+                Intent i = new Intent(this, MonthlyCategoryReportActivity.class);
+                i.putExtra("bookId", AppConfig.get(this).getActiveBookId());
+                startActivity(i);
+                return;
+            }
+            case "sequence":
+                startActivity(new Intent(this, SequenceActivity.class));
                 return;
             default:
                 Toast.makeText(this, "No screen registered for " + r.action, Toast.LENGTH_SHORT).show();

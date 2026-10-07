@@ -62,7 +62,8 @@ public class MainActivity extends AppCompatActivity {
             premiumLoader.setAlpha(0f);
             premiumLoader.animate().alpha(1f).setDuration(160).start();
             rootView.postDelayed(this::dismissPremiumLoader, 550);
-        } catch (Throwable ignored) { }
+        } catch (Throwable ignored) {
+        }
 
         com.expenseos.util.ReminderScheduler.scheduleDaily9PM(this);
         requestNotificationPermissionIfNeeded();
@@ -103,11 +104,6 @@ public class MainActivity extends AppCompatActivity {
             startActivity(new Intent(this, FoodTrackerActivity.class));
         });
 
-        findViewById(R.id.navIntegrations).setOnClickListener(v -> {
-            markNavSelected(R.id.navIntegrations, R.id.navIntegrationsIcon, R.id.navIntegrationsLabel);
-            startActivity(new Intent(this, IntegrationsActivity.class));
-        });
-
         findViewById(R.id.navMore).setOnClickListener(v -> {
             markNavSelected(R.id.navMore, R.id.navMoreIcon, R.id.navMoreLabel);
             showMoreSheet();
@@ -116,11 +112,6 @@ public class MainActivity extends AppCompatActivity {
         // Global search — screens, masters and transactions in one box.
         findViewById(R.id.btnGlobalSearch).setOnClickListener(v ->
                 startActivity(new Intent(this, GlobalSearchActivity.class)));
-
-        findViewById(R.id.btnRestoreCloud).setOnClickListener(v -> showRestoreCloudDialog());
-
-        findViewById(R.id.btnAllTxn).setOnClickListener(v ->
-                startActivity(new Intent(this, AllTransactionsActivity.class)));
 
         // New Book
         findViewById(R.id.btnNewBook).setOnClickListener(v -> showNewBookDialog());
@@ -146,13 +137,17 @@ public class MainActivity extends AppCompatActivity {
         loadBooks();
     }
 
-    /** Scroll the book list back to the top when the active tab is re-tapped. */
+    /**
+     * Scroll the book list back to the top when the active tab is re-tapped.
+     */
     private void scrollToTop() {
         RecyclerView rv = findViewById(R.id.rvBooks);
         if (rv != null) rv.smoothScrollToPosition(0);
     }
 
-    /** Momentary highlight on a nav tab while its screen opens. */
+    /**
+     * Momentary highlight on a nav tab while its screen opens.
+     */
     private void markNavSelected(int tabId, int iconId, int labelId) {
         View tab = findViewById(tabId);
         if (tab == null) return;
@@ -177,7 +172,6 @@ public class MainActivity extends AppCompatActivity {
                 {R.id.navAiIcon, R.id.navAiAssistantLabel},
                 {R.id.navPassbookIcon, R.id.navPassbookLabel},
                 {R.id.navFoodIcon, R.id.navFoodLabel},
-                {R.id.navIntegrationsIcon, R.id.navIntegrationsLabel},
                 {R.id.navMoreIcon, R.id.navMoreLabel}
         };
         for (int[] set : sets) {
@@ -196,28 +190,10 @@ public class MainActivity extends AppCompatActivity {
                 new com.google.android.material.bottomsheet.BottomSheetDialog(this);
         sheet.setContentView(v);
 
-        View rowPassbook = v.findViewById(R.id.rowPassbook);
-        if (rowPassbook != null) rowPassbook.setOnClickListener(Click -> {
-            sheet.dismiss();
-            if (ContextCompat.checkSelfPermission(this,
-                    Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.READ_SMS}, REQ_SMS_PERMISSION);
-            } else {
-                startActivity(new Intent(this, PassbookActivity.class));
-            }
-        });
-
         View rowAllTxn = v.findViewById(R.id.rowAllTxn);
         if (rowAllTxn != null) rowAllTxn.setOnClickListener(Click -> {
             sheet.dismiss();
             startActivity(new Intent(this, AllTransactionsActivity.class));
-        });
-
-        View rowFoodTracker = v.findViewById(R.id.rowFoodTracker);
-        if (rowFoodTracker != null) rowFoodTracker.setOnClickListener(Click -> {
-            sheet.dismiss();
-            startActivity(new Intent(this, com.expenseos.ui.FoodTrackerActivity.class));
         });
 
         View rowIntegrations = v.findViewById(R.id.rowIntegrations);
