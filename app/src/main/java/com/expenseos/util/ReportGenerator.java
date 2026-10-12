@@ -381,7 +381,110 @@ public class ReportGenerator {
             addCell(table, t.getAmount() != null ? t.getAmount().toPlainString() : "0", cellFont);
             addCell(table, t.getNote() != null ? t.getNote() : "", cellFont);
         }
+
+        // ── Totals ──
+        BigDecimal totalIn = BigDecimal.ZERO, totalOut = BigDecimal.ZERO;
+        boolean hasIn = false, hasOut = false;
+        for (Transaction t : txns) {
+            BigDecimal amt = t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO;
+            if (t.getType() == Transaction.Type.INCOME) {
+                totalIn = totalIn.add(amt);
+                hasIn = true;
+            } else {
+                totalOut = totalOut.add(amt);
+                hasOut = true;
+            }
+        }
+
+        Font boldFont = new Font(cellFont);
+        boldFont.setStyle(Font.BOLD);
+        BaseColor totalBg = new BaseColor(226, 232, 240);
+
+        if (hasIn && hasOut) {
+            // Mixed selection → Income / Expense / Net
+            addTotalRow(table, "Total Income", totalIn, boldFont, totalBg);
+            addTotalRow(table, "Total Expense", totalOut, boldFont, totalBg);
+            addTotalRow(table, "Net", totalIn.subtract(totalOut), boldFont, totalBg);
+        } else {
+            // Only one type selected → single Total
+            addTotalRow(table, "Total", hasIn ? totalIn : totalOut, boldFont, totalBg);
+        }
         doc.add(table);
+
+        addCategorySummaryTable(doc, txns, headFont, cellFont);
+    }
+
+
+    // Category-wise summary under the All Entries table: S.No / Category /
+    // Amount, highest amount first. Built only from the txns passed in, so
+    // for a multi-select export it covers just the selected entries.
+    private static void addCategorySummaryTable(Document doc, List<Transaction> txns, Font headFont, Font cellFont) throws Exception {
+        Map<String, BigDecimal> byCategory = new LinkedHashMap<>();
+        for (Transaction t : txns) {
+            String cat = (t.getCategoryName() != null && !t.getCategoryName().isEmpty())
+                    ? t.getCategoryName() : "Uncategorized";
+            BigDecimal amt = t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO;
+            byCategory.merge(cat, amt, BigDecimal::add);
+        }
+        if (byCategory.isEmpty()) return;
+
+        List<Map.Entry<String, BigDecimal>> sorted = new ArrayList<>(byCategory.entrySet());
+        sorted.sort((a, b) -> b.getValue().compareTo(a.getValue())); // descending by amount
+
+        PdfPTable table = new PdfPTable(new float[]{1f, 4f, 2f});
+        table.setWidthPercentage(60);
+        table.setHorizontalAlignment(Element.ALIGN_LEFT);
+        table.setSpacingBefore(24f); // gap after the entries table
+        for (String h : new String[]{"S.No", "Category", "Amount"})
+            addHeaderCell(table, h, headFont);
+
+        int sno = 1;
+        BigDecimal grandTotal = BigDecimal.ZERO;
+        for (Map.Entry<String, BigDecimal> e : sorted) {
+            addCell(table, String.valueOf(sno++), cellFont);
+            addCell(table, e.getKey(), cellFont);
+            addCell(table, e.getValue().toPlainString(), cellFont);
+            grandTotal = grandTotal.add(e.getValue());
+        }
+
+        // Total row — label spans S.No + Category columns, value under Amount
+        Font boldFont = new Font(cellFont);
+        boldFont.setStyle(Font.BOLD);
+        BaseColor totalBg = new BaseColor(226, 232, 240);
+
+        PdfPCell label = new PdfPCell(new Paragraph("Total", boldFont));
+        label.setColspan(2);
+        label.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        label.setPadding(5);
+        label.setBackgroundColor(totalBg);
+        table.addCell(label);
+
+        PdfPCell value = new PdfPCell(new Paragraph(grandTotal.toPlainString(), boldFont));
+        value.setPadding(5);
+        value.setBackgroundColor(totalBg);
+        table.addCell(value);
+
+        doc.add(table);
+    }
+
+    // Label spans the first 5 columns (right-aligned) so the value lines up
+    // under the "Amount" column; last cell is the empty "Note" column.
+    private static void addTotalRow(PdfPTable table, String label, BigDecimal amount, Font font, BaseColor bg) {
+        PdfPCell l = new PdfPCell(new Paragraph(label, font));
+        l.setColspan(5);
+        l.setHorizontalAlignment(Element.ALIGN_RIGHT);
+        l.setPadding(5);
+        l.setBackgroundColor(bg);
+        table.addCell(l);
+
+        PdfPCell a = new PdfPCell(new Paragraph(amount.toPlainString(), font));
+        a.setPadding(5);
+        a.setBackgroundColor(bg);
+        table.addCell(a);
+
+        PdfPCell n = new PdfPCell(new Paragraph("", font));
+        n.setBackgroundColor(bg);
+        table.addCell(n);
     }
 
     private static void addDaywiseTable(Document doc, List<Transaction> txns, Font headFont, Font cellFont) throws Exception {
