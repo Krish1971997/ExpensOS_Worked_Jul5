@@ -951,6 +951,15 @@ public class LocalDB extends SQLiteOpenHelper {
      * (caught + ignored) once the column already exists.
      */
     private void repairSchema(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS import_log (" +
+                "id            INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "imported_at   TEXT NOT NULL," +
+                "action        TEXT NOT NULL," +
+                "total_rows    INTEGER DEFAULT 0," +
+                "success_count INTEGER DEFAULT 0," +
+                "failed_count  INTEGER DEFAULT 0," +
+                "status        TEXT," +
+                "message       TEXT)");
         String[][] repairs = {
                 {"cash_books", "updated_at", "TEXT DEFAULT (datetime('now'))"},
                 {"cash_books", "created_at", "TEXT DEFAULT (datetime('now'))"},
@@ -1047,7 +1056,7 @@ public class LocalDB extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE IF NOT EXISTS card_mappings (" +
                 "last4        TEXT PRIMARY KEY," +
                 "payment_type TEXT NOT NULL)");
-        
+
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('8161','AXIS Neo Card')");
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5265','Axis Flipkart Card')");
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5068','SBI Credit Card')");

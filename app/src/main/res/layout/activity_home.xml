@@ -388,6 +388,25 @@
                         android:text="Bulk Add" />
                 </LinearLayout>
 
+                <LinearLayout
+                    android:id="@+id/drawerImportExcel"
+                    style="@style/DrawerItem">
+
+                    <TextView
+                        android:layout_width="26dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="📥"
+                        android:textSize="17sp" />
+
+                    <TextView
+                        style="@style/Text.Body"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_3"
+                        android:text="Excel Import" />
+                </LinearLayout>
+
                 <View style="@style/Divider" />
 
                 <TextView

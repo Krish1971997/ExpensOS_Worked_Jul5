@@ -38,6 +38,10 @@ public class WorkDriveApiService {
      * Uploads a local file to WorkDrive, returns resource_id or null on failure.
      */
     public String uploadFile(File file) throws Exception {
+        return uploadFile(file, "application/zip");
+    }
+
+    public String uploadFile(File file, String contentType) throws Exception {
         String url = "https://workdrive.zoho.com/api/v1/upload";
         String boundary = "Boundary-" + UUID.randomUUID().toString().replace("-", "");
 
@@ -63,7 +67,7 @@ public class WorkDriveApiService {
             writer.append("--").append(boundary).append("\r\n");
             writer.append("Content-Disposition: form-data; name=\"content\"; filename=\"")
                     .append(file.getName()).append("\"\r\n");
-            writer.append("Content-Type: application/zip\r\n\r\n");
+            writer.append("Content-Type: ").append(contentType).append("\r\n\r\n");
             writer.flush();
 
             try (FileInputStream fis = new FileInputStream(file)) {

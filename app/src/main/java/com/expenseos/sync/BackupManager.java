@@ -545,7 +545,10 @@ public class BackupManager {
      */
     private void pruneOldCloudBackups(Context ctx, WorkDriveApiService wds) {
         try {
-            List<WorkDriveApiService.WorkDriveFileInfo> files = wds.listFiles();
+            List<WorkDriveApiService.WorkDriveFileInfo> files = new java.util.ArrayList<>();
+            for (WorkDriveApiService.WorkDriveFileInfo f : wds.listFiles())
+                if (f.name != null && f.name.startsWith("backup_"))
+                    files.add(f);   // ignore ExpenseOS_Bulk_Import.xlsx etc.
             if (files.size() <= MAX_CLOUD_BACKUPS) return;
 
             files.sort((a, b) -> Long.compare(a.modifiedTimeMillis, b.modifiedTimeMillis)); // oldest first

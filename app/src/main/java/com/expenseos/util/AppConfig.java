@@ -30,6 +30,8 @@ public class AppConfig {
     public static final String KEY_ZOHO_CLIENT_SECRET = "zoho.client.secret";
     public static final String KEY_ZOHO_REFRESH_TOKEN = "zoho.refresh.token";
     public static final String KEY_WORKDRIVE_FOLDER_ID = "workdrive.main.folder.id";
+    public static final String KEY_IMPORT_EXCEL_FILE_NAME = "import.excel.file.name";
+    public static final String DEFAULT_IMPORT_EXCEL_FILE_NAME = "Import Transactions.zsheetlnk";
     public static final String KEY_BACKUP_HOUR = "backup.schedule.hour";
     public static final String KEY_BACKUP_MINUTE = "backup.schedule.minute";
     public static final String KEY_SESSION_TIMEOUT = "session.timeout";
@@ -126,6 +128,16 @@ public class AppConfig {
         return prefs.getString(KEY_WORKDRIVE_FOLDER_ID, "");
     }
 
+    /**
+     * Excel file used by Bulk Import (lives in the same WorkDrive folder as backups).
+     * Blank -> default; ".xlsx" is appended if missing; illegal file-name chars become "_".
+     */
+    public String getImportExcelFileName() {
+        String n = prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
+        n = n == null ? "" : n.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
+        return n.isEmpty() ? DEFAULT_IMPORT_EXCEL_FILE_NAME : n;
+    }
+
     public int getBackupHour() {
         return prefs.getInt(KEY_BACKUP_HOUR, 0);
     }
@@ -194,6 +206,10 @@ public class AppConfig {
                 .putString(KEY_ZOHO_REFRESH_TOKEN, refreshToken)
                 .putString(KEY_WORKDRIVE_FOLDER_ID, folderId)
                 .apply();
+    }
+
+    public void setImportExcelFileName(String fileName) {
+        prefs.edit().putString(KEY_IMPORT_EXCEL_FILE_NAME, fileName == null ? "" : fileName.trim()).apply();
     }
 
     public void setBackupSchedule(int hour, int minute) {

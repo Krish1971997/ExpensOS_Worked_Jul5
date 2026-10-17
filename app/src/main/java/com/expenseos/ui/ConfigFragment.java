@@ -43,7 +43,7 @@ public class ConfigFragment extends Fragment {
     private EditText etDbUrl, etDbUser, etDbPass;
     // Gmail Config
     private EditText etGmailFrom, etGmailPass, etAlertEmail;
-    private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId;
+    private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId, etImportExcelFileName;
 
     // Status & AI Spinner views
     private Button btnTestConnection, btnSyncConfigToDb;
@@ -81,6 +81,7 @@ public class ConfigFragment extends Fragment {
         enhanceField(etZohoClientSecret, true);
         enhanceField(etZohoRefreshToken, true);
         enhanceField(etWorkdriveFolderId, false);
+        enhanceField(etImportExcelFileName, false);
     }
 
     private void enhanceField(EditText et, boolean isSecret) {
@@ -154,6 +155,7 @@ public class ConfigFragment extends Fragment {
         etZohoRefreshToken = v.findViewById(R.id.etCfgZohoRefreshToken);
 
         etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
+        etImportExcelFileName = v.findViewById(R.id.etCfgImportExcelFileName);
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
@@ -173,6 +175,7 @@ public class ConfigFragment extends Fragment {
         etZohoClientSecret.setText(cfg.getZohoClientSecret());
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
+        etImportExcelFileName.setText(cfg.getImportExcelFileName());
 
     }
 
@@ -193,6 +196,8 @@ public class ConfigFragment extends Fragment {
                     etZohoClientSecret.getText().toString().trim(),
                     etZohoRefreshToken.getText().toString().trim(),
                     etWorkdriveFolderId.getText().toString().trim());
+            AppConfig.get(requireContext()).setImportExcelFileName(
+                    etImportExcelFileName.getText().toString().trim());
             toast("✓ Zoho Config saved!");
         });
 

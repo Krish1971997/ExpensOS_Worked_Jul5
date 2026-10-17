@@ -265,6 +265,12 @@ public class HomeActivity extends AppCompatActivity {
             startActivity(new Intent(this, BulkAddActivity.class));
         });
 
+        View drawerImportExcel = findViewById(R.id.drawerImportExcel);
+        if (drawerImportExcel != null) drawerImportExcel.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, ImportExcelActivity.class));
+        });
+
         View drawerRecycleBin = findViewById(R.id.drawerRecycleBin);
         if (drawerRecycleBin != null) drawerRecycleBin.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);

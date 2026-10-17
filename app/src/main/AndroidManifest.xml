@@ -55,6 +55,7 @@
         <activity android:name=".ui.GenerateReportActivity" />
         <activity android:name=".ui.TransactionDetailActivity" />
         <activity android:name=".ui.BulkAddActivity" />
+        <activity android:name=".ui.ImportExcelActivity" />
         <activity android:name=".ui.SettingsActivity" />
         <activity android:name=".ui.AuditLogActivity" />
         <activity android:name=".ui.EntryDetailActivity" />
