@@ -20,6 +20,15 @@ public class TaskDao {
         db = LocalDB.getInstance(ctx);
     }
 
+    public List<Task> findAll() {
+        List<Task> out = new ArrayList<>();
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT id,name,task_datetime,description,color,google_event_id FROM tasks ORDER BY task_datetime", null)) {
+            while (c.moveToNext()) out.add(fromCursor(c));
+        }
+        return out;
+    }
+
     /**
      * Tasks whose date falls on the given yyyy-MM-dd.
      */

@@ -51,11 +51,19 @@ public class AddReminderActivity extends AppCompatActivity {
         findViewById(R.id.btnSaveReminder).setOnClickListener(v -> save());
 
         editingId = getIntent().getLongExtra("reminder_id", 0);
-        if (editingId > 0) loadForEdit();
+        if (editingId > 0) {
+            ((android.widget.TextView) findViewById(R.id.tvAddReminderTitle))
+                    .setText("Edit Reminder");
+            loadForEdit();
+        }
     }
 
     private void refreshTimeLabel() {
-        btnTime.setText(String.format("%02d:%02d", hour, minute));
+        // 12-hour display — users enter "7 PM / 7.55 AM" in the examples;
+        // 24h "19:00" kept confusing the selection against the picker.
+        String amPm = hour < 12 ? "AM" : "PM";
+        int h12 = hour % 12 == 0 ? 12 : hour % 12;
+        btnTime.setText(String.format(java.util.Locale.US, "%02d:%02d %s", h12, minute, amPm));
     }
 
     private void loadForEdit() {

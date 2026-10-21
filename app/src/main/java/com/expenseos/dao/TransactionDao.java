@@ -102,6 +102,7 @@ public class TransactionDao {
     // ── UPDATE ────────────────────────────────────────────
     public void update(Transaction oldT, Transaction newT) {
         ContentValues cv = new ContentValues();
+        cv.put("type", newT.getType().name());   // persist INCOME/EXPENSE switch
         cv.put("txn_datetime", newT.getDateTime().format(TS_FMT));
         cv.put("amount", newT.getAmount().toString());
         cv.put("category_id", newT.getCategoryId());
@@ -117,6 +118,8 @@ public class TransactionDao {
 
         db.update("transactions", cv, "id = ?", new String[]{String.valueOf(oldT.getId())});
 
+        if (oldT.getType() != newT.getType())
+            auditDao.logUpdate(oldT.getId(), "user", "type", oldT.getType().name(), newT.getType().name());
         if (oldT.getAmount().compareTo(newT.getAmount()) != 0)
             auditDao.logUpdate(oldT.getId(), "user", "amount", "\u20B9" + oldT.getAmount(), "\u20B9" + newT.getAmount());
         if (!oldT.getDateTime().equals(newT.getDateTime()))

@@ -30,6 +30,16 @@
         </LinearLayout>
 
         <Button
+            android:id="@+id/btnAlarmTone"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="12dp"
+            android:layout_marginTop="8dp"
+            android:text="🔔 Alarm tone: Default phone alarm tone"
+            android:textSize="12sp" />
+
+        <Button
             android:id="@+id/btnGoogleConnect"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"

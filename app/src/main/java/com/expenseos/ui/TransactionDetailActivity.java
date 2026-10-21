@@ -111,6 +111,8 @@ public class TransactionDetailActivity extends AppCompatActivity {
     private ListPopupWindow noteSuggestPopup;
     private ArrayAdapter<String> noteSuggestAdapter;
     private boolean suppressNoteSuggestion = false;
+    private Transaction.Type selectedType;
+    private int catOffset = 0;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -217,6 +219,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
                     isDirty = true;
                 }));
 
+        tvDetailType.setOnClickListener(v -> confirmTypeSwitch());
         markDirtyOn(etAmount);
         markDirtyOn(etNote);
 
@@ -304,14 +307,18 @@ public class TransactionDetailActivity extends AppCompatActivity {
         attachmentList.removeAllViews();
         pendingAttachments.clear();
 
-        boolean isIncome = current.getType() == Transaction.Type.INCOME;
-        tvDetailTitle.setText("Edit " + (isIncome ? "Income" : "Expense"));
-        tvDetailType.setText(current.getType().name());
-        int typeColor = isIncome ? getColor(R.color.green) : getColor(R.color.red);
-        tvDetailType.setTextColor(typeColor);
+//        boolean isIncome = current.getType() == Transaction.Type.INCOME;
+//        tvDetailTitle.setText("Edit " + (isIncome ? "Income" : "Expense"));
+//        tvDetailType.setText(current.getType().name());
+//        int typeColor = isIncome ? getColor(R.color.green) : getColor(R.color.red);
+//        tvDetailType.setTextColor(typeColor);
+
+        selectedType = current.getType();
+        catOffset = 0;
+        applyTypeHeader();
 
         etAmount.setText(current.getAmount().toPlainString());
-        etAmount.setTextColor(typeColor);
+//        etAmount.setTextColor(typeColor);
         etNote.setText(current.getNote() != null ? current.getNote() : "");
 
         LocalDateTime dt = current.getDateTime();
@@ -345,8 +352,16 @@ public class TransactionDetailActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 isDirty = true;
-                if (pos >= 0 && pos < currentCategories.size()) {
-                    loadSubCategoriesFor(currentCategories.get(pos).getId());
+//                if (pos >= 0 && pos < currentCategories.size()) {
+//                    loadSubCategoriesFor(currentCategories.get(pos).getId());
+//                }
+                Object o = spCategory.getItemAtPosition(pos);
+                if (o instanceof Category && ((Category) o).getId() > 0) {
+                    loadSubCategoriesFor(((Category) o).getId());
+                } else {
+                    currentSubCategories = new ArrayList<>();
+                    spSubCategory.setVisibility(View.GONE);
+                    tvSubCategoryLabel.setVisibility(View.GONE);
                 }
             }
 
@@ -420,6 +435,69 @@ public class TransactionDetailActivity extends AppCompatActivity {
         btnNext.setAlpha(hasNext ? 1f : 0.4f);
     }
 
+    private void applyTypeHeader() {
+        boolean isIncome = selectedType == Transaction.Type.INCOME;
+        int typeColor = getColor(isIncome ? R.color.green : R.color.red);
+        tvDetailTitle.setText("Edit " + (isIncome ? "Income" : "Expense"));
+        tvDetailType.setText(selectedType.name() + "  ⇄");
+        tvDetailType.setTextColor(typeColor);
+        etAmount.setTextColor(typeColor);
+    }
+
+    private void confirmTypeSwitch() {
+        Transaction.Type target = selectedType == Transaction.Type.INCOME
+                ? Transaction.Type.EXPENSE : Transaction.Type.INCOME;
+        new AlertDialog.Builder(this)
+                .setTitle("Change to " + target.name() + "?")
+                .setMessage("Category and custom fields will be reset for the new type. "
+                        + "Tap Save to apply the change.")
+                .setPositiveButton("Change", (d, w) -> switchType(target))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void switchType(Transaction.Type target) {
+        selectedType = target;
+        applyTypeHeader();
+
+        currentCategories = catDao.findByType(target.name(), current.getBookId());
+        List<Category> items = new ArrayList<>();
+        items.add(new Category(0, "Select Category", target.name(), null));
+        items.addAll(currentCategories);
+        catOffset = 1;
+        ArrayAdapter<Category> adp = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, items);
+        adp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spCategory.setAdapter(adp);
+
+        // Original type-ku thirumba switch panna, original category-ah restore pannidum
+        int sel = 0;
+        if (target == current.getType()) {
+            for (int i = 0; i < currentCategories.size(); i++) {
+                if (currentCategories.get(i).getId() == current.getCategoryId()) {
+                    sel = i + 1;
+                    break;
+                }
+            }
+        }
+        spCategory.setSelection(sel, false);
+        if (sel > 0) {
+            loadSubCategoriesFor(currentCategories.get(sel - 1).getId());
+        } else {
+            currentSubCategories = new ArrayList<>();
+            spSubCategory.setVisibility(View.GONE);
+            tvSubCategoryLabel.setVisibility(View.GONE);
+        }
+
+        customFieldsContainer.removeAllViews();
+        customFieldInputs.clear();
+        loadCustomFieldsForType(target == current.getType() ? current.getCustomValues() : null);
+
+        pendingSuggestion = null;
+        tvKwSuggestion.setVisibility(View.GONE);
+        isDirty = true;
+    }
+
     private void loadSubCategoriesFor(int catId) {
         currentSubCategories = scDao.findByCategoryId(catId);
         if (currentSubCategories.isEmpty()) {
@@ -482,7 +560,8 @@ public class TransactionDetailActivity extends AppCompatActivity {
     }
 
     private void loadCustomFieldsForType(@Nullable Map<String, String> existingValues) {
-        List<ColumnDefinition> defs = colDefDao.findByType(current.getType().name());
+//        List<ColumnDefinition> defs = colDefDao.findByType(current.getType().name());
+        List<ColumnDefinition> defs = colDefDao.findByType(selectedType.name());
         for (ColumnDefinition cd : defs) {
             String existing = existingValues != null ? existingValues.get(cd.getColKey()) : null;
             addCustomFieldRow(cd, existing);
@@ -723,7 +802,8 @@ public class TransactionDetailActivity extends AppCompatActivity {
             return false;
         }
 
-        if (spCategory.getSelectedItem() == null) {
+        if (spCategory.getSelectedItem() == null
+                || ((Category) spCategory.getSelectedItem()).getId() == 0) {
             Toast.makeText(this, "Please select a category", Toast.LENGTH_SHORT).show();
             return false;
         }
@@ -763,7 +843,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
         Transaction updated = new Transaction();
         updated.setId(txnId);
-        updated.setType(current.getType());
+        updated.setType(selectedType);
         updated.setAmount(amount);
         updated.setCategoryId(selCat.getId());
         updated.setSubCategoryId(selSub != null && selSub.getId() > 0 ? selSub.getId() : 0);
@@ -917,7 +997,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
             return;
         }
 
-        KeywordMapping match = kwDao.suggest(cleanedNote, current.getType().name(), bookId);
+        KeywordMapping match = kwDao.suggest(cleanedNote, selectedType.name(), bookId);
 
         if (!isSuggestionDifferent(match)) {
             pendingSuggestion = null;
@@ -957,7 +1037,7 @@ public class TransactionDetailActivity extends AppCompatActivity {
 
             for (int i = 0; i < currentCategories.size(); i++) {
                 if (currentCategories.get(i).getId() == pendingSuggestion.getCategoryId()) {
-                    spCategory.setSelection(i, false);
+                    spCategory.setSelection(i + catOffset, false);
                     loadSubCategoriesFor(pendingSuggestion.getCategoryId());
                     break;
                 }

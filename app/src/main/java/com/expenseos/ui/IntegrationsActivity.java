@@ -1,5 +1,6 @@
 package com.expenseos.ui;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -16,6 +17,7 @@ import com.expenseos.R;
 import com.expenseos.dao.EventDao;
 import com.expenseos.dao.ReminderDao;
 import com.expenseos.model.Event;
+import com.expenseos.model.EventReminder;
 import com.expenseos.model.Reminder;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.tabs.TabLayout;
@@ -33,6 +35,85 @@ public class IntegrationsActivity extends AppCompatActivity {
     private RecyclerView rv;
     private int subTab = 0; // 0 = Events, 1 = Reminders
 
+    // ── Alarm tone picker (phone tones / file-manager audio) ─────────
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> ringtoneLauncher =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+                        android.net.Uri picked = result.getData()
+                                .getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                        if (picked != null) {
+                            com.expenseos.util.AlarmToneStore.save(this, picked.toString(), toneName(this, picked));
+                            refreshToneLabel();
+                        }
+                    });
+
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> audioFileLauncher =
+            registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() != RESULT_OK || result.getData() == null
+                                || result.getData().getData() == null) return;
+                        android.net.Uri file = result.getData().getData();
+                        try {
+                            // Persist read access so the alarm can still play it after restarts
+                            getContentResolver().takePersistableUriPermission(file,
+                                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception ignored) {
+                            // Some providers don't grant persistable rights — tone may not survive reboot
+                        }
+                        com.expenseos.util.AlarmToneStore.save(this, file.toString(), toneName(this, file));
+                        refreshToneLabel();
+                    });
+
+    private static String toneName(Context ctx, android.net.Uri uri) {
+        try (android.database.Cursor c = ctx.getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
+        } catch (Exception ignored) {
+        }
+        String last = uri.getLastPathSegment();
+        return last != null ? last.substring(Math.max(0, last.length() - 40)) : "Custom tone";
+    }
+
+    private void showToneChooser() {
+        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)"};
+        new AlertDialog.Builder(this)
+                .setTitle("Alarm tone")
+                .setItems(opts, (d, which) -> {
+                    if (which == 0) {
+                        // the phone's own alarm sounds
+                        android.content.Intent i = new android.content.Intent(
+                                android.media.RingtoneManager.ACTION_RINGTONE_PICKER);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,
+                                android.media.RingtoneManager.TYPE_ALARM);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Select alarm tone");
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+                        ringtoneLauncher.launch(i);
+                    } else if (which == 1) {
+                        // any audio file on the device
+                        android.content.Intent i = new android.content.Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                        i.setType("audio/*");
+                        try {
+                            audioFileLauncher.launch(i);
+                        } catch (android.content.ActivityNotFoundException e) {
+                            Toast.makeText(this, "No file manager found", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        com.expenseos.util.AlarmToneStore.clear(this);
+                        refreshToneLabel();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void refreshToneLabel() {
+        ((android.widget.Button) findViewById(R.id.btnAlarmTone))
+                .setText("🔔 Alarm tone: " + com.expenseos.util.AlarmToneStore.getName(this));
+    }
+
     private androidx.activity.result.ActivityResultLauncher<android.content.Intent> signInLauncher;
 
     @Override
@@ -41,6 +122,21 @@ public class IntegrationsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_integrations);
         eventDao = new EventDao(this);
         reminderDao = new ReminderDao(this);
+
+        // Alarm tone — phone tones or a file-manager audio file, played by
+        // AlarmRingActivity when an ALARM reminder fires.
+        refreshToneLabel();
+        findViewById(R.id.btnAlarmTone).setOnClickListener(v -> showToneChooser());
+
+        // POST_NOTIFICATIONS — task NOTIFICATION reminders need it on Android
+        // 13+; asked here too in case the app was opened straight into this screen.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                && androidx.core.content.ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            androidx.core.app.ActivityCompat.requestPermissions(this,
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1002);
+        }
 
         signInLauncher = registerForActivityResult(
                 new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(), result -> {
@@ -129,7 +225,14 @@ public class IntegrationsActivity extends AppCompatActivity {
             public void onBindViewHolder(VH h, int pos) {
                 Event e = events.get(pos);
                 h.tvName.setText(e.getName());
-                h.tvSummary.setText(e.getSummary());
+                // Table-like row: offset summary + the linked NOTIFICATION / ALARM
+                // reminder names, so the config reads like a grid.
+                StringBuilder meta = new StringBuilder();
+                List<EventReminder> n = eventDao.findReminders(e.getId(), "NOTIFICATION");
+                List<EventReminder> a = eventDao.findReminders(e.getId(), "ALARM");
+                meta.append("🔔 ").append(n.isEmpty() ? "—" : n.get(0).getReminderName());
+                meta.append("   ⏰ ").append(a.isEmpty() ? "—" : a.get(0).getReminderName());
+                h.tvSummary.setText(e.getSummary() + "\n" + meta);
                 h.itemView.setOnClickListener(v -> openEditEvent(e.getId()));
                 h.btnMenu.setOnClickListener(v -> {
                     PopupMenu m = new PopupMenu(IntegrationsActivity.this, v);

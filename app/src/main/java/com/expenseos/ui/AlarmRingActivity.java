@@ -48,13 +48,47 @@ public class AlarmRingActivity extends AppCompatActivity {
         ((android.widget.TextView) findViewById(R.id.tvAlarmTaskName))
                 .setText(task != null ? task.getName() : "Task Alarm");
 
-        ringtone = RingtoneManager.getRingtone(this, RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM));
-        if (ringtone != null) ringtone.play();
+        ringtone = buildRingtone();
+        if (ringtone != null) {
+            try {
+                // Route through the ALARM usage so the volume key context and
+                // Do Not Disturb treat it as an alarm, not media.
+                ringtone.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build());
+                ringtone.play();
+            } catch (Exception ignored) {
+            }
+        }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
 
         findViewById(R.id.btnSnooze).setOnClickListener(v -> snooze());
         findViewById(R.id.btnDismiss).setOnClickListener(v -> dismiss());
+    }
+
+    /**
+     * User-picked tone (phone tones picker or a file-manager audio file) if
+     * one is saved in {@link AlarmToneStore}; otherwise the phone's default
+     * alarm sound. Falls back to the default when a saved file URI is no
+     * longer readable.
+     */
+    private Ringtone buildRingtone() {
+        String saved = com.expenseos.util.AlarmToneStore.getUri(this);
+        if (saved != null && !saved.isEmpty()) {
+            try {
+                Ringtone r = RingtoneManager.getRingtone(this, android.net.Uri.parse(saved));
+                if (r != null) return r;
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            return RingtoneManager.getRingtone(this,
+                    RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @SuppressLint("ScheduleExactAlarm")

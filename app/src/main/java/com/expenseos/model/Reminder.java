@@ -66,7 +66,9 @@ public class Reminder {
     public String getSummary() {
         String unit = offsetValue == 1 ? offsetUnit.toLowerCase() : offsetUnit.toLowerCase() + "s";
         String when = offsetValue == 0 ? "On the day" : offsetValue + " " + unit + " before";
-        return when + " at " + String.format("%02d:%02d", timeHour, timeMinute);
+        String amPm = timeHour < 12 ? "AM" : "PM";
+        int h12 = timeHour % 12 == 0 ? 12 : timeHour % 12;
+        return when + " at " + String.format("%02d:%02d %s", h12, timeMinute, amPm);
     }
 
     @Override

@@ -57,7 +57,12 @@ public class EventDao {
         cv.put("offset_direction", e.getOffsetDirection());
         cv.put("offset_days", e.getOffsetDays());
         cv.put("header", e.getHeader());
-        cv.put("updated_at", "datetime('now')");
+        // FIX: was cv.put("updated_at", "datetime('now')") — that stored the
+        // LITERAL STRING "datetime('now')" into the column instead of a
+        // timestamp (the same bug repairSchema() keeps repairing for
+        // created_at). Store a real timestamp.
+        cv.put("updated_at", java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         db.getWritableDatabase().update("events", cv, "id=?", new String[]{String.valueOf(e.getId())});
     }
 

@@ -83,7 +83,10 @@ public class AddEventActivity extends AppCompatActivity {
         findViewById(R.id.btnSaveEvent).setOnClickListener(v -> save());
 
         editingEventId = getIntent().getLongExtra("event_id", 0);
-        if (editingEventId > 0) loadForEdit();
+        if (editingEventId > 0) {
+            ((android.widget.TextView) findViewById(R.id.tvAddEventTitle)).setText("Edit Event");
+            loadForEdit();
+        }
     }
 
     private void setupTabs() {
@@ -197,6 +200,12 @@ public class AddEventActivity extends AppCompatActivity {
 
         if (notifReminderId > 0) eventDao.setReminder(eventId, "NOTIFICATION", notifReminderId);
         if (alarmReminderId > 0) eventDao.setReminder(eventId, "ALARM", alarmReminderId);
+
+        // Event offsets/links may have changed — every task linked to this
+        // event now fires at different times. Recompute all task alarms.
+        new Thread(() ->
+                com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAll(this),
+                "event-save-reschedule").start();
 
         Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
         finish();

@@ -1,8 +1,10 @@
 package com.expenseos.ui;
 
+import android.app.AlarmManager;
 import android.app.DatePickerDialog;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -214,6 +216,27 @@ public class AddTaskActivity extends AppCompatActivity {
         } else taskId = taskDao.insert(t);
 
         TaskAlarmScheduler.scheduleForTask(this, taskId, t.getTaskDateTime(), selectedEventIds);
+
+        // Android 14+ — without the exact-alarm grant alarms become inexact
+        // and can drift by minutes. Point the user to the system toggle once.
+        AlarmManager am = (AlarmManager) getSystemService(android.content.Context.ALARM_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && (am == null || !am.canScheduleExactAlarms())) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Allow exact alarms")
+                    .setMessage("Alarms and notifications may otherwise be delayed.\n\n" +
+                            "Settings → Permissions → Alarms & reminders → Allow")
+                    .setPositiveButton("Open settings", (d, w) -> {
+                        try {
+                            startActivity(new android.content.Intent(
+                                    android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                    android.net.Uri.parse("package:" + getPackageName())));
+                        } catch (Exception ignored) {
+                        }
+                    })
+                    .setNegativeButton("Later", null)
+                    .show();
+        }
 
         if (com.expenseos.sync.GoogleCalendarSyncManager.isSignedIn(this)) {
             com.expenseos.sync.GoogleCalendarSyncManager.upsert(this, taskId, (ok, msg) -> {

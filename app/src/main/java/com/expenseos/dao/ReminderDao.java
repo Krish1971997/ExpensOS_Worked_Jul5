@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.Reminder;
+import com.expenseos.scheduler.TaskAlarmRescheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,6 +92,9 @@ public class ReminderDao {
         }
         wdb.delete("event_reminders", "reminder_id=?", new String[]{String.valueOf(id)});
         wdb.delete("reminders", "id=?", new String[]{String.valueOf(id)});
+        // Any task scheduled through this reminder's event links must be
+        // recomputed, or the deleted reminder's alarms keep firing.
+        TaskAlarmRescheduler.rescheduleAllAsync(ctx);
     }
 
     private ContentValues toCv(Reminder r) {
