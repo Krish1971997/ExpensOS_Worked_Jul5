@@ -1,29 +1,33 @@
 package com.expenseos.ui;
 
 import android.annotation.SuppressLint;
-import android.app.AlarmManager;
-import android.app.KeyguardManager;
-import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.WindowManager;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.expenseos.R;
 import com.expenseos.dao.TaskDao;
 import com.expenseos.model.Task;
-import com.expenseos.receiver.AlarmReceiver;
+import com.expenseos.receiver.AlarmService;
 
 public class AlarmRingActivity extends AppCompatActivity {
 
     private Ringtone ringtone;
     private Vibrator vibrator;
     private long taskId, eventReminderId, eventId;
+    private BroadcastReceiver finishReceiver;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -32,14 +36,23 @@ public class AlarmRingActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
-            KeyguardManager km = getSystemService(KeyguardManager.class);
-            if (km != null) km.requestDismissKeyguard(this, null);
         } else {
             getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                     | android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
                     | android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
         }
         setContentView(R.layout.activity_alarm_ring);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // AlarmService stops (dismiss / snooze / power button / timeout) → close this screen
+        finishReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent i) {
+                finish();
+            }
+        };
+        ContextCompat.registerReceiver(this, finishReceiver,
+                new IntentFilter(AlarmService.ACTION_FINISHED), ContextCompat.RECEIVER_NOT_EXPORTED);
 
         taskId = getIntent().getLongExtra("task_id", 0);
         eventReminderId = getIntent().getLongExtra("event_reminder_id", 0);
@@ -49,7 +62,9 @@ public class AlarmRingActivity extends AppCompatActivity {
         ((android.widget.TextView) findViewById(R.id.tvAlarmTaskName))
                 .setText(task != null ? task.getName() : "Task Alarm");
 
-        ringtone = buildRingtone();
+        // AlarmService normally rings; play here only on the fallback path
+        boolean playHere = getIntent().getBooleanExtra("play_here", false);
+        ringtone = playHere ? buildRingtone() : null;
         if (ringtone != null) {
             try {
                 // Route through the ALARM usage so the volume key context and
@@ -64,10 +79,39 @@ public class AlarmRingActivity extends AppCompatActivity {
             }
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if (vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
+        if (playHere && vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
 
         findViewById(R.id.btnSnooze).setOnClickListener(v -> snooze());
         findViewById(R.id.btnDismiss).setOnClickListener(v -> dismiss());
+        setupSwipe();
+    }
+
+    /**
+     * Drag the centre circle: left = snooze, right = dismiss (like the Clock app).
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupSwipe() {
+        final View handle = findViewById(R.id.alarmHandle);
+        final float[] downX = {0};
+        handle.setOnTouchListener((v, e) -> {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX[0] = e.getRawX();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    v.setTranslationX(e.getRawX() - downX[0]);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    float dx = e.getRawX() - downX[0];
+                    float limit = getResources().getDisplayMetrics().density * 90;
+                    if (dx <= -limit) snooze();
+                    else if (dx >= limit) dismiss();
+                    else v.animate().translationX(0).setDuration(150).start();
+                    return true;
+            }
+            return false;
+        });
     }
 
     /**
@@ -93,27 +137,19 @@ public class AlarmRingActivity extends AppCompatActivity {
         }
     }
 
-    @SuppressLint("ScheduleExactAlarm")
     private void snooze() {
         stopAlert();
-        AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-        Intent intent = new Intent(this, AlarmReceiver.class);
-        intent.putExtra("task_id", taskId);
-        intent.putExtra("event_reminder_id", eventReminderId);
-        PendingIntent pi = PendingIntent.getBroadcast(this, (int) (40000 + taskId), intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        long triggerAt = System.currentTimeMillis() + 10 * 60 * 1000L; // 10 min snooze
-        if (am != null) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms())
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-            else
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-        }
+        // service schedules the 10-min snooze + shows the countdown notification
+        startService(new Intent(this, AlarmService.class)
+                .setAction(AlarmService.ACTION_SNOOZE)
+                .putExtra("task_id", taskId)
+                .putExtra("event_reminder_id", eventReminderId));
         finish();
     }
 
     private void dismiss() {
         stopAlert();
+        startService(new Intent(this, AlarmService.class).setAction(AlarmService.ACTION_STOP));
         finish();
     }
 
@@ -125,6 +161,12 @@ public class AlarmRingActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (finishReceiver != null) {
+            try {
+                unregisterReceiver(finishReceiver);
+            } catch (Exception ignored) {
+            }
+        }
         super.onDestroy();
         stopAlert();
     }

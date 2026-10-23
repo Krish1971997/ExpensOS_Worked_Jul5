@@ -43,15 +43,14 @@ public class AlarmReceiver extends BroadcastReceiver {
         if (task == null) return; // task deleted — don't ring a stale alarm
         String taskName = task.getName() != null ? task.getName() : "Task alarm";
 
-        // 1 — direct launch (works while the app is already in the foreground)
+        // 1 — foreground service plays the tone + vibration and shows the ring notification
         try {
-            Intent ring = new Intent(ctx, AlarmRingActivity.class);
-            ring.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            ring.putExtra("task_id", taskId);
-            ring.putExtra("event_reminder_id", eventReminderId);
-            ctx.startActivity(ring);
+            ContextCompat.startForegroundService(ctx, new Intent(ctx, AlarmService.class)
+                    .putExtra("task_id", taskId)
+                    .putExtra("event_reminder_id", eventReminderId));
+            return;
         } catch (Exception ignored) {
-            // background start blocked — the full-screen notification below still fires
+            // service start blocked — fall back to the full-screen notification below
         }
 
         // 2 — full-screen-intent notification (works from the background / lock screen)
@@ -61,6 +60,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         ring.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ring.putExtra("task_id", taskId);
         ring.putExtra("event_reminder_id", eventReminderId);
+        ring.putExtra("play_here", true); // fallback path: the ring screen plays the tone itself
         PendingIntent fullScreenPi = PendingIntent.getActivity(ctx,
                 (int) (50000 + taskId), ring,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
