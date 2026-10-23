@@ -95,6 +95,8 @@ public class IntegrationsActivity extends AppCompatActivity {
                         android.content.Intent i = new android.content.Intent(Intent.ACTION_OPEN_DOCUMENT);
                         i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
                         i.setType("audio/*");
+                        i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                | android.content.Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                         try {
                             audioFileLauncher.launch(i);
                         } catch (android.content.ActivityNotFoundException e) {
@@ -205,6 +207,7 @@ public class IntegrationsActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         load();
+        com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAllAsync(this);
     }
 
     private void load() {
@@ -313,6 +316,7 @@ public class IntegrationsActivity extends AppCompatActivity {
                 .setMessage("This removes the event and its notification/alarm links.")
                 .setPositiveButton("Delete", (d, w) -> {
                     eventDao.delete(e.getId());
+                    com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAllAsync(this);
                     Toast.makeText(this, "Deleted", Toast.LENGTH_SHORT).show();
                     load();
                 })

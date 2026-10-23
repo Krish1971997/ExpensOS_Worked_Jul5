@@ -111,6 +111,18 @@ public class EventDao {
     }
 
     /**
+     * event_reminders.id → owning event id (0 if not found).
+     */
+    public long findEventIdByEventReminderId(long eventReminderId) {
+        try (Cursor c = db.getReadableDatabase().rawQuery(
+                "SELECT event_id FROM event_reminders WHERE id=?",
+                new String[]{String.valueOf(eventReminderId)})) {
+            if (c.moveToFirst()) return c.getLong(0);
+        }
+        return 0;
+    }
+
+    /**
      * Sets (or replaces) the single NOTIFICATION or ALARM reminder link for an event.
      */
     public void setReminder(long eventId, String type, long reminderId) {

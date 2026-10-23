@@ -215,7 +215,11 @@ public class AddTaskActivity extends AppCompatActivity {
             taskId = editingTaskId;
         } else taskId = taskDao.insert(t);
 
-        TaskAlarmScheduler.scheduleForTask(this, taskId, t.getTaskDateTime(), selectedEventIds);
+        int scheduled = TaskAlarmScheduler.scheduleForTask(this, taskId, t.getTaskDateTime(), selectedEventIds);
+        if (scheduled == 0) {
+            Toast.makeText(this, "No alarm/notification scheduled — all reminder times are already in the past",
+                    Toast.LENGTH_LONG).show();
+        }
 
         // Android 14+ — without the exact-alarm grant alarms become inexact
         // and can drift by minutes. Point the user to the system toggle once.

@@ -137,11 +137,31 @@
             android:name=".receiver.ReminderReceiver"
             android:exported="false" />
 
+        <!-- Task notification reminders -->
+        <receiver
+            android:name=".receiver.TaskNotificationReceiver"
+            android:exported="false" />
+
+        <!-- Task alarms (full-screen ring) -->
+        <receiver
+            android:name=".receiver.AlarmReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.AlarmRingActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
         <receiver
             android:name=".receiver.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
 

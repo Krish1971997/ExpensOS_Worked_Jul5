@@ -23,7 +23,7 @@ public class AlarmRingActivity extends AppCompatActivity {
 
     private Ringtone ringtone;
     private Vibrator vibrator;
-    private long taskId, eventReminderId;
+    private long taskId, eventReminderId, eventId;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -43,6 +43,7 @@ public class AlarmRingActivity extends AppCompatActivity {
 
         taskId = getIntent().getLongExtra("task_id", 0);
         eventReminderId = getIntent().getLongExtra("event_reminder_id", 0);
+        eventId = new com.expenseos.dao.EventDao(this).findEventIdByEventReminderId(eventReminderId);
 
         Task task = new TaskDao(this).findById(taskId);
         ((android.widget.TextView) findViewById(R.id.tvAlarmTaskName))
@@ -57,6 +58,7 @@ public class AlarmRingActivity extends AppCompatActivity {
                         .setUsage(android.media.AudioAttributes.USAGE_ALARM)
                         .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ringtone.setLooping(true);
                 ringtone.play();
             } catch (Exception ignored) {
             }
@@ -75,7 +77,7 @@ public class AlarmRingActivity extends AppCompatActivity {
      * longer readable.
      */
     private Ringtone buildRingtone() {
-        String saved = com.expenseos.util.AlarmToneStore.getUri(this);
+        String saved = com.expenseos.util.AlarmToneStore.resolveUri(this, eventId);
         if (saved != null && !saved.isEmpty()) {
             try {
                 Ringtone r = RingtoneManager.getRingtone(this, android.net.Uri.parse(saved));
@@ -101,7 +103,12 @@ public class AlarmRingActivity extends AppCompatActivity {
         PendingIntent pi = PendingIntent.getBroadcast(this, (int) (40000 + taskId), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         long triggerAt = System.currentTimeMillis() + 10 * 60 * 1000L; // 10 min snooze
-        if (am != null) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+        if (am != null) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms())
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            else
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+        }
         finish();
     }
 
@@ -113,6 +120,7 @@ public class AlarmRingActivity extends AppCompatActivity {
     private void stopAlert() {
         if (ringtone != null && ringtone.isPlaying()) ringtone.stop();
         if (vibrator != null) vibrator.cancel();
+        androidx.core.app.NotificationManagerCompat.from(this).cancel((int) (70000 + taskId));
     }
 
     @Override

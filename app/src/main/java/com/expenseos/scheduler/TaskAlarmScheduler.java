@@ -30,8 +30,12 @@ public class TaskAlarmScheduler {
 
     private static final DateTimeFormatter TASK_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    public static void scheduleForTask(Context ctx, long taskId, String taskDateTimeStr, List<Long> eventIds) {
+    /**
+     * @return how many alarms/notifications were actually scheduled (past times are skipped).
+     */
+    public static synchronized int scheduleForTask(Context ctx, long taskId, String taskDateTimeStr, List<Long> eventIds) {
         cancelForTask(ctx, taskId); // clear old alarms first (handles edit)
+        int scheduled = 0;
 
         LocalDateTime taskDateTime = LocalDateTime.parse(taskDateTimeStr, TASK_FMT);
         EventDao eventDao = new EventDao(ctx);
@@ -44,12 +48,13 @@ public class TaskAlarmScheduler {
                     ? taskDateTime.plusDays(event.getOffsetDays())
                     : taskDateTime.minusDays(event.getOffsetDays());
 
-            scheduleType(ctx, taskId, eventDao, eventId, "NOTIFICATION", baseDate);
-            scheduleType(ctx, taskId, eventDao, eventId, "ALARM", baseDate);
+            scheduled += scheduleType(ctx, taskId, eventDao, eventId, "NOTIFICATION", baseDate);
+            scheduled += scheduleType(ctx, taskId, eventDao, eventId, "ALARM", baseDate);
         }
+        return scheduled;
     }
 
-    
+
     private static PendingIntent buildPendingIntent(Context ctx, int requestCode, long taskId, long eventReminderId, String type) {
         Intent intent = new Intent(ctx, "ALARM".equals(type) ? AlarmReceiver.class : TaskNotificationReceiver.class);
         intent.putExtra("task_id", taskId);
@@ -58,7 +63,7 @@ public class TaskAlarmScheduler {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    public static void cancelForTask(Context ctx, long taskId) {
+    public static synchronized void cancelForTask(Context ctx, long taskId) {
         LocalDB db = LocalDB.getInstance(ctx);
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         try (Cursor c = db.getReadableDatabase().rawQuery(
@@ -97,9 +102,9 @@ public class TaskAlarmScheduler {
         return null;
     }
 
-    private static void scheduleType(Context ctx, long taskId, EventDao eventDao, long eventId,
-                                     String type, LocalDateTime baseDate) {
+    private static int scheduleType(Context ctx, long taskId, EventDao eventDao, long eventId, String type, LocalDateTime baseDate) {
         ReminderDao reminderDao = new ReminderDao(ctx);
+        int count = 0;
         for (EventReminder er : eventDao.findReminders(eventId, type)) {
             com.expenseos.model.Reminder reminder = reminderDao.findById(er.getReminderId());
             if (reminder == null) continue;
@@ -122,6 +127,8 @@ public class TaskAlarmScheduler {
             }
 
             recordAlarm(ctx, taskId, er.getId(), requestCode, trigger.format(TASK_FMT), type);
+            count++;
         }
+        return count;
     }
 }

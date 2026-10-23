@@ -24,14 +24,19 @@ public final class TaskAlarmRescheduler {
     private TaskAlarmRescheduler() {
     }
 
-    /** Reschedules every task's alarms. Blocking — call off the main thread. */
+    /**
+     * Reschedules every task's alarms. Blocking — call off the main thread.
+     */
     public static void rescheduleAll(Context ctx) {
         try {
             TaskDao taskDao = new TaskDao(ctx);
             List<Task> all = taskDao.findAll();
             for (Task t : all) {
                 List<Long> eventIds = taskDao.findEventIds(t.getId());
-                if (eventIds.isEmpty()) continue; // no events → no alarms to schedule
+                if (eventIds.isEmpty()) {
+                    TaskAlarmScheduler.cancelForTask(ctx, t.getId()); // events gone → drop stale alarms
+                    continue;
+                }
                 TaskAlarmScheduler.scheduleForTask(ctx, t.getId(), t.getTaskDateTime(), eventIds);
             }
         } catch (Exception ignored) {
@@ -39,7 +44,9 @@ public final class TaskAlarmRescheduler {
         }
     }
 
-    /** Fire-and-forget variant for call sites already on the UI thread. */
+    /**
+     * Fire-and-forget variant for call sites already on the UI thread.
+     */
     public static void rescheduleAllAsync(Context ctx) {
         final Context app = ctx.getApplicationContext();
         new Thread(() -> rescheduleAll(app), "task-alarm-reschedule").start();

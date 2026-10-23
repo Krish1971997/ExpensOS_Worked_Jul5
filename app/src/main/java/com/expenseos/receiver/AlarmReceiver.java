@@ -1,7 +1,6 @@
 package com.expenseos.receiver;
 
 import android.Manifest;
-import android.app.AlarmManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -41,7 +40,8 @@ public class AlarmReceiver extends BroadcastReceiver {
         long taskId = intent.getLongExtra("task_id", 0);
         long eventReminderId = intent.getLongExtra("event_reminder_id", 0);
         Task task = new TaskDao(ctx).findById(taskId);
-        String taskName = task != null && task.getName() != null ? task.getName() : "Task alarm";
+        if (task == null) return; // task deleted — don't ring a stale alarm
+        String taskName = task.getName() != null ? task.getName() : "Task alarm";
 
         // 1 — direct launch (works while the app is already in the foreground)
         try {
@@ -95,6 +95,7 @@ public class AlarmReceiver extends BroadcastReceiver {
                     NotificationManager.IMPORTANCE_HIGH);
             ch.setDescription("Full-screen task alarms");
             ch.enableVibration(true);
+            ch.setSound(null, null); // AlarmRingActivity plays the tone — avoid double sound
             NotificationManager m = ctx.getSystemService(NotificationManager.class);
             if (m != null) m.createNotificationChannel(ch);
         }

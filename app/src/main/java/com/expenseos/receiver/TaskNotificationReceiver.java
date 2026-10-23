@@ -28,7 +28,8 @@ public class TaskNotificationReceiver extends BroadcastReceiver {
         createChannel(ctx);
         long taskId = intent.getLongExtra("task_id", 0);
         Task task = new TaskDao(ctx).findById(taskId);
-        String title = task != null ? task.getName() : "Task reminder";
+        if (task == null) return; // task deleted
+        String title = task.getName();
 
         Intent openApp = new Intent(ctx, HomeActivity.class);
         openApp.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

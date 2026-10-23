@@ -97,6 +97,7 @@ public class TaskDao {
     }
 
     public void delete(long id) {
+        com.expenseos.scheduler.TaskAlarmScheduler.cancelForTask(ctx, id); // stop its alarms first
         SQLiteDatabase wdb = db.getWritableDatabase();
         try (Cursor c = wdb.rawQuery(
                 "SELECT name, task_datetime, description, color, google_event_id FROM tasks WHERE id=?",

@@ -39,6 +39,12 @@ public class AddEventActivity extends AppCompatActivity {
     private long notifReminderId = 0;
     private long alarmReminderId = 0;
 
+    private String toneUri = "";   // per-event alarm tone ("" = use global/default)
+    private String toneName = "";
+    private Button btnAlarmTone;
+    private ActivityResultLauncher<Intent> ringtoneLauncher;
+    private ActivityResultLauncher<Intent> audioFileLauncher;
+
     private ActivityResultLauncher<Intent> notifReminderLauncher;
     private ActivityResultLauncher<Intent> alarmReminderLauncher;
 
@@ -79,6 +85,38 @@ public class AddEventActivity extends AppCompatActivity {
         btnNotifReminder.setOnClickListener(v -> showReminderPicker(true));
         btnAlarmReminder.setOnClickListener(v -> showReminderPicker(false));
 
+        btnAlarmTone = findViewById(R.id.btnAlarmTone);
+        ringtoneLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != RESULT_OK || result.getData() == null) return;
+            android.net.Uri picked = result.getData()
+                    .getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+            if (picked == null) return;
+            String n;
+            try {
+                n = android.media.RingtoneManager.getRingtone(this, picked).getTitle(this);
+            } catch (Exception ex) {
+                n = toneNameOf(picked);
+            }
+            toneUri = picked.toString();
+            toneName = n;
+            refreshToneButton();
+        });
+        audioFileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != RESULT_OK || result.getData() == null
+                    || result.getData().getData() == null) return;
+            android.net.Uri file = result.getData().getData();
+            try {
+                getContentResolver().takePersistableUriPermission(file,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) {
+            }
+            toneUri = file.toString();
+            toneName = toneNameOf(file);
+            refreshToneButton();
+        });
+        btnAlarmTone.setOnClickListener(v -> showToneChooser());
+        refreshToneButton();
+
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnSaveEvent).setOnClickListener(v -> save());
 
@@ -113,6 +151,60 @@ public class AddEventActivity extends AppCompatActivity {
     private void showTab(int pos) {
         blockNotification.setVisibility(pos == 0 ? View.VISIBLE : View.GONE);
         blockAlarm.setVisibility(pos == 1 ? View.VISIBLE : View.GONE);
+    }
+
+    // ── Per-event alarm tone ──────────────────────────────
+    private String toneNameOf(android.net.Uri uri) {
+        try (android.database.Cursor c = getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
+        } catch (Exception ignored) {
+        }
+        String last = uri.getLastPathSegment();
+        return last != null ? last.substring(Math.max(0, last.length() - 40)) : "Custom tone";
+    }
+
+    private void refreshToneButton() {
+        btnAlarmTone.setText("🔔 Alarm tone: " + (toneUri.isEmpty()
+                ? "Default (" + com.expenseos.util.AlarmToneStore.getName(this) + ")"
+                : toneName));
+    }
+
+    private void showToneChooser() {
+        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)"};
+        new AlertDialog.Builder(this)
+                .setTitle("Alarm tone")
+                .setItems(opts, (d, which) -> {
+                    if (which == 0) {
+                        Intent i = new Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,
+                                android.media.RingtoneManager.TYPE_ALARM);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Select alarm tone");
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+                        i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+                        if (!toneUri.isEmpty())
+                            i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                    android.net.Uri.parse(toneUri));
+                        ringtoneLauncher.launch(i);
+                    } else if (which == 1) {
+                        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        i.addCategory(Intent.CATEGORY_OPENABLE);
+                        i.setType("audio/*");
+                        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                        try {
+                            audioFileLauncher.launch(i);
+                        } catch (android.content.ActivityNotFoundException ex) {
+                            Toast.makeText(this, "No file manager found", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        toneUri = "";
+                        toneName = "";
+                        refreshToneButton();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     // ── Reminder picker: popup list of existing reminders + "Create new" ──
@@ -169,6 +261,11 @@ public class AddEventActivity extends AppCompatActivity {
             alarmReminderId = alarms.get(0).getReminderId();
             refreshReminderButton(btnAlarmReminder, alarmReminderId);
         }
+        if (com.expenseos.util.AlarmToneStore.hasEventTone(this, editingEventId)) {
+            toneUri = com.expenseos.util.AlarmToneStore.getEventUri(this, editingEventId);
+            toneName = com.expenseos.util.AlarmToneStore.getEventName(this, editingEventId);
+        }
+        refreshToneButton();
     }
 
     // ── Save ───────────────────────────────────────────────
@@ -200,6 +297,9 @@ public class AddEventActivity extends AppCompatActivity {
 
         if (notifReminderId > 0) eventDao.setReminder(eventId, "NOTIFICATION", notifReminderId);
         if (alarmReminderId > 0) eventDao.setReminder(eventId, "ALARM", alarmReminderId);
+
+        if (toneUri.isEmpty()) com.expenseos.util.AlarmToneStore.clearForEvent(this, eventId);
+        else com.expenseos.util.AlarmToneStore.saveForEvent(this, eventId, toneUri, toneName);
 
         // Event offsets/links may have changed — every task linked to this
         // event now fires at different times. Recompute all task alarms.

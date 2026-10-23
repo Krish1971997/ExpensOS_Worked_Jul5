@@ -34,7 +34,9 @@ public final class AlarmToneStore {
                 .apply();
     }
 
-    /** @return the stored tone URI, or "" when the default tone should be used. */
+    /**
+     * @return the stored tone URI, or "" when the default tone should be used.
+     */
     public static String getUri(Context ctx) {
         return prefs(ctx).getString(KEY_URI, "");
     }
@@ -47,5 +49,37 @@ public final class AlarmToneStore {
 
     public static void clear(Context ctx) {
         prefs(ctx).edit().remove(KEY_URI).remove(KEY_NAME).apply();
+    }
+
+    // ── Per-event tone (falls back to the global tone above) ──────────
+    public static void saveForEvent(Context ctx, long eventId, String uri, String name) {
+        prefs(ctx).edit()
+                .putString("ev_uri_" + eventId, uri)
+                .putString("ev_name_" + eventId, name == null || name.isEmpty() ? "Custom tone" : name)
+                .apply();
+    }
+
+    public static void clearForEvent(Context ctx, long eventId) {
+        prefs(ctx).edit().remove("ev_uri_" + eventId).remove("ev_name_" + eventId).apply();
+    }
+
+    public static boolean hasEventTone(Context ctx, long eventId) {
+        return !prefs(ctx).getString("ev_uri_" + eventId, "").isEmpty();
+    }
+
+    public static String getEventUri(Context ctx, long eventId) {
+        return prefs(ctx).getString("ev_uri_" + eventId, "");
+    }
+
+    public static String getEventName(Context ctx, long eventId) {
+        return prefs(ctx).getString("ev_name_" + eventId, "Custom tone");
+    }
+
+    /**
+     * Event's own tone if set, else the global tone ("" = phone default).
+     */
+    public static String resolveUri(Context ctx, long eventId) {
+        String own = getEventUri(ctx, eventId);
+        return own.isEmpty() ? getUri(ctx) : own;
     }
 }
