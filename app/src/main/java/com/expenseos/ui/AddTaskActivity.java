@@ -94,6 +94,7 @@ public class AddTaskActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnSaveTask).setOnClickListener(v -> save());
+        com.expenseos.util.ScreenAnim.staggerIn((android.view.ViewGroup) findViewById(R.id.btnSaveTask).getParent());
 
         editingTaskId = getIntent().getLongExtra(EXTRA_TASK_ID, 0);
         if (editingTaskId > 0) loadForEdit();

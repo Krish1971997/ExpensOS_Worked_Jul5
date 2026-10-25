@@ -1,23 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="52dp"
+    android:layout_height="96dp"
+    android:background="@drawable/bg_calendar_cell"
     android:orientation="vertical"
-    android:gravity="center"
-    android:background="?attr/selectableItemBackground">
+    android:paddingHorizontal="1dp"
+    android:paddingTop="2dp"
+    android:paddingBottom="1dp">
 
     <TextView
         android:id="@+id/tvDayNumber"
-        android:layout_width="28dp"
-        android:layout_height="28dp"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center_horizontal"
         android:gravity="center"
-        android:textSize="13sp" />
+        android:textSize="12sp" />
 
-    <View
-        android:id="@+id/viewTaskDot"
-        android:layout_width="5dp"
-        android:layout_height="5dp"
-        android:layout_marginTop="2dp"
-        android:background="@color/primary"
+    <TextView
+        android:id="@+id/tvChip1"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:layout_marginTop="1dp"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="3dp"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvChip2"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:layout_marginTop="1dp"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="3dp"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvChip3"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:layout_marginTop="1dp"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="3dp"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvChip4"
+        android:layout_width="match_parent"
+        android:layout_height="16dp"
+        android:layout_marginTop="1dp"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="3dp"
+        android:textSize="10sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvMore"
+        android:layout_width="match_parent"
+        android:layout_height="12dp"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingHorizontal="3dp"
+        android:textColor="#99808080"
+        android:textSize="9sp"
         android:visibility="gone" />
 </LinearLayout>

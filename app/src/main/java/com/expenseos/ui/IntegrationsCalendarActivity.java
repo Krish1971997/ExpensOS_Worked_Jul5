@@ -1,14 +1,18 @@
 package com.expenseos.ui;
 
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -16,6 +20,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.expenseos.R;
 import com.expenseos.dao.TaskDao;
 import com.expenseos.model.Task;
+import com.expenseos.util.SwipeNavHelper;
 import com.google.android.material.tabs.TabLayout;
 
 import java.time.LocalDate;
@@ -23,8 +28,10 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Task/reminder calendar for the Integrations tab — separate from
@@ -40,6 +47,7 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
     private LocalDate currentDay;
     private boolean listMode = false; // calendar vs flat list toggle
     private int viewMode = 0; // 0=Month 1=Week 2=Day 3=Year
+    private SwipeNavHelper swipe;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -55,7 +63,7 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
         bottomNav.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.navConfig) {
                 startActivity(new Intent(this, IntegrationsActivity.class));
-                overridePendingTransition(0, 0);
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
                 finish();
                 return true;
             }
@@ -91,7 +99,26 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
             }
         });
 
+        // swipe: month / week / day / year step, same as the ◀ ▶ buttons
+        swipe = new SwipeNavHelper(this, new SwipeNavHelper.Callback() {
+            @Override
+            public void onPrev() {
+                step(-1);
+            }
+
+            @Override
+            public void onNext() {
+                step(1);
+            }
+        });
+
         render();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (swipe != null) swipe.onTouch(ev);
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
@@ -116,12 +143,25 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
                 break;
         }
         render();
+        animateBody(dir);
+    }
+
+    /**
+     * Content slides in from the side we are moving towards.
+     */
+    private void animateBody(int dir) {
+        RecyclerView rv = findViewById(R.id.rvCalendarBody);
+        rv.animate().cancel();
+        rv.setTranslationX(getResources().getDisplayMetrics().density * 48 * dir);
+        rv.setAlpha(0.2f);
+        rv.animate().translationX(0).alpha(1f).setDuration(200).start();
     }
 
     private void render() {
         RecyclerView rv = findViewById(R.id.rvCalendarBody);
         TextView tvTitle = findViewById(R.id.tvCalTitle);
         findViewById(R.id.btnToggleList).setVisibility(viewMode == 0 ? View.VISIBLE : View.GONE);
+        findViewById(R.id.rowWeekdays).setVisibility(viewMode == 0 && !listMode ? View.VISIBLE : View.GONE);
 
         if (listMode && viewMode == 0) {
             renderFlatList(rv, tvTitle);
@@ -144,53 +184,92 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
         }
     }
 
-    // ── Month grid (dots for days with tasks) ─────────────
+    // ── Month grid (Google-Calendar style: coloured task chips per day) ──
     private void renderMonth(RecyclerView rv, TextView tvTitle) {
         tvTitle.setText(currentMonth.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + currentMonth.getYear());
 
-        List<String> datesWithTasks = taskDao.findDatesInMonth(currentMonth.toString().substring(0, 7));
+        // cell height = grid height / rows → grid isn't measured yet on the first render
+        if (rv.getHeight() == 0) {
+            rv.post(() -> {
+                if (rv.getHeight() > 0 && viewMode == 0 && !listMode) renderMonth(rv, tvTitle);
+            });
+            return;
+        }
 
-        List<LocalDate> cells = new ArrayList<>();
+        // group all tasks by day once (findAll is ordered by task_datetime)
+        Map<String, List<Task>> byDay = new HashMap<>();
+        for (Task t : taskDao.findAll()) {
+            if (t.getTaskDateTime() == null || t.getTaskDateTime().length() < 10) continue;
+            byDay.computeIfAbsent(t.getTaskDateTime().substring(0, 10), k -> new ArrayList<>()).add(t);
+        }
+
+        // full weeks: Sunday before the 1st .. Saturday after the last day (neighbour-month days dimmed)
         LocalDate first = currentMonth.atDay(1);
         int leading = first.getDayOfWeek().getValue() % 7;
-        for (int i = 0; i < leading; i++) cells.add(null);
-        for (int d = 1; d <= currentMonth.lengthOfMonth(); d++) cells.add(currentMonth.atDay(d));
-        while (cells.size() % 7 != 0) cells.add(null);
+        LocalDate start = first.minusDays(leading);
+        int rows = (int) Math.ceil((leading + currentMonth.lengthOfMonth()) / 7.0);
+        List<LocalDate> cells = new ArrayList<>();
+        for (int i = 0; i < rows * 7; i++) cells.add(start.plusDays(i));
+
+        final float dp = getResources().getDisplayMetrics().density;
+        int gridH = rv.getHeight() - rv.getPaddingTop() - rv.getPaddingBottom();
+        final int cellH = Math.max((int) (72 * dp), gridH / rows);
 
         rv.setLayoutManager(new GridLayoutManager(this, 7));
         rv.setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             class VH extends RecyclerView.ViewHolder {
                 final TextView tvNum;
-                final View dot;
+                final TextView more;
+                final TextView[] chips = new TextView[4];
 
                 VH(View v) {
                     super(v);
                     tvNum = v.findViewById(R.id.tvDayNumber);
-                    dot = v.findViewById(R.id.viewTaskDot);
+                    more = v.findViewById(R.id.tvMore);
+                    chips[0] = v.findViewById(R.id.tvChip1);
+                    chips[1] = v.findViewById(R.id.tvChip2);
+                    chips[2] = v.findViewById(R.id.tvChip3);
+                    chips[3] = v.findViewById(R.id.tvChip4);
                 }
             }
 
             @NonNull
             @Override
             public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup p, int t) {
-                return new VH(LayoutInflater.from(p.getContext()).inflate(R.layout.item_integrations_calendar_day, p, false));
+                View v = LayoutInflater.from(p.getContext()).inflate(R.layout.item_integrations_calendar_day, p, false);
+                v.getLayoutParams().height = cellH;
+                return new VH(v);
             }
 
             @Override
             public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int pos) {
                 VH h = (VH) holder;
                 LocalDate date = cells.get(pos);
-                if (date == null) {
-                    h.tvNum.setText("");
-                    h.dot.setVisibility(View.GONE);
-                    h.itemView.setOnClickListener(null);
-                    return;
-                }
-                h.tvNum.setText(String.valueOf(date.getDayOfMonth()));
+                boolean inMonth = YearMonth.from(date).equals(currentMonth);
                 boolean isToday = date.equals(LocalDate.now());
+
+                h.tvNum.setText(String.valueOf(date.getDayOfMonth()));
                 h.tvNum.setBackgroundResource(isToday ? R.drawable.bg_today_circle : 0);
                 h.tvNum.setTextColor(getColor(isToday ? android.R.color.white : R.color.text));
-                h.dot.setVisibility(datesWithTasks.contains(date.format(DATE_FMT)) ? View.VISIBLE : View.GONE);
+                h.itemView.setAlpha(inMonth ? 1f : 0.45f);
+
+                List<Task> tasks = byDay.get(date.format(DATE_FMT));
+                int n = tasks == null ? 0 : tasks.size();
+                int avail = cellH - (int) (27 * dp);              // below the day number
+                int fit = Math.min(4, Math.max(1, avail / (int) (17 * dp)));
+                int show = n <= fit ? n : Math.max(1, Math.min(4, (avail - (int) (12 * dp)) / (int) (17 * dp)));
+
+                for (int i = 0; i < 4; i++) {
+                    if (i < show) bindChip(h.chips[i], tasks.get(i), dp);
+                    else h.chips[i].setVisibility(View.GONE);
+                }
+                if (n > show) {
+                    h.more.setVisibility(View.VISIBLE);
+                    h.more.setText("+" + (n - show) + " more");
+                } else {
+                    h.more.setVisibility(View.GONE);
+                }
+
                 h.itemView.setOnClickListener(v ->
                         DayTasksDialog.show(IntegrationsCalendarActivity.this, date.format(DATE_FMT), () -> render()));
             }
@@ -200,6 +279,26 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
                 return cells.size();
             }
         });
+    }
+
+    /**
+     * Rounded chip in the task's colour (primary when none); text flips dark on light colours (e.g. Banana).
+     */
+    private void bindChip(TextView chip, Task t, float dp) {
+        int color;
+        try {
+            String hex = t.getColor();
+            color = (hex == null || hex.isEmpty()) ? getColor(R.color.primary) : Color.parseColor(hex);
+        } catch (IllegalArgumentException e) {
+            color = getColor(R.color.primary);
+        }
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(4 * dp);
+        bg.setColor(color);
+        chip.setBackground(bg);
+        chip.setTextColor(ColorUtils.calculateLuminance(color) > 0.6 ? 0xFF202124 : Color.WHITE);
+        chip.setText(t.getName());
+        chip.setVisibility(View.VISIBLE);
     }
 
     // ── Week: 7 rows, one per day, with task count ────────

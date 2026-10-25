@@ -49,6 +49,7 @@ public class AddReminderActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnSaveReminder).setOnClickListener(v -> save());
+        com.expenseos.util.ScreenAnim.staggerIn((android.view.ViewGroup) findViewById(R.id.btnSaveReminder).getParent());
 
         editingId = getIntent().getLongExtra("reminder_id", 0);
         if (editingId > 0) {

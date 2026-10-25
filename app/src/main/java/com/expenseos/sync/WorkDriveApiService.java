@@ -126,7 +126,7 @@ public class WorkDriveApiService {
         conn.setReadTimeout(30_000);
         conn.setRequestProperty("Authorization", "Zoho-oauthtoken " + token.getAccessToken());
         conn.setRequestProperty("Content-Type", "application/vnd.api+json");
-        conn.setRequestProperty("Accept", "application/vnd.api+json");   // <-- add this, matches web
+        conn.setRequestProperty("Accept", "application/vnd.api+json");   // same as the web client
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.getBytes(StandardCharsets.UTF_8));

@@ -121,9 +121,19 @@ public class TaskAlarmScheduler {
             long triggerMillis = trigger.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
             boolean canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || (am != null && am.canScheduleExactAlarms());
             if (am != null) {
-                if (canExact)
+                if ("ALARM".equals(type)) {
+                    // Alarm clock: no exact-alarm permission, never deferred by Doze, and the system lets
+                    // the app start its ringing service / screen when it fires — also with the screen off.
+                    Intent showI = new Intent(ctx, com.expenseos.ui.HomeActivity.class)
+                            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    PendingIntent showPi = PendingIntent.getActivity(ctx, requestCode + 500000, showI,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerMillis, showPi), pi);
+                } else if (canExact) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
-                else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
+                } else {
+                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMillis, pi);
+                }
             }
 
             recordAlarm(ctx, taskId, er.getId(), requestCode, trigger.format(TASK_FMT), type);

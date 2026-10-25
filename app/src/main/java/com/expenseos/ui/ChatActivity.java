@@ -630,7 +630,7 @@ public class ChatActivity extends AppCompatActivity {
         android.widget.TableRow tr = new android.widget.TableRow(this);
         for (String cellText : cells) {
             TextView tv = new TextView(this);
-            tv.setText(cellText);
+            tv.setText(renderSimpleMarkdown(cellText));
             tv.setPadding(dp(8), dp(6), dp(8), dp(6));
             tv.setTextSize(13);
             if (isHeader) tv.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -698,25 +698,97 @@ public class ChatActivity extends AppCompatActivity {
         return tv;
     }
 
+    private static final java.util.regex.Pattern MD_HEADING =
+            java.util.regex.Pattern.compile("^\\s{0,3}(#{1,6})\\s+(.*?)\\s*#*\\s*$");
+    private static final java.util.regex.Pattern MD_HR =
+            java.util.regex.Pattern.compile("^\\s*([-*_])(\\s*\\1){2,}\\s*$");
+    private static final java.util.regex.Pattern MD_BULLET =
+            java.util.regex.Pattern.compile("^(\\s*)[*+\\-•]\\s+(.*)$");
+    // **bold** | __bold__ | `code` | *italic* (italic never starts/ends next to a space, so "* " bullets and stray stars are safe)
+    private static final java.util.regex.Pattern MD_INLINE = java.util.regex.Pattern.compile(
+            "\\*\\*(.+?)\\*\\*|__(.+?)__|`([^`]+)`|(?<![*\\w])\\*(?![\\s*])(.+?)(?<![\\s*])\\*(?![*\\w])");
+
+    /**
+     * Mini markdown: # headings, --- rules, * / - bullets, **bold**, *italic*, `code`, <br>.
+     * Used for chat bubbles AND table cells.
+     */
     private CharSequence renderSimpleMarkdown(String text) {
+        final int fl = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
         android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\\*\\*(.+?)\\*\\*|\\*(.+?)\\*")
-                .matcher(text);
+        String[] lines = text.replace("\r", "").replaceAll("(?i)<br\\s*/?>", "\n").split("\n", -1);
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            int start = sb.length();
+            java.util.regex.Matcher h = MD_HEADING.matcher(line);
+            java.util.regex.Matcher b = MD_BULLET.matcher(line);
+
+            if (MD_HR.matcher(line).matches()) {
+                sb.append("────────────────");
+                sb.setSpan(new android.text.style.ForegroundColorSpan(0x55808080), start, sb.length(), fl);
+            } else if (h.matches()) {
+                appendInline(sb, h.group(2));
+                int level = h.group(1).length();
+                sb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, sb.length(), fl);
+                sb.setSpan(new android.text.style.RelativeSizeSpan(level == 1 ? 1.3f : level == 2 ? 1.2f : 1.1f),
+                        start, sb.length(), fl);
+            } else if (b.matches()) {
+                sb.append(b.group(1).isEmpty() ? "• " : "     ◦ ");
+                appendInline(sb, b.group(2));
+            } else {
+                appendInline(sb, line);
+            }
+            if (i < lines.length - 1) sb.append('\n');
+        }
+        colorArrows(sb);
+        return sb;
+    }
+
+    /**
+     * Expense compare: an increase is bad (red), a decrease is a saving (green). Set false for income comparisons.
+     */
+    private static final boolean INCREASE_IS_BAD = true;
+
+    /**
+     * Replaces 🔺🔻⬆⬇↑↓▲▼ (colour emoji can't be tinted) with plain ▲ / ▼ glyphs and colours them:
+     * red = bad direction, green = good direction.
+     */
+    private void colorArrows(android.text.SpannableStringBuilder sb) {
+        final int red = 0xFFDC2626, green = 0xFF16A34A;
+        for (int i = 0; i < sb.length(); i++) {
+            int cp = Character.codePointAt(sb, i);
+            boolean up = cp == 0x1F53A || cp == 0x1F53C || cp == 0x25B2 || cp == 0x2B06 || cp == 0x2191;
+            boolean down = cp == 0x1F53B || cp == 0x1F53D || cp == 0x25BC || cp == 0x2B07 || cp == 0x2193;
+            if (!up && !down) continue;
+
+            int end = i + Character.charCount(cp);
+            if (end < sb.length() && sb.charAt(end) == '\uFE0F') end++; // emoji variation selector
+            sb.replace(i, end, up ? "▲" : "▼");
+            sb.setSpan(new android.text.style.ForegroundColorSpan(up == INCREASE_IS_BAD ? red : green),
+                    i, i + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+    }
+
+    private void appendInline(android.text.SpannableStringBuilder sb, String s) {
+        final int fl = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
+        java.util.regex.Matcher m = MD_INLINE.matcher(s);
         int last = 0;
         while (m.find()) {
-            sb.append(text, last, m.start());
-            boolean bold = m.group(1) != null;
-            String inner = bold ? m.group(1) : m.group(2);
+            sb.append(s, last, m.start());
             int start = sb.length();
-            sb.append(inner);
-            sb.setSpan(new android.text.style.StyleSpan(
-                            bold ? android.graphics.Typeface.BOLD : android.graphics.Typeface.ITALIC),
-                    start, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (m.group(1) != null || m.group(2) != null) {
+                sb.append(m.group(1) != null ? m.group(1) : m.group(2));
+                sb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, sb.length(), fl);
+            } else if (m.group(3) != null) {
+                sb.append(m.group(3));
+                sb.setSpan(new android.text.style.TypefaceSpan("monospace"), start, sb.length(), fl);
+            } else {
+                sb.append(m.group(4));
+                sb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.ITALIC), start, sb.length(), fl);
+            }
             last = m.end();
         }
-        sb.append(text, last, text.length());
-        return sb;
+        sb.append(s, last, s.length());
     }
 
     private ImageView imageView(String path) {

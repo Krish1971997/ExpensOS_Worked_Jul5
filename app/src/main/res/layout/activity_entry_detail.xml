@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg"
@@ -21,7 +21,9 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
-            android:src="@android:drawable/ic_menu_revert" />
+            android:padding="8dp"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="@color/text" />
 
         <TextView
             android:layout_width="0dp"
@@ -36,6 +38,7 @@
         <ImageView
             android:id="@+id/ivSyncStatus"
             android:layout_width="24dp"
+
             android:layout_height="24dp"
             android:layout_marginEnd="8dp"
             android:contentDescription="Sync status" />
@@ -51,7 +54,8 @@
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -325,4 +329,25 @@
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
+
+    <!-- Share entry — pinned to the bottom -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/bg"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp">
+
+        <com.google.android.material.button.MaterialButton xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/btnShareEntry"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Share entry"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            app:backgroundTint="#16A34A"
+            app:cornerRadius="16dp" />
+    </FrameLayout>
 </LinearLayout>

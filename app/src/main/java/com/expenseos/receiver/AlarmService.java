@@ -48,10 +48,13 @@ public class AlarmService extends Service {
     public static final String ACTION_CANCEL_SNOOZE = "com.expenseos.ALARM_CANCEL_SNOOZE";
     public static final String ACTION_FINISHED = "com.expenseos.ALARM_FINISHED";
     private static final String CHANNEL_ID = "task_alarm_v2";
-    private static final String SNOOZE_CHANNEL = "task_snooze";
+    private static final String SNOOZE_CHANNEL = "task_snooze_v2";
     private static final int SNOOZE_NOTIF_BASE = 110000;
     private static final long MAX_RING_MS = 2 * 60 * 1000L;
     private static final long SNOOZE_MS = 10 * 60 * 1000L;
+
+    private long rampMs = 30_000L;       // Config → Alarm → Gradually increase volume (0 = off)
+    private boolean vibrationOn = true;  // Config → Alarm → Vibration
 
     private Ringtone ringtone;
     private Vibrator vibrator;
@@ -60,6 +63,29 @@ public class AlarmService extends Service {
     private boolean ringing;
     private long curTaskId, curEventReminderId, ringStartedAt;
     private BroadcastReceiver screenOffReceiver;
+
+    // gradual volume: RAMP_START → 1.0 over RAMP_MS
+    private static final float RAMP_START = 0.1f;
+    private long rampStartedAt;
+    private final Runnable rampStep = new Runnable() {
+        @Override
+        public void run() {
+            if (ringtone == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
+            float f = Math.min(1f, (SystemClock.elapsedRealtime() - rampStartedAt) / (float) rampMs);
+            try {
+                ringtone.setVolume(RAMP_START + (1f - RAMP_START) * f);
+            } catch (Exception ignored) {
+            }
+            if (f < 1f) handler.postDelayed(this, 500);
+        }
+    };
+
+    private void startVolumeRamp() {
+        if (rampMs <= 0) return; // "Off": already at full volume
+        rampStartedAt = SystemClock.elapsedRealtime();
+        handler.removeCallbacks(rampStep);
+        handler.post(rampStep);
+    }
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -111,6 +137,9 @@ public class AlarmService extends Service {
         }
 
         long eventId = new EventDao(this).findEventIdByEventReminderId(eventReminderId);
+        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(this);
+        rampMs = cfg.getAlarmVolumeRampSeconds() * 1000L;
+        vibrationOn = cfg.isAlarmVibrationEnabled();
         startRing(eventId);
 
         curTaskId = taskId;
@@ -124,6 +153,7 @@ public class AlarmService extends Service {
         // Screen on → heads-up popup with Snooze / Dismiss buttons.
         handler.removeCallbacksAndMessages(null);
         handler.postDelayed(this::stopSelf, MAX_RING_MS);
+        startVolumeRamp(); // must come after removeCallbacksAndMessages(null) above
         return START_NOT_STICKY;
     }
 
@@ -151,10 +181,15 @@ public class AlarmService extends Service {
         AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
         PendingIntent pi = snoozeAlarmPi(taskId, eventReminderId);
         if (am != null) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms())
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
-            else
+            try {
+                Intent showI = new Intent(this, com.expenseos.ui.HomeActivity.class)
+                        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                PendingIntent showPi = PendingIntent.getActivity(this, (int) (98000 + taskId), showI,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerAt, showPi), pi);
+            } catch (Exception e) {
                 am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+            }
         }
 
         Task t = new TaskDao(this).findById(taskId);
@@ -162,7 +197,9 @@ public class AlarmService extends Service {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(SNOOZE_CHANNEL, "Snoozed alarms",
-                    NotificationManager.IMPORTANCE_LOW);
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            ch.setSound(null, null);
+            ch.enableVibration(false);
             NotificationManager m = getSystemService(NotificationManager.class);
             if (m != null) m.createNotificationChannel(ch);
         }
@@ -172,10 +209,18 @@ public class AlarmService extends Service {
         PendingIntent cancelPi = PendingIntent.getService(this, (int) (97000 + taskId), cancel,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+        String at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+                .format(new java.util.Date(triggerAt));
+        Intent open = new Intent(this, com.expenseos.ui.HomeActivity.class)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent openPi = PendingIntent.getActivity(this, (int) (98500 + taskId), open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Notification n = new NotificationCompat.Builder(this, SNOOZE_CHANNEL)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("Snoozed: " + name)
-                .setContentText("Alarm rings again in")
+                .setContentTitle("⏰ " + name)
+                .setContentText("Snoozed — rings again at " + at)
+                .setSubText("Alarm")
                 .setUsesChronometer(true)
                 .setChronometerCountDown(true)
                 .setShowWhen(true)
@@ -183,7 +228,9 @@ public class AlarmService extends Service {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
-                .addAction(0, "Cancel alarm", cancelPi)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setContentIntent(openPi)
+                .addAction(0, "Dismiss", cancelPi)
                 .build();
         NotificationManagerCompat.from(this).notify(SNOOZE_NOTIF_BASE + (int) taskId, n);
 
@@ -267,13 +314,16 @@ public class AlarmService extends Service {
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build());
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ringtone.setLooping(true);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ringtone.setLooping(true);
+                    ringtone.setVolume(rampMs > 0 ? RAMP_START : 1f);
+                }
                 ringtone.play();
             } catch (Exception ignored) {
             }
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if (vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
+        if (vibrationOn && vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
     }
 
     /**

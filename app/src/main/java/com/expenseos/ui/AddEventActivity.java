@@ -119,6 +119,7 @@ public class AddEventActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnSaveEvent).setOnClickListener(v -> save());
+        com.expenseos.util.ScreenAnim.staggerIn((android.view.ViewGroup) findViewById(R.id.btnSaveEvent).getParent());
 
         editingEventId = getIntent().getLongExtra("event_id", 0);
         if (editingEventId > 0) {

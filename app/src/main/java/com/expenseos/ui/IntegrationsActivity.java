@@ -34,6 +34,7 @@ public class IntegrationsActivity extends AppCompatActivity {
     private ReminderDao reminderDao;
     private RecyclerView rv;
     private int subTab = 0; // 0 = Events, 1 = Reminders
+    private com.expenseos.util.SwipeNavHelper swipe;
 
     // ── Alarm tone picker (phone tones / file-manager audio) ─────────
     private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> ringtoneLauncher =
@@ -187,6 +188,19 @@ public class IntegrationsActivity extends AppCompatActivity {
             }
         });
 
+
+        swipe = new com.expenseos.util.SwipeNavHelper(this, new com.expenseos.util.SwipeNavHelper.Callback() {
+            @Override
+            public void onPrev() { // → finger : back to Events
+                if (subTab == 1) tabs.selectTab(tabs.getTabAt(0));
+            }
+
+            @Override
+            public void onNext() { // ← finger : on to Reminders
+                if (subTab == 0) tabs.selectTab(tabs.getTabAt(1));
+            }
+        });
+
         findViewById(R.id.fabAdd).setOnClickListener(v ->
                 startActivity(new Intent(this, subTab == 0 ? AddEventActivity.class : AddReminderActivity.class)));
 
@@ -195,7 +209,7 @@ public class IntegrationsActivity extends AppCompatActivity {
         bottomNav.setOnItemSelectedListener(item -> {
             if (item.getItemId() == R.id.navCalendar) {
                 startActivity(new Intent(this, IntegrationsCalendarActivity.class));
-                overridePendingTransition(0, 0);
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
                 finish();
                 return true;
             }
@@ -208,6 +222,12 @@ public class IntegrationsActivity extends AppCompatActivity {
         super.onResume();
         load();
         com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAllAsync(this);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        if (swipe != null) swipe.onTouch(ev);
+        return super.dispatchTouchEvent(ev);
     }
 
     private void load() {

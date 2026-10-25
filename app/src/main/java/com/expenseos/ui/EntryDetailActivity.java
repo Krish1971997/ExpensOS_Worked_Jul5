@@ -76,6 +76,17 @@ public class EntryDetailActivity extends AppCompatActivity {
 
         findViewById(R.id.btnEntryBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnEntryMenu).setOnClickListener(this::showEntryMenu);
+        findViewById(R.id.btnShareEntry).setOnClickListener(v -> {
+            if (txn == null) return;
+            String bookName = "";
+            for (CashBook b : bookDao.findAll()) {
+                if (b.getId() == txn.getBookId()) {
+                    bookName = b.getName();
+                    break;
+                }
+            }
+            ShareBillSheet.show(this, txn, bookName);
+        });
         findViewById(R.id.btnEditEntry).setOnClickListener(v -> {
             // Edit goes through the dedicated TransactionDetailActivity edit
             // screen (not TransactionEntryActivity — that stays reserved for

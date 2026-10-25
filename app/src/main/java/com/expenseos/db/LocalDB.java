@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 45; // bumped: added session_id to ai_chat_messages (multi-chat history + new chat)
+    private static final int DB_VERSION = 46; // bumped: added session_id to ai_chat_messages (multi-chat history + new chat)
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -930,6 +930,14 @@ public class LocalDB extends SQLiteOpenHelper {
                 db.execSQL("ALTER TABLE ai_chat_messages ADD COLUMN session_id TEXT NOT NULL DEFAULT 'default'");
             }
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_chat_session ON ai_chat_messages(session_id, id)");
+        }
+
+        if (oldV < 46) {
+            db.execSQL("ALTER TABLE categories     ADD COLUMN icon  TEXT");
+            db.execSQL("ALTER TABLE categories     ADD COLUMN color TEXT");
+            db.execSQL("ALTER TABLE sub_categories ADD COLUMN icon  TEXT");
+            db.execSQL("ALTER TABLE sub_categories ADD COLUMN color TEXT");
+            
         }
 
     }

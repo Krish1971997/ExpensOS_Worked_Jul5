@@ -45,7 +45,7 @@
                 style="@style/Text.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="1) Update Excel  →  2) Zoho la fill pannunga  →  3) Fetch &amp; Preview  →  4) Import" />
+                android:text="1) Update Excel  →  2) Fill in Zoho  →  3) Fetch &amp; Preview  →  4) Import" />
 
             <LinearLayout
                 android:layout_width="match_parent"

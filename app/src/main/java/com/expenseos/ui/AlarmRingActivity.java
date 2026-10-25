@@ -79,7 +79,9 @@ public class AlarmRingActivity extends AppCompatActivity {
             }
         }
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-        if (playHere && vibrator != null) vibrator.vibrate(new long[]{0, 500, 500}, 0);
+        if (playHere && vibrator != null
+                && com.expenseos.util.AppConfig.get(this).isAlarmVibrationEnabled())
+            vibrator.vibrate(new long[]{0, 500, 500}, 0);
 
         findViewById(R.id.btnSnooze).setOnClickListener(v -> snooze());
         findViewById(R.id.btnDismiss).setOnClickListener(v -> dismiss());

@@ -65,7 +65,7 @@ public class ZohoSheetApiService {
             if (code == 2863 && !"worksheet.list".equals(method)) {
                 try {   // diagnostic only: show which worksheets really exist
                     String names = call(resourceId, "worksheet.list", new LinkedHashMap<>()).toString();
-                    extra = " | Sheet la irukkura worksheets: " + (names.length() > 300 ? names.substring(0, 300) + "…" : names);
+                    extra = " | Worksheets in this sheet: " + (names.length() > 300 ? names.substring(0, 300) + "…" : names);
                 } catch (Exception ignored) {
                 }
             }
@@ -84,7 +84,7 @@ public class ZohoSheetApiService {
         while (true) {
             Map<String, String> p = new LinkedHashMap<>();
             p.put("worksheet_name", worksheet);
-            p.put("render_option", "formatted");   // cell la display aagura text apdiye ("October 2026", "8.50 AM")
+            p.put("render_option", "formatted");   // cell text exactly as displayed ("October 2026", "8.50 AM")
             p.put("records_start_index", String.valueOf(start));
             p.put("count", String.valueOf(PAGE));
             JSONArray recs = call(rid, "worksheet.records.fetch", p).optJSONArray("records");
@@ -143,17 +143,17 @@ public class ZohoSheetApiService {
         switch (code) {
             case 2401:
             case 2403:
-                return " — Refresh token ku ZohoSheet.dataAPI.READ + UPDATE scope illa, new refresh token generate pannunga";
+                return " — the refresh token lacks the ZohoSheet.dataAPI.READ + UPDATE scopes; generate a new refresh token";
             case 2862:
             case 2898:
-                return " — Zoho Sheet resource id thappu (file Zoho Sheet ah irukkanum)";
+                return " — wrong Zoho Sheet resource id (the file must be a Zoho Sheet)";
             case 2863:
-                return " — 'Import' / 'Reference' worksheet name check pannunga";
+                return " — check the 'Import' / 'Reference' worksheet names";
             case 2990:
             case 2884:
-                return " — row 1 la header names check pannunga";
+                return " — check the header names in row 1";
             case 2950:
-                return " — API throttle, 5 min kazhichu try pannunga";
+                return " — API throttled, try again after 5 minutes";
             default:
                 return "";
         }

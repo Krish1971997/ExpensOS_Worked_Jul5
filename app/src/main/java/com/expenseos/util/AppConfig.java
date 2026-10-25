@@ -37,6 +37,8 @@ public class AppConfig {
     public static final String KEY_SESSION_TIMEOUT = "session.timeout";
     public static final String KEY_ACTIVE_BOOK_ID = "active_book_id";
     public static final String KEY_ACTIVE_BOOK_NAME = "active_book_name";
+    public static final String KEY_ALARM_VOLUME_RAMP_SEC = "alarm.volume.ramp.sec";
+    public static final String KEY_ALARM_VIBRATE = "alarm.vibrate";
 
     private final SharedPreferences prefs;
     private static AppConfig instance;
@@ -150,6 +152,17 @@ public class AppConfig {
         return prefs.getInt(KEY_SESSION_TIMEOUT, 60);
     }
 
+    /**
+     * Seconds the alarm takes to reach full volume; 0 = off (full volume immediately).
+     */
+    public int getAlarmVolumeRampSeconds() {
+        return prefs.getInt(KEY_ALARM_VOLUME_RAMP_SEC, 30);
+    }
+
+    public boolean isAlarmVibrationEnabled() {
+        return prefs.getBoolean(KEY_ALARM_VIBRATE, true);
+    }
+
     public int getActiveBookId() {
         return prefs.getInt(KEY_ACTIVE_BOOK_ID, 1);
     }
@@ -218,6 +231,14 @@ public class AppConfig {
 
     public void setSessionTimeout(int minutes) {
         prefs.edit().putInt(KEY_SESSION_TIMEOUT, minutes).apply();
+    }
+
+    public void setAlarmVolumeRampSeconds(int seconds) {
+        prefs.edit().putInt(KEY_ALARM_VOLUME_RAMP_SEC, Math.max(0, seconds)).apply();
+    }
+
+    public void setAlarmVibrationEnabled(boolean on) {
+        prefs.edit().putBoolean(KEY_ALARM_VIBRATE, on).apply();
     }
 
     public void setActiveBook(int id, String name) {

@@ -56,6 +56,8 @@ public class ImportExcelActivity extends AppCompatActivity {
         btnUpdate.setOnClickListener(v -> doUpdateExcel());
         btnFetch.setOnClickListener(v -> doFetch());
         btnImport.setOnClickListener(v -> confirmImport());
+        com.expenseos.util.ScreenAnim.staggerIn(
+                (android.view.ViewGroup) ((android.view.ViewGroup) btnUpdate.getParent()).getParent());
 
         renderLog();
     }
@@ -98,7 +100,7 @@ public class ImportExcelActivity extends AppCompatActivity {
         previewList.removeAllViews();
         btnImport.setVisibility(View.GONE);
         if (preview == null || preview.rows.isEmpty()) {
-            tvSummary.setText("Excel la new data illa.");
+            tvSummary.setText("No new data in the Excel.");
             return;
         }
         tvSummary.setText(preview.rows.size() + " rows · ✓ " + preview.valid + " valid · ✗ " + preview.invalid + " invalid");
@@ -133,8 +135,8 @@ public class ImportExcelActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Import " + preview.valid + " rows?")
                 .setMessage(preview.invalid > 0
-                        ? preview.invalid + " invalid rows Excel la Status/Error oda irukkum."
-                        : "Ellaa rows um save aagum, Excel la irundhu remove aagum.")
+                        ? preview.invalid + " invalid rows will stay in the Excel with Status/Error."
+                        : "All rows will be saved and removed from the Excel.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Import", (d, w) -> doImport())
                 .show();
@@ -152,10 +154,10 @@ public class ImportExcelActivity extends AppCompatActivity {
                     previewList.removeAllViews();
                     btnImport.setVisibility(View.GONE);
                     tvSummary.setText("✓ " + res.success + " imported · ✗ " + res.failed + " failed"
-                            + (res.failed > 0 ? "\nFailed rows Excel la Status/Error oda irukku." : ""));
+                            + (res.failed > 0 ? "\nFailed rows are kept in the Excel with Status/Error." : ""));
                     if (!res.cleanupOk)
                         showStatus("⚠ Rows saved, but Excel cleanup failed (" + res.cleanupError
-                                + "). Dont import again — remove imported rows from Excel manually.", true);
+                                + "). Don't import again — remove the imported rows from the Excel manually.", true);
                     else showStatus("Import finished", false);
                     renderLog();
                 });

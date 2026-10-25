@@ -389,7 +389,7 @@ public class ExcelImportService {
             }
         }
         if (best == null)
-            throw new IllegalStateException("'" + name + "' WorkDrive Backup folder la illa — Config la file name check pannunga");
+            throw new IllegalStateException("'" + name + "' not found in the WorkDrive Backup folder — check the file name in Config");
         cachedRidName = name;
         cachedRid = best.id;
         return best.id;
@@ -422,7 +422,7 @@ public class ExcelImportService {
         String n = fileName().toLowerCase(Locale.ROOT);
         if (n.endsWith(".zsheetlnk")) return Mode.SHEET;
         if (n.endsWith(".xlsx")) return Mode.XLSX;
-        throw new IllegalStateException("Config la file name .xlsx illa .zsheetlnk la mudiyanum (ippo: '" + fileName() + "')");
+        throw new IllegalStateException("File name in Config must end with .xlsx or .zsheetlnk (current: '" + fileName() + "')");
     }
 
     public String updateExcel() throws Exception {

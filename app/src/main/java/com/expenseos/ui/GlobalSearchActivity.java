@@ -72,8 +72,22 @@ public class GlobalSearchActivity extends AppCompatActivity {
                 "passbook sms bank upi inbox import message", "passbook"));
         SCREENS.add(new ScreenEntry("Food Tracker", "Daily food and meal expense tracker",
                 "food tracker meal breakfast lunch dinner eat", "food"));
-        SCREENS.add(new ScreenEntry("Integrations", "Google Calendar events and reminders",
-                "integrations calendar events reminders sync google", "integrations"));
+        SCREENS.add(new ScreenEntry("Integrations Calendar", "Task calendar — month, week, day and year views",
+                "integrations calendar tasks month week day year train bus booking alarm", "intcalendar"));
+        SCREENS.add(new ScreenEntry("Integrations Config", "Events, reminders, alarm tone and Google Calendar sync",
+                "integrations config events reminders alarm tone notification sync google", "integrations"));
+        SCREENS.add(new ScreenEntry("New Task", "Add a task with events, date, time and colour",
+                "new add create task integrations calendar", "addtask"));
+        SCREENS.add(new ScreenEntry("New Event", "Add an event with before/after days and reminders",
+                "new add create event integrations offset before after days notification alarm", "addevent"));
+        SCREENS.add(new ScreenEntry("New Reminder", "Add a reminder (day / week before, time)",
+                "new add create reminder integrations day week before time", "addreminder"));
+        SCREENS.add(new ScreenEntry("Alarm Tone", "Pick the alarm tone — phone tones or an audio file",
+                "alarm tone ringtone sound audio file integrations", "integrations"));
+        SCREENS.add(new ScreenEntry("Excel Import", "Bulk import transactions from Excel / Zoho Sheet",
+                "excel import bulk zoho sheet workdrive xlsx zsheetlnk upload transactions preview", "importexcel"));
+        SCREENS.add(new ScreenEntry("Console Log", "App console / log viewer",
+                "console log logs debug errors", "log"));
         SCREENS.add(new ScreenEntry("All Transactions", "Every entry with filters and search",
                 "all transactions list entries history", "alltxn"));
         SCREENS.add(new ScreenEntry("SQL Console", "Raw SELECT / INSERT / UPDATE / DELETE console",
@@ -393,6 +407,24 @@ public class GlobalSearchActivity extends AppCompatActivity {
                 return;
             case "integrations":
                 startActivity(new Intent(this, IntegrationsActivity.class));
+                return;
+            case "intcalendar":
+                startActivity(new Intent(this, IntegrationsCalendarActivity.class));
+                return;
+            case "addtask":
+                startActivity(new Intent(this, AddTaskActivity.class));
+                return;
+            case "addevent":
+                startActivity(new Intent(this, AddEventActivity.class));
+                return;
+            case "addreminder":
+                startActivity(new Intent(this, AddReminderActivity.class));
+                return;
+            case "importexcel":
+                startActivity(new Intent(this, ImportExcelActivity.class));
+                return;
+            case "log":
+                startActivity(new Intent(this, LogActivity.class));
                 return;
             case "alltxn":
                 startActivity(new Intent(this, AllTransactionsActivity.class));

@@ -64,6 +64,7 @@ public class ConfigFragment extends Fragment {
         enhanceAllFields();
         loadSavedValues();
         setupButtons();
+        setupAlarmSettings(v);
     }
 
     /**
@@ -130,6 +131,51 @@ public class ConfigFragment extends Fragment {
         row.addView(copy);
 
         parent.addView(row, idx);
+    }
+
+    // ── Alarm settings: Gradually increase volume + Vibration (saved instantly) ──
+    private static final int[] RAMP_OPTIONS = {0, 5, 10, 15, 20, 25, 30};
+
+    private static String rampLabel(int sec) {
+        return sec == 0 ? "Off" : sec + " seconds";
+    }
+
+    /**
+     * Built in code (no XML change). Inserted right below the section that holds the Zoho save
+     * button: climbs from that button up to the scroll content column, then adds after that section.
+     */
+
+    private void setupAlarmSettings(View v) {
+        AppConfig cfg = AppConfig.get(requireContext());
+
+        TextView rampValue = v.findViewById(R.id.tvAlarmRampValue);
+        rampValue.setText(rampLabel(cfg.getAlarmVolumeRampSeconds()));
+        v.findViewById(R.id.rowAlarmRamp).setOnClickListener(x -> showRampDialog(rampValue));
+
+        androidx.appcompat.widget.SwitchCompat vib = v.findViewById(R.id.swAlarmVibration);
+        vib.setChecked(cfg.isAlarmVibrationEnabled());
+        vib.setOnCheckedChangeListener((b, on) -> cfg.setAlarmVibrationEnabled(on));
+        v.findViewById(R.id.rowAlarmVibration).setOnClickListener(x -> vib.toggle());
+    }
+
+
+    private void showRampDialog(TextView valueView) {
+        AppConfig cfg = AppConfig.get(requireContext());
+        String[] labels = new String[RAMP_OPTIONS.length];
+        int checked = 0;
+        for (int i = 0; i < RAMP_OPTIONS.length; i++) {
+            labels[i] = rampLabel(RAMP_OPTIONS[i]);
+            if (RAMP_OPTIONS[i] == cfg.getAlarmVolumeRampSeconds()) checked = i;
+        }
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Gradually increase volume")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    cfg.setAlarmVolumeRampSeconds(RAMP_OPTIONS[which]);
+                    valueView.setText(rampLabel(RAMP_OPTIONS[which]));
+                    d.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void copyToClipboard(String text) {

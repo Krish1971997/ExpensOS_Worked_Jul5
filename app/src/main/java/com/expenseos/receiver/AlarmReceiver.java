@@ -33,10 +33,15 @@ import com.expenseos.ui.HomeActivity;
  */
 public class AlarmReceiver extends BroadcastReceiver {
 
-    private static final String CHANNEL_ID = "task_alarm";
+    private static final String CHANNEL_ID = "task_alarm_v3";
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
+        // the alarm's own wakelock ends when onReceive returns — keep the CPU up until AlarmService is running
+        android.os.PowerManager pm = (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+        if (pm != null) {
+            pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "expenseos:alarm-recv").acquire(15_000L);
+        }
         long taskId = intent.getLongExtra("task_id", 0);
         long eventReminderId = intent.getLongExtra("event_reminder_id", 0);
         Task task = new TaskDao(ctx).findById(taskId);
@@ -60,7 +65,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         ring.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ring.putExtra("task_id", taskId);
         ring.putExtra("event_reminder_id", eventReminderId);
-        ring.putExtra("play_here", true); // fallback path: the ring screen plays the tone itself
+        // fallback: the insistent notification sound rings; the ring screen only shows Snooze / Dismiss
         PendingIntent fullScreenPi = PendingIntent.getActivity(ctx,
                 (int) (50000 + taskId), ring,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -85,7 +90,9 @@ public class AlarmReceiver extends BroadcastReceiver {
                 || ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED;
         if (canPost) {
-            NotificationManagerCompat.from(ctx).notify((int) (70000 + taskId), b.build());
+            android.app.Notification n = b.build();
+            n.flags |= android.app.Notification.FLAG_INSISTENT; // repeat the sound until dismissed
+            NotificationManagerCompat.from(ctx).notify((int) (70000 + taskId), n);
         }
     }
 
@@ -95,7 +102,12 @@ public class AlarmReceiver extends BroadcastReceiver {
                     NotificationManager.IMPORTANCE_HIGH);
             ch.setDescription("Full-screen task alarms");
             ch.enableVibration(true);
-            ch.setSound(null, null); // AlarmRingActivity plays the tone — avoid double sound
+            // fallback path (service couldn't start): the notification itself has to ring like an alarm
+            android.net.Uri tone = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM);
+            ch.setSound(tone, new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
             NotificationManager m = ctx.getSystemService(NotificationManager.class);
             if (m != null) m.createNotificationChannel(ch);
         }
