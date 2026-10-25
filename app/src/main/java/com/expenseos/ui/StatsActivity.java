@@ -319,7 +319,39 @@ public class StatsActivity extends AppCompatActivity {
     // selected) — leave the dropdown as-is rather than force a mismatch.
 
 
+    // ── Spending forecast: current month, Expense tab only ──────────────
+    private void updateForecast(CashBook book) {
+        android.widget.LinearLayout host = findViewById(R.id.llForecast);
+        host.removeAllViews();
+        host.setVisibility(View.GONE);
+        if (!showExpense || !currentMonth.equals(YearMonth.now())) return;
+
+        TransactionDao dao = new TransactionDao(this);
+        Map<java.time.LocalDate, BigDecimal> daily = new java.util.HashMap<>();
+        collectDaily(dao, currentMonth, book, daily);
+        for (int k = 1; k <= 3; k++) { // previous 3 months' books of the same series
+            YearMonth pm = currentMonth.minusMonths(k);
+            CashBook pb = MonthBookResolver.findBookForMonth(this, pm, seriesSuffix);
+            if (pb != null) collectDaily(dao, pm, pb, daily);
+        }
+
+        String label = currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT,
+                java.util.Locale.ENGLISH) + " " + currentMonth.getYear();
+        host.addView(com.expenseos.util.ForecastCard.build(this,
+                com.expenseos.util.SpendingForecast.compute(daily, java.time.LocalDate.now()), label));
+        host.setVisibility(View.VISIBLE);
+    }
+
+    private void collectDaily(TransactionDao dao, YearMonth ym, CashBook b,
+                              Map<java.time.LocalDate, BigDecimal> out) {
+        for (Map<String, Object> row : dao.dailyTotals(ym.getYear(), ym.getMonthValue(), b.getId())) {
+            BigDecimal exp = (BigDecimal) row.get("expense");
+            if (exp != null) out.put(java.time.LocalDate.parse((String) row.get("day")), exp);
+        }
+    }
+
     private void refresh() {
+        findViewById(R.id.llForecast).setVisibility(View.GONE); // stays hidden on the early returns below
         tabExpense.setTextColor(showExpense ? Color.parseColor("#DC2626") : Color.GRAY);
         tabIncome.setTextColor(!showExpense ? Color.parseColor("#16A34A") : Color.GRAY);
 
@@ -343,6 +375,7 @@ public class StatsActivity extends AppCompatActivity {
         }
 
         if (isHomeEntry) syncBookDropdownSelection(book);
+        updateForecast(book);
 
         TransactionDao dao = new TransactionDao(this);
         String currentType = showExpense ? "EXPENSE" : "INCOME";

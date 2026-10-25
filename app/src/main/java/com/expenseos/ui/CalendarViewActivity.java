@@ -18,6 +18,7 @@ import com.expenseos.adapter.TransactionAdapter;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.Transaction;
 import com.expenseos.model.TransactionFilter;
+import com.expenseos.util.SpendingForecast;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -210,5 +211,19 @@ public class CalendarViewActivity extends AppCompatActivity {
                 .setView(view)
                 .setPositiveButton("Close", null)
                 .show();
+    }
+
+    private SpendingForecast.Result loadForecast(int bookId) {
+        TransactionDao txnDao = new TransactionDao(this);
+        Map<LocalDate, BigDecimal> daily = new HashMap<>();
+        YearMonth cur = YearMonth.now();
+        for (int k = 0; k <= 3; k++) {
+            YearMonth ym = cur.minusMonths(k);
+            for (Map<String, Object> row : txnDao.dailyTotals(ym.getYear(), ym.getMonthValue(), bookId)) {
+                BigDecimal exp = (BigDecimal) row.get("expense");
+                if (exp != null) daily.put(LocalDate.parse((String) row.get("day")), exp);
+            }
+        }
+        return SpendingForecast.compute(daily, LocalDate.now());
     }
 }
