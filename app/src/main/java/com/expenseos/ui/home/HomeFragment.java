@@ -20,7 +20,6 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -241,6 +240,47 @@ public class HomeFragment extends Fragment {
         return root;
     }
 
+    // ── Spending forecast: only when the active book is the CURRENT month's book ──
+    private void updateForecast(int bookId) {
+        View host = getView() != null ? getView().findViewById(R.id.llHomeForecast) : null;
+        if (!(host instanceof LinearLayout box)) return;
+        box.removeAllViews();
+        box.setVisibility(View.GONE);
+
+        CashBook active = null;
+        for (CashBook b : new CashBookDao(requireContext()).findAll()) {
+            if (b.getId() == bookId) {
+                active = b;
+                break;
+            }
+        }
+        if (active == null) return;
+        java.time.YearMonth ym = com.expenseos.util.MonthBookResolver.parseYearMonth(active.getName());
+        if (ym == null || !ym.equals(java.time.YearMonth.now())) return;
+        String suffix = com.expenseos.util.MonthBookResolver.extractSuffix(active.getName());
+
+        TransactionDao dao = new TransactionDao(requireContext());
+        java.util.Map<java.time.LocalDate, BigDecimal> daily = new java.util.HashMap<>();
+        collectDaily(dao, ym, active, daily);
+        for (int k = 1; k <= 3; k++) { // previous 3 months' books of the same series
+            java.time.YearMonth pm = ym.minusMonths(k);
+            CashBook pb = com.expenseos.util.MonthBookResolver.findBookForMonth(requireContext(), pm, suffix);
+            if (pb != null) collectDaily(dao, pm, pb, daily);
+        }
+        box.addView(com.expenseos.util.ForecastCard.buildCompact(requireContext(),
+                com.expenseos.util.SpendingForecast.compute(daily, java.time.LocalDate.now()),
+                v -> rowStats.performClick())); // tap → Stats
+        box.setVisibility(View.VISIBLE);
+    }
+
+    private void collectDaily(TransactionDao dao, java.time.YearMonth ym, CashBook b,
+                              java.util.Map<java.time.LocalDate, BigDecimal> out) {
+        for (java.util.Map<String, Object> row : dao.dailyTotals(ym.getYear(), ym.getMonthValue(), b.getId())) {
+            BigDecimal exp = (BigDecimal) row.get("expense");
+            if (exp != null) out.put(java.time.LocalDate.parse((String) row.get("day")), exp);
+        }
+    }
+
     public void refreshData() {
         loadTransactions();
     }
@@ -271,6 +311,7 @@ public class HomeFragment extends Fragment {
         refreshFilterChips();
         com.expenseos.util.UiUtils.animateCount(tvEntryCount, all.size(), "Showing %d entries");
         layoutNoTransactions.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
+        updateForecast(bookId);
 
         if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
     }

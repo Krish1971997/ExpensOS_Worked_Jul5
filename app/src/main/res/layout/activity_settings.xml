@@ -85,13 +85,13 @@
                 android:textSize="12sp" />
 
             <Button
-                android:id="@+id/btnTabColumns"
+                android:id="@+id/btnTabKeywords"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:minWidth="0dp"
                 android:paddingHorizontal="12dp"
-                android:text="Columns"
+                android:text="Keywords"
                 android:textColor="@color/text_muted"
                 android:textSize="12sp" />
 
@@ -107,13 +107,13 @@
                 android:textSize="12sp" />
 
             <Button
-                android:id="@+id/btnTabKeywords"
+                android:id="@+id/btnTabColumns"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:minWidth="0dp"
                 android:paddingHorizontal="12dp"
-                android:text="Keywords"
+                android:text="Custom Columns"
                 android:textColor="@color/text_muted"
                 android:textSize="12sp" />
         </LinearLayout>

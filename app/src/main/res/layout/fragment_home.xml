@@ -125,6 +125,16 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
+            <!-- Spending forecast (filled from HomeFragment.updateForecast) -->
+            <LinearLayout
+                android:id="@+id/llHomeForecast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="@dimen/screen_padding"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
             <!-- ═══════════ SEARCH + FILTER ═══════════ -->
             <LinearLayout
                 android:layout_width="match_parent"

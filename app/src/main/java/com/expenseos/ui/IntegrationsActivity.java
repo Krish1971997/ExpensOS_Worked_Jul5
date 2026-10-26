@@ -46,6 +46,7 @@ public class IntegrationsActivity extends AppCompatActivity {
                         if (picked != null) {
                             com.expenseos.util.AlarmToneStore.save(this, picked.toString(), toneName(this, picked));
                             refreshToneLabel();
+                            com.expenseos.util.AlarmTonePreview.play(this, picked.toString());
                         }
                     });
 
@@ -64,6 +65,7 @@ public class IntegrationsActivity extends AppCompatActivity {
                         }
                         com.expenseos.util.AlarmToneStore.save(this, file.toString(), toneName(this, file));
                         refreshToneLabel();
+                        com.expenseos.util.AlarmTonePreview.play(this, file.toString());
                     });
 
     private static String toneName(Context ctx, android.net.Uri uri) {
@@ -77,7 +79,8 @@ public class IntegrationsActivity extends AppCompatActivity {
     }
 
     private void showToneChooser() {
-        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)"};
+        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)",
+                "▶ Preview current tone"};
         new AlertDialog.Builder(this)
                 .setTitle("Alarm tone")
                 .setItems(opts, (d, which) -> {
@@ -103,13 +106,22 @@ public class IntegrationsActivity extends AppCompatActivity {
                         } catch (android.content.ActivityNotFoundException e) {
                             Toast.makeText(this, "No file manager found", Toast.LENGTH_SHORT).show();
                         }
-                    } else {
+                    } else if (which == 2) {
                         com.expenseos.util.AlarmToneStore.clear(this);
                         refreshToneLabel();
+                        com.expenseos.util.AlarmTonePreview.play(this, "");
+                    } else {
+                        com.expenseos.util.AlarmTonePreview.play(this, com.expenseos.util.AlarmToneStore.getUri(this));
                     }
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        com.expenseos.util.AlarmTonePreview.stop();
     }
 
     private void refreshToneLabel() {

@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -653,7 +654,9 @@ public class ChatActivity extends AppCompatActivity {
      */
     private View addErrorBubble(String message) {
         LinearLayout col = bubbleColumn(false);
+        col.getLayoutParams().width = ViewGroup.LayoutParams.WRAP_CONTENT; // full-width error text, not Retry-chip width
         TextView tv = textBubble("⚠ " + (message == null ? "Something went wrong." : message), false);
+        tv.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.9f));
         col.addView(tv);
 
         TextView retry = new TextView(this);

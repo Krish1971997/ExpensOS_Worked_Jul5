@@ -100,6 +100,7 @@ public class AddEventActivity extends AppCompatActivity {
             toneUri = picked.toString();
             toneName = n;
             refreshToneButton();
+            com.expenseos.util.AlarmTonePreview.play(this, toneUri);
         });
         audioFileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
             if (result.getResultCode() != RESULT_OK || result.getData() == null
@@ -113,6 +114,7 @@ public class AddEventActivity extends AppCompatActivity {
             toneUri = file.toString();
             toneName = toneNameOf(file);
             refreshToneButton();
+            com.expenseos.util.AlarmTonePreview.play(this, toneUri);
         });
         btnAlarmTone.setOnClickListener(v -> showToneChooser());
         refreshToneButton();
@@ -155,6 +157,12 @@ public class AddEventActivity extends AppCompatActivity {
     }
 
     // ── Per-event alarm tone ──────────────────────────────
+    @Override
+    protected void onPause() {
+        super.onPause();
+        com.expenseos.util.AlarmTonePreview.stop();
+    }
+
     private String toneNameOf(android.net.Uri uri) {
         try (android.database.Cursor c = getContentResolver().query(uri,
                 new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
@@ -172,7 +180,8 @@ public class AddEventActivity extends AppCompatActivity {
     }
 
     private void showToneChooser() {
-        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)"};
+        CharSequence[] opts = {"Phone alarm tones", "Audio file (file manager)", "Default tone (reset)",
+                "▶ Preview current tone"};
         new AlertDialog.Builder(this)
                 .setTitle("Alarm tone")
                 .setItems(opts, (d, which) -> {
@@ -198,10 +207,14 @@ public class AddEventActivity extends AppCompatActivity {
                         } catch (android.content.ActivityNotFoundException ex) {
                             Toast.makeText(this, "No file manager found", Toast.LENGTH_SHORT).show();
                         }
-                    } else {
+                    } else if (which == 2) {
                         toneUri = "";
                         toneName = "";
                         refreshToneButton();
+                    } else {
+                        // event's own tone, else the global one, else the phone default
+                        com.expenseos.util.AlarmTonePreview.play(this, !toneUri.isEmpty() ? toneUri
+                                : com.expenseos.util.AlarmToneStore.getUri(this));
                     }
                 })
                 .setNegativeButton("Cancel", null)
