@@ -134,10 +134,32 @@ public class AppConfig {
      * Excel file used by Bulk Import (lives in the same WorkDrive folder as backups).
      * Blank -> default; ".xlsx" is appended if missing; illegal file-name chars become "_".
      */
+    /**
+     * First configured file (kept for old callers).
+     */
     public String getImportExcelFileName() {
-        String n = prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
-        n = n == null ? "" : n.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
-        return n.isEmpty() ? DEFAULT_IMPORT_EXCEL_FILE_NAME : n;
+        return getImportExcelFileNames().get(0);
+    }
+
+    /**
+     * All files: comma / semicolon / newline separated in the same Config field.
+     */
+    public java.util.List<String> getImportExcelFileNames() {
+        String raw = prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (raw != null) for (String part : raw.split("[,;\\n]")) {
+            String n = part.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
+            if (!n.isEmpty()) out.add(n);
+        }
+        if (out.isEmpty()) out.add(DEFAULT_IMPORT_EXCEL_FILE_NAME);
+        return new java.util.ArrayList<>(out);
+    }
+
+    /**
+     * Raw text exactly as saved (may hold several comma-separated names), for the Config screen.
+     */
+    public String getImportExcelFileNamesRaw() {
+        return prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
     }
 
     public int getBackupHour() {

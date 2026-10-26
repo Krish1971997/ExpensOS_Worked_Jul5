@@ -654,9 +654,8 @@ public class ChatActivity extends AppCompatActivity {
      */
     private View addErrorBubble(String message) {
         LinearLayout col = bubbleColumn(false);
-        col.getLayoutParams().width = ViewGroup.LayoutParams.WRAP_CONTENT; // full-width error text, not Retry-chip width
+        col.getLayoutParams().width = ViewGroup.LayoutParams.MATCH_PARENT; // column spans the screen; Retry chip stays small
         TextView tv = textBubble("⚠ " + (message == null ? "Something went wrong." : message), false);
-        tv.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.9f));
         col.addView(tv);
 
         TextView retry = new TextView(this);

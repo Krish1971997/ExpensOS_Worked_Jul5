@@ -130,7 +130,7 @@ public class AiFailoverManager {
         }
     }
 
-    private static final long TOTAL_TURN_BUDGET_MS = 60_000; // must stay under ChatActivity's 95s watchdog
+    private static final long TOTAL_TURN_BUDGET_MS = 80_000; // must stay under ChatActivity's 95s watchdog
 
     private String runTurnInternal(AiRequest request, AiProvider.Callback cb, UiHooks hooks) throws AiException {
         if (candidates.isEmpty()) {
@@ -140,6 +140,7 @@ public class AiFailoverManager {
 
         long turnStart = System.currentTimeMillis();
         long now = turnStart;
+        request.deadlineMs = turnStart + TOTAL_TURN_BUDGET_MS; // clients shrink their read timeouts to fit
         AiException last = null;
         boolean anyTried = false;
 
@@ -179,7 +180,8 @@ public class AiFailoverManager {
                 } catch (AiException ae) {
                     last = ae;
                     if (ae.kind == AiException.Kind.NETWORK || ae.kind == AiException.Kind.SERVER) {
-                        if (attempts <= NET_RETRIES) {
+                        // Don't restart a whole multi-round turn if there's no time left for it.
+                        if (attempts <= NET_RETRIES && request.remainingMs() > 20_000) {
                             sleep(NET_BACKOFF_MS * attempts);
                             continue; // bounded retry on the same candidate
                         }

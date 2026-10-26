@@ -55,6 +55,14 @@ public class SchedulerWorker extends Worker {
 
         int dueCount = 0;
         for (SchedulerConfig s : dao.findAll()) {
+            if (EXCEL_SYNC.equals(s.getName())) { // own hourly gate, independent of SchedulerTimeUtil
+                boolean due = runOnly != null ? runOnly.equals(s.getName()) : (s.isEnabled() && excelSyncDue(ctx));
+                if (due) {
+                    dueCount++;
+                    runExcelSync(ctx, dao, s);
+                }
+                continue;
+            }
             boolean shouldRun = (runOnly != null)
                     ? runOnly.equals(s.getName())
                     : SchedulerTimeUtil.isDue(s, now);
@@ -128,6 +136,13 @@ public class SchedulerWorker extends Worker {
                     MonthlyReportOutcome o = runMonthlyCategoryReport(ctx);
                     ok = o.ok;
                     message = o.message;
+                    break;
+                }
+                case "EXCEL_SYNC": {
+                    com.expenseos.excel.ExcelSyncRunner.Outcome o = com.expenseos.excel.ExcelSyncRunner.run(ctx);
+                    ok = o.ok;
+                    message = o.message;
+                    rows = o.files;
                     break;
                 }
                 default:
@@ -579,6 +594,35 @@ public class SchedulerWorker extends Worker {
         boolean ok = false;
         String summary = "";
         int rows = 0;
+    }
+
+    public static final String EXCEL_SYNC = "EXCEL_SYNC";
+
+    private boolean excelSyncDue(Context ctx) {
+        long last = ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE).getLong("last_run", 0);
+        return System.currentTimeMillis() - last >= 55 * 60_000L; // 15-min tick -> lands ~hourly
+    }
+
+    private void runExcelSync(Context ctx, SchedulerDao dao, SchedulerConfig s) {
+        log.info("▶ Running scheduler: " + s.getDisplayName());
+        long logId = dao.logStart(s.getId());
+        ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE).edit()
+                .putLong("last_run", System.currentTimeMillis()).apply();
+        LocalDateTime nextRun = LocalDateTime.now().plusHours(1);
+        try {
+            com.expenseos.excel.ExcelSyncRunner.Outcome o = com.expenseos.excel.ExcelSyncRunner.run(ctx);
+            dao.logFinish((int) logId, s.getId(), o.ok ? "SUCCESS" : "FAILED", o.message, o.files, nextRun);
+            log.info("Excel sync: " + o.message);
+        } catch (Exception e) {
+            dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
+        }
+    }
+
+    public static void ensureExcelSyncScheduler(Context ctx) {
+        SchedulerDao dao = new SchedulerDao(ctx);
+        if (dao.findByName(EXCEL_SYNC) != null) return;
+        dao.insertScheduler(EXCEL_SYNC, "Excel Import Sync (hourly)", true,
+                "HOURLY", "1", 0, 0, LocalDateTime.now());
     }
 
 // ── Static scheduling helpers ────────────────────────────────────

@@ -202,6 +202,9 @@ public class ConfigFragment extends Fragment {
 
         etWorkdriveFolderId = v.findViewById(R.id.etCfgWorkdriveFolderId);
         etImportExcelFileName = v.findViewById(R.id.etCfgImportExcelFileName);
+        etImportExcelFileName.setHint("File1.zsheetlnk, File2.xlsx (comma separated)");
+        etImportExcelFileName.setSingleLine(false);
+        etImportExcelFileName.setMaxLines(4);
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
@@ -221,7 +224,7 @@ public class ConfigFragment extends Fragment {
         etZohoClientSecret.setText(cfg.getZohoClientSecret());
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
-        etImportExcelFileName.setText(cfg.getImportExcelFileName());
+        etImportExcelFileName.setText(cfg.getImportExcelFileNamesRaw());
 
     }
 

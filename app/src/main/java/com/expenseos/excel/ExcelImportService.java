@@ -62,7 +62,14 @@ public class ExcelImportService {
     private final TransactionDao txnDao;
     private final ImportLogDao logDao;
 
+    private final String fileNameOverride;
+
     public ExcelImportService(Context ctx) {
+        this(ctx, null);
+    }
+
+    public ExcelImportService(Context ctx, String fileName) {
+        this.fileNameOverride = fileName;
         this.ctx = ctx.getApplicationContext();
         drive = new WorkDriveApiService(this.ctx);
         sheet = new ZohoSheetApiService(this.ctx);
@@ -81,29 +88,13 @@ public class ExcelImportService {
 
         int pending = sheet.fetchRecords(rid, IMPORT_SHEET).size();   // also proves Sheet API + 'Import' sheet work
 
-        List<Integer> oldRows = new ArrayList<>();
-        for (Map<String, String> m : sheet.fetchRecords(rid, REFERENCE_SHEET)) {
-            int ri = rowIndexOf(m);
-            if (ri > 0) oldRows.add(ri);
-        }
-        sheet.deleteRows(rid, REFERENCE_SHEET, oldRows);
+        refreshReferenceSheet(rid, ref);
+        ensureDropdowns(rid, ref, true);   // manual "Update Excel" always re-applies dropdowns
+        rememberRefHash(ref);              // so the hourly scheduler doesn't redo the same work
 
-        int n = Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
-                Math.max(ref.categories.size(), ref.subCategories.size()));
-        JSONArray rows = new JSONArray();
-        for (int i = 0; i < n; i++) {
-            JSONObject o = new JSONObject();
-            putAt(o, "Cashbooks", ref.cashbooks, i);
-            putAt(o, "Payment Types", ref.paymentTypes, i);
-            putAt(o, "Categories", ref.categories, i);
-            putAt(o, "Subcategories", ref.subCategories, i);
-            rows.put(o);
-        }
-        if (n > 0) sheet.addRecords(rid, REFERENCE_SHEET, rows);
-
-        String msg = "Reference updated — " + ref.cashbooks.size() + " cashbooks, " + ref.paymentTypes.size()
+        String msg = "Reference + dropdowns updated — " + ref.cashbooks.size() + " cashbooks, " + ref.paymentTypes.size()
                 + " payment types, " + ref.categories.size() + " categories, " + ref.subCategories.size()
-                + " subcategories. Rows waiting in Import: " + pending;
+                + " subcategories. Rows waiting in Import: " + pending + " [sheet id " + rid + "]";
         logDao.insert("UPDATE_EXCEL", pending, 0, 0, "SUCCESS", msg);
         return msg;
     }
@@ -152,19 +143,16 @@ public class ExcelImportService {
 
         // Cleanup order matters: first append the not-imported rows (with Status/Error) at the bottom,
         // only then delete every old row. If the add fails nothing is deleted, so no row is ever lost.
-        List<Integer> oldRows = new ArrayList<>();
-        for (ImportRow r : p.rows) oldRows.add(r.sheetRow);
+        int lastOldRow = 1;
+        for (ImportRow r : p.rows) lastOldRow = Math.max(lastOldRow, r.sheetRow);
         try {
-            if (!remaining.isEmpty()) {
-                JSONArray arr = toJson(remaining);
-                try {
-                    sheet.addRecords(rid, IMPORT_SHEET, arr);
-                } catch (Exception first) {
-                    Thread.sleep(1500);
-                    sheet.addRecords(rid, IMPORT_SHEET, arr);
-                }
+            List<String[]> body = toCsvRows(remaining);
+            try {
+                sheet.rewriteRows(rid, IMPORT_SHEET, 2, 11, body, lastOldRow);
+            } catch (Exception first) {
+                Thread.sleep(1500);
+                sheet.rewriteRows(rid, IMPORT_SHEET, 2, 11, body, lastOldRow); // idempotent, safe to retry
             }
-            sheet.deleteRows(rid, IMPORT_SHEET, oldRows);   // not retried: a retry could hit shifted rows
         } catch (Exception e) {
             res.cleanupOk = false;
             res.cleanupError = e.getMessage();
@@ -194,6 +182,15 @@ public class ExcelImportService {
                     .append(r.paymentType).append('|').append(r.category).append('|').append(r.subCategory)
                     .append('|').append(r.description).append('\n');
         return sb.toString().hashCode();
+    }
+
+    // column order = ExcelImportTemplate.HEADERS (11 columns A..K)
+    private static List<String[]> toCsvRows(List<ImportRow> rows) {
+        List<String[]> out = new ArrayList<>();
+        for (ImportRow r : rows)
+            out.add(new String[]{r.cashbook, r.type, r.dateRaw, r.timeRaw, r.amountRaw, r.paymentType,
+                    r.category, r.subCategory, r.description, r.status, r.error});
+        return out;
     }
 
     private static JSONArray toJson(List<ImportRow> rows) throws Exception {
@@ -226,6 +223,166 @@ public class ExcelImportService {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    // ── Hourly scheduler entry: reads + refreshes Reference lists ONLY.
+    //    Never imports rows, never deletes/edits the user's Import rows. ──
+    public static class SyncReport {
+        public String fileName, mode = "?", error, stackTrace;
+        public int valid, invalid;
+        public boolean referenceUpdated, skippedBusy;
+        public List<ImportRow> rows = new ArrayList<>();
+        public byte[] rawXlsx;
+
+        public boolean ok() {
+            return error == null;
+        }
+    }
+
+    public SyncReport sync() {
+        SyncReport rep = new SyncReport();
+        rep.fileName = fileName();
+        try {
+            Mode m = mode();
+            rep.mode = m.name();
+            ReferenceData ref = loadReference();
+            String hash = String.valueOf(referenceHash(ref));
+            android.content.SharedPreferences sp = ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE);
+            String hashKey = "refhash:" + rep.fileName;
+            boolean changed = !hash.equals(sp.getString(hashKey, null));
+            boolean done = !changed;
+
+            if (m == Mode.SHEET) {
+                String rid = resolveResourceId();
+                rep.rows = readImportRows(rid);                 // proves the file is readable
+                if (changed) {
+                    refreshReferenceSheet(rid, ref);
+                    rep.referenceUpdated = true;
+                    done = true;
+                }
+                if (ensureDropdowns(rid, ref, false)) rep.referenceUpdated = true;
+            } else {
+                WorkDriveApiService.WorkDriveFileInfo f = findXlsxFile();
+                if (f == null)
+                    throw new IllegalStateException("Excel not found in WorkDrive: " + rep.fileName);
+                rep.rawXlsx = drive.downloadFile(f.id);
+                rep.rows = ExcelImportReader.read(rep.rawXlsx);
+                if (changed) {
+                    WorkDriveApiService.WorkDriveFileInfo again = findXlsxFile();
+                    if (again == null || again.modifiedTimeMillis != f.modifiedTimeMillis) {
+                        rep.skippedBusy = true;                 // edited in the last seconds: retry next hour
+                    } else {
+                        uploadWorkbook(ref, rep.rows);           // rows carried over untouched
+                        rep.referenceUpdated = true;
+                        done = true;
+                    }
+                }
+            }
+            if (changed && done) sp.edit().putString(hashKey, hash).apply();
+
+            validate(rep.rows);                                  // in-memory only, for the report
+            for (ImportRow r : rep.rows)
+                if (r.valid) rep.valid++;
+                else rep.invalid++;
+        } catch (Exception e) {
+            rep.error = e.getMessage() != null ? e.getMessage() : e.toString();
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            rep.stackTrace = sw.toString().length() > 4000 ? sw.toString().substring(0, 4000) : sw.toString();
+        }
+        return rep;
+    }
+
+    private static final int IMPORT_LAST_ROW = 1000;
+    private static final int DV_VERSION = 1; // bump to force re-applying dropdowns to every file
+
+    /**
+     * Re-applies Import-sheet dropdowns + validation when the lists changed (or were never applied).
+     */
+    private boolean ensureDropdowns(String rid, ReferenceData ref, boolean force) throws Exception {
+        android.content.SharedPreferences sp = ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE);
+        String key = "dvhash:" + fileName();
+        String val = referenceHash(ref) + ":" + DV_VERSION;
+        if (!force && val.equals(sp.getString(key, null))) return false;
+        applyDropdowns(rid, ref);
+        sp.edit().putString(key, val).apply();
+        return true;
+    }
+
+    private void applyDropdowns(String rid, ReferenceData ref) throws Exception {
+        final String last = String.valueOf(IMPORT_LAST_ROW);
+        final String A = "A2:A" + last, B = "B2:B" + last, C = "C2:C" + last, D = "D2:D" + last,
+                E = "E2:E" + last, F = "F2:F" + last, G = "G2:G" + last, H = "H2:H" + last;
+
+        try {   // wipe old picklists first; fails harmlessly when there is nothing to remove
+            sheet.removePicklists(rid, IMPORT_SHEET, java.util.Arrays.asList(A, B, F, G, H));
+        } catch (Exception ignored) {
+        }
+
+        pickFromRef(rid, A, "A", ref.cashbooks.size());      // Reference col A = Cashbooks
+        pickFromRef(rid, F, "B", ref.paymentTypes.size());   // B = Payment Types
+        pickFromRef(rid, G, "C", ref.categories.size());     // C = Categories
+        pickFromRef(rid, H, "D", ref.subCategories.size());  // D = Subcategories
+
+        JSONArray types = new JSONArray()
+                .put(new JSONObject().put("value", "INCOME").put("font_color", "#000000").put("fill_color", "#C8E6C9"))
+                .put(new JSONObject().put("value", "EXPENSE").put("font_color", "#000000").put("fill_color", "#FFCDD2"));
+        sheet.setPicklistItems(rid, IMPORT_SHEET, B, types);
+
+        sheet.setDataValidation(rid, IMPORT_SHEET, C,
+                new JSONObject().put("type", "date").put("operator", "is_valid_date").put("values", new JSONArray()),
+                "Enter a valid date", "Invalid date");
+        sheet.setDataValidation(rid, IMPORT_SHEET, D,
+                new JSONObject().put("type", "decimal").put("operator", "between")
+                        .put("values", new JSONArray().put("0").put("0.99998842592")),
+                "Enter a time, e.g. 13:45", "Invalid time");
+        sheet.setDataValidation(rid, IMPORT_SHEET, E,
+                new JSONObject().put("type", "decimal").put("operator", "greater_than")
+                        .put("values", new JSONArray().put("0")),
+                "Enter an amount greater than 0", "Amount must be a number greater than 0");
+    }
+
+    private void pickFromRef(String rid, String importRange, String refCol, int count) throws Exception {
+        if (count <= 0) return;
+        sheet.setPicklistFromRange(rid, IMPORT_SHEET, importRange,
+                REFERENCE_SHEET, refCol + "2:" + refCol + (1 + count));
+    }
+
+    private void refreshReferenceSheet(String rid, ReferenceData ref) throws Exception {
+        int oldLast = 1;
+        for (Map<String, String> m : sheet.fetchRecords(rid, REFERENCE_SHEET))
+            oldLast = Math.max(oldLast, rowIndexOf(m));
+
+        int n = Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
+                Math.max(ref.categories.size(), ref.subCategories.size()));
+        List<String[]> rows = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+            rows.add(new String[]{cell(ref.cashbooks, i), cell(ref.paymentTypes, i),
+                    cell(ref.categories, i), cell(ref.subCategories, i)});
+
+        try {
+            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 4, rows, oldLast);
+        } catch (Exception first) {
+            Thread.sleep(1500);
+            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 4, rows, oldLast); // idempotent, safe to retry
+        }
+    }
+
+    private static String cell(List<String> l, int i) {
+        return i < l.size() ? l.get(i) : "";
+    }
+
+    private static int referenceHash(ReferenceData r) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(r.cashbooks).append(r.paymentTypes).append(r.categories)
+                .append(r.subCategories).append(r.subsByCategory);
+        for (String[] a : r.categoryInfo) sb.append(String.join("\u0001", a)).append('\u0002');
+        return sb.toString().hashCode();
+    }
+
+    private void rememberRefHash(ReferenceData ref) {
+        ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE).edit()
+                .putString("refhash:" + fileName(), String.valueOf(referenceHash(ref))).apply();
     }
 
     // ── validation ──
@@ -360,10 +517,15 @@ public class ExcelImportService {
                         : bookNames.getOrDefault(c.getBookId(), "Book #" + c.getBookId());
                 List<String> sl = subsByCat.get(c.getId());
                 ref.categoryInfo.add(new String[]{c.getName(), type, scope, sl == null ? "" : String.join(", ", sl)});
+                if (sl != null && !sl.isEmpty()) {
+                    List<String> acc = ref.subsByCategory.computeIfAbsent(c.getName(), k -> new ArrayList<>());
+                    for (String sn : sl) if (!acc.contains(sn)) acc.add(sn);
+                }
             }
         }
         ref.categoryInfo.sort(Comparator.comparing((String[] a) -> a[0].toLowerCase(Locale.ROOT)).thenComparing(a -> a[1]));
         ref.categories.addAll(catNames);
+        for (List<String> l : ref.subsByCategory.values()) l.sort(String.CASE_INSENSITIVE_ORDER);
         ref.subCategories.addAll(subNames);
         return ref;
     }
@@ -372,7 +534,11 @@ public class ExcelImportService {
      * Excel file name comes from Config (same WorkDrive folder as backups).
      */
     private String fileName() {
-        return AppConfig.get(ctx).getImportExcelFileName();
+        return fileNameOverride != null ? fileNameOverride : AppConfig.get(ctx).getImportExcelFileName();
+    }
+
+    public String getFileName() {
+        return fileName();
     }
 
     /**
@@ -384,12 +550,14 @@ public class ExcelImportService {
         final String want = stripExt(name);
         WorkDriveApiService.WorkDriveFileInfo best = null;
         for (WorkDriveApiService.WorkDriveFileInfo f : drive.listFiles()) {
-            if (f.name != null && stripExt(f.name).equalsIgnoreCase(want)) {
+            if (f.name == null || isUploadedSpreadsheet(f.name))
+                continue; // never take the .xlsx twin
+            if (stripExt(f.name).equalsIgnoreCase(want)) {
                 if (best == null || f.modifiedTimeMillis > best.modifiedTimeMillis) best = f;
             }
         }
         if (best == null)
-            throw new IllegalStateException("'" + name + "' not found in the WorkDrive Backup folder — check the file name in Config");
+            throw new IllegalStateException("Zoho Sheet '" + want + "' not found in the WorkDrive Backup folder — check the file name in Config");
         cachedRidName = name;
         cachedRid = best.id;
         return best.id;
@@ -397,6 +565,12 @@ public class ExcelImportService {
 
     private static String stripExt(String s) {
         return s.trim().replaceAll("\\.[A-Za-z0-9]{2,10}$", "");
+    }
+
+    private static boolean isUploadedSpreadsheet(String n) {
+        String l = n.trim().toLowerCase(Locale.ROOT);
+        return l.endsWith(".xlsx") || l.endsWith(".xls") || l.endsWith(".xlsm")
+                || l.endsWith(".csv") || l.endsWith(".ods") || l.endsWith(".zip");
     }
 
     private Transaction toTransaction(ImportRow r) {
@@ -446,6 +620,7 @@ public class ExcelImportService {
         uploadWorkbook(ref, carry);
         String msg = "Excel updated — " + ref.cashbooks.size() + " cashbooks, " + ref.paymentTypes.size()
                 + " payment types, " + ref.categories.size() + " categories. Existing rows kept: " + carry.size();
+        rememberRefHash(ref);
         logDao.insert("UPDATE_EXCEL", carry.size(), 0, 0, "SUCCESS", msg);
         return msg;
     }
@@ -515,13 +690,16 @@ public class ExcelImportService {
     private WorkDriveApiService.WorkDriveFileInfo findXlsxFile() throws Exception {
         final String name = fileName();
         String base = name.substring(0, name.lastIndexOf('.'));
-        WorkDriveApiService.WorkDriveFileInfo best = null;
+        WorkDriveApiService.WorkDriveFileInfo exact = null, loose = null;
         for (WorkDriveApiService.WorkDriveFileInfo f : drive.listFiles()) {
-            if (f.name != null && (f.name.equalsIgnoreCase(name) || f.name.equalsIgnoreCase(base))) {
-                if (best == null || f.modifiedTimeMillis > best.modifiedTimeMillis) best = f;
+            if (f.name == null) continue;
+            if (f.name.equalsIgnoreCase(name)) {
+                if (exact == null || f.modifiedTimeMillis > exact.modifiedTimeMillis) exact = f;
+            } else if (f.name.equalsIgnoreCase(base)) {   // only if the API returns names without extension
+                if (loose == null || f.modifiedTimeMillis > loose.modifiedTimeMillis) loose = f;
             }
         }
-        return best;
+        return exact != null ? exact : loose;
     }
 
     private void uploadWorkbook(ReferenceData ref, List<ImportRow> rows) throws Exception {

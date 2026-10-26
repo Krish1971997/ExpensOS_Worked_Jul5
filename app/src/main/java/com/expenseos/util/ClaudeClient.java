@@ -21,6 +21,7 @@ public class ClaudeClient implements AiProvider {
     private static final String ENDPOINT = "https://api.anthropic.com/v1/messages";
     private static final String ANTHROPIC_VERSION = "2023-06-01";
     private static final int MAX_TOOL_RESULT_CHARS = 4000; // same fix as GeminiClient
+    private static final int MAX_ROUNDS = 8;
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
@@ -69,8 +70,12 @@ public class ClaudeClient implements AiProvider {
             messages.put(request.imagePath != null ? userMsgWithImage(request.userMessage, request.imagePath) : userMsg(request.userMessage));
 
             cb.onProgress("Thinking…");
-            for (int round = 0; round < 12; round++) {
-                JSONObject response = call(messages);
+            for (int round = 0; round < MAX_ROUNDS; round++) {
+                if (request.remainingMs() < 3000) {
+                    throw new AiException(AiException.Kind.NETWORK,
+                            "Timed out — question romba periyadhu. Narrow-a kelunga (e.g. 'top 10 expenses').");
+                }
+                JSONObject response = call(messages, request);
                 JSONArray content = response.getJSONArray("content");
                 String stopReason = response.optString("stop_reason", "");
 
@@ -178,10 +183,10 @@ public class ClaudeClient implements AiProvider {
         return m;
     }
 
-    private JSONObject call(JSONArray messages) throws Exception {
+    private JSONObject call(JSONArray messages, AiRequest request) throws Exception {
         JSONObject body = new JSONObject();
         body.put("model", model);
-        body.put("max_tokens", 1024);
+        body.put("max_tokens", 2048); // Tamil/Tanglish needs more tokens than English
         body.put("system", AiPrompts.systemPrompt());
         body.put("messages", messages);
         body.put("tools", toolDefinitions());
@@ -194,7 +199,7 @@ public class ClaudeClient implements AiProvider {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
         conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000); // model "thinking" + tool round trips can run long
+        conn.setReadTimeout(request.readTimeoutMs(60000)); // capped to the turn's remaining budget
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));

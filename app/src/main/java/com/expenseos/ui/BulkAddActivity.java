@@ -161,7 +161,8 @@ public class BulkAddActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════
     private void bindForm() {
         form = new BulkRow();
-        form.tvDateTime = findViewById(R.id.tvBulkDateTime);
+        form.tvDate = findViewById(R.id.tvBulkDate);
+        form.tvTime = findViewById(R.id.tvBulkTime);
         form.etAmount = findViewById(R.id.etBulkAmount);
         form.spCategory = findViewById(R.id.spBulkCategory);
         form.subWrap = findViewById(R.id.llBulkSubWrap);
@@ -178,7 +179,8 @@ public class BulkAddActivity extends AppCompatActivity {
         form.date = LocalDate.now();
         form.time = LocalTime.now();
         updateRowDateTimeText(form);
-        form.tvDateTime.setOnClickListener(x -> showDatePicker(form));
+        form.tvDate.setOnClickListener(x -> showDatePicker(form));
+        form.tvTime.setOnClickListener(x -> showTimePicker(form));
 
         typeToggle.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (typeSwitching || !isChecked) return;
@@ -459,11 +461,7 @@ public class BulkAddActivity extends AppCompatActivity {
     private void showDatePicker(BulkRow row) {
         new DatePickerDialog(this, (view, y, m, d) -> {
             row.date = LocalDate.of(y, m + 1, d);
-            // Post instead of calling directly — the DatePickerDialog is
-            // still in the middle of dismissing when onDateSet() fires, so
-            // opening TimePickerDialog synchronously here can silently
-            // fail to show on some devices. Posting waits one frame.
-            mainHandler.post(() -> showTimePicker(row));
+            updateRowDateTimeText(row); // date only — time picker is separate now
         }, row.date.getYear(), row.date.getMonthValue() - 1, row.date.getDayOfMonth()).show();
     }
 
@@ -475,7 +473,8 @@ public class BulkAddActivity extends AppCompatActivity {
     }
 
     private void updateRowDateTimeText(BulkRow row) {
-        row.tvDateTime.setText(row.date.format(DATE_FMT) + " " + row.time.format(TIME_FMT));
+        row.tvDate.setText(row.date.format(DATE_FMT));
+        row.tvTime.setText(row.time.format(TIME_FMT));
     }
 
     // ══════════════════════════════════════════════════════
@@ -1080,7 +1079,7 @@ public class BulkAddActivity extends AppCompatActivity {
         View rootView, subWrap;
         String type = "EXPENSE";
         Spinner spCategory, spSubCategory, spPaymentType;
-        TextView tvDateTime, btnMic, tvKwSuggestion, btnExpandToggle;
+        TextView tvDate, tvTime, btnMic, tvKwSuggestion, btnExpandToggle;
         EditText etAmount, etNote;
         View btnCalc, btnAttach, btnDel;
         LinearLayout expandPanel, attachmentList, customFieldsContainer;

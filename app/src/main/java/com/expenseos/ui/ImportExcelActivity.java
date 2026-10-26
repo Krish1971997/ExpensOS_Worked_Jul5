@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.expenseos.R;
 import com.expenseos.dao.ImportLogDao;
+import com.expenseos.excel.ExcelImportBatch;
 import com.expenseos.excel.ExcelImportService;
 import com.expenseos.excel.ImportRow;
 
@@ -32,7 +33,8 @@ public class ImportExcelActivity extends AppCompatActivity {
     private ProgressBar progress;
     private TextView tvStatus, tvSummary;
     private LinearLayout previewList, logList;
-    private ExcelImportService.Preview preview;
+    private java.util.List<ExcelImportBatch.FilePreview> previews;
+    private int totalValid, totalInvalid;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -67,7 +69,7 @@ public class ImportExcelActivity extends AppCompatActivity {
         setBusy(true, "Updating Excel in WorkDrive…");
         exec.execute(() -> {
             try {
-                String msg = service.updateExcel();
+                String msg = ExcelImportBatch.updateAll(this);
                 mainHandler.post(() -> {
                     setBusy(false, null);
                     showStatus(msg, false);
@@ -84,10 +86,10 @@ public class ImportExcelActivity extends AppCompatActivity {
         setBusy(true, "Downloading and checking Excel…");
         exec.execute(() -> {
             try {
-                ExcelImportService.Preview p = service.fetch();
+                java.util.List<ExcelImportBatch.FilePreview> p = ExcelImportBatch.fetchAll(this);
                 mainHandler.post(() -> {
                     setBusy(false, null);
-                    preview = p;
+                    previews = p;
                     renderPreview();
                 });
             } catch (Exception e) {
@@ -99,65 +101,87 @@ public class ImportExcelActivity extends AppCompatActivity {
     private void renderPreview() {
         previewList.removeAllViews();
         btnImport.setVisibility(View.GONE);
-        if (preview == null || preview.rows.isEmpty()) {
-            tvSummary.setText("No new data in the Excel.");
+        totalValid = 0;
+        totalInvalid = 0;
+        int totalRows = 0, shown = 0;
+        if (previews == null || previews.isEmpty()) {
+            tvSummary.setText("No Excel files configured.");
             return;
         }
-        tvSummary.setText(preview.rows.size() + " rows · ✓ " + preview.valid + " valid · ✗ " + preview.invalid + " invalid");
-        int shown = 0;
-        for (ImportRow r : preview.rows) {
-            if (shown++ >= MAX_PREVIEW_ROWS) {
-                addText(previewList, "… +" + (preview.rows.size() - MAX_PREVIEW_ROWS) + " more rows", R.color.text_muted, 12);
-                break;
+        boolean capped = false;
+        for (ExcelImportBatch.FilePreview fp : previews) {
+            addText(previewList, "📄 " + fp.fileName, R.color.text, 14);
+            if (fp.error != null) {
+                addText(previewList, "✗ " + fp.error, R.color.red, 13);
+                continue;
             }
-            String when = ((r.date != null ? r.date.toString() : r.dateRaw) + " "
-                    + (r.time != null ? r.time.toString() : r.timeRaw)).trim();
-            String amt = r.amount != null ? "₹" + r.amount.toPlainString() : r.amountRaw;
-            StringBuilder sb = new StringBuilder();
-            sb.append(r.valid ? "✓ " : "✗ ").append("Row ").append(r.sheetRow).append(" · ").append(when)
-                    .append(" · ").append(amt).append("\n").append(r.cashbook).append(" · ").append(r.type)
-                    .append(" · ").append(r.category);
-            if (!r.subCategory.isEmpty()) sb.append(" › ").append(r.subCategory);
-            sb.append(" · ").append(r.paymentType);
-            if (!r.description.isEmpty()) sb.append("\n").append(r.description);
-            if (!r.valid) sb.append("\n⚠ ").append(r.error);
-            addText(previewList, sb.toString(), r.valid ? R.color.green : R.color.red, 13);
+            ExcelImportService.Preview p = fp.preview;
+            totalValid += p.valid;
+            totalInvalid += p.invalid;
+            totalRows += p.rows.size();
+            if (p.rows.isEmpty()) {
+                addText(previewList, "No new data", R.color.text_muted, 12);
+                continue;
+            }
+            for (ImportRow r : p.rows) {
+                if (shown++ >= MAX_PREVIEW_ROWS) {
+                    capped = true;
+                    break;
+                }
+                addText(previewList, rowText(r), r.valid ? R.color.green : R.color.red, 13);
+            }
         }
-        if (preview.valid > 0) {
-            btnImport.setText("Import " + preview.valid + " valid rows");
+        if (capped) addText(previewList, "… more rows not shown", R.color.text_muted, 12);
+        tvSummary.setText(previews.size() + " files · " + totalRows + " rows · ✓ " + totalValid
+                + " valid · ✗ " + totalInvalid + " invalid");
+        if (totalValid > 0) {
+            btnImport.setText("Import " + totalValid + " valid rows");
             btnImport.setVisibility(View.VISIBLE);
         }
     }
 
-    // ── Import ──
+    private String rowText(ImportRow r) {
+        String when = ((r.date != null ? r.date.toString() : r.dateRaw) + " "
+                + (r.time != null ? r.time.toString() : r.timeRaw)).trim();
+        String amt = r.amount != null ? "₹" + r.amount.toPlainString() : r.amountRaw;
+        StringBuilder sb = new StringBuilder();
+        sb.append(r.valid ? "✓ " : "✗ ").append("Row ").append(r.sheetRow).append(" · ").append(when)
+                .append(" · ").append(amt).append("\n").append(r.cashbook).append(" · ").append(r.type)
+                .append(" · ").append(r.category);
+        if (!r.subCategory.isEmpty()) sb.append(" › ").append(r.subCategory);
+        sb.append(" · ").append(r.paymentType);
+        if (!r.description.isEmpty()) sb.append("\n").append(r.description);
+        if (!r.valid) sb.append("\n⚠ ").append(r.error);
+        return sb.toString();
+    }
+
     private void confirmImport() {
-        if (preview == null || preview.valid == 0) return;
+        if (previews == null || totalValid == 0) return;
         new AlertDialog.Builder(this)
-                .setTitle("Import " + preview.valid + " rows?")
-                .setMessage(preview.invalid > 0
-                        ? preview.invalid + " invalid rows will stay in the Excel with Status/Error."
-                        : "All rows will be saved and removed from the Excel.")
+                .setTitle("Import " + totalValid + " rows?")
+                .setMessage(totalInvalid > 0
+                        ? totalInvalid + " invalid rows will stay in their Excel with Status/Error."
+                        : "All rows will be saved and removed from their Excel files.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Import", (d, w) -> doImport())
                 .show();
     }
 
     private void doImport() {
-        final ExcelImportService.Preview p = preview;
+        final java.util.List<ExcelImportBatch.FilePreview> ps = previews;
         setBusy(true, "Saving transactions…");
         exec.execute(() -> {
             try {
-                ExcelImportService.Result res = service.importValid(p);
+                ExcelImportBatch.BatchResult res = ExcelImportBatch.importAll(ps);
                 mainHandler.post(() -> {
                     setBusy(false, null);
-                    preview = null;
+                    previews = null;
                     previewList.removeAllViews();
                     btnImport.setVisibility(View.GONE);
                     tvSummary.setText("✓ " + res.success + " imported · ✗ " + res.failed + " failed"
                             + (res.failed > 0 ? "\nFailed rows are kept in the Excel with Status/Error." : ""));
-                    if (!res.cleanupOk)
-                        showStatus("⚠ Rows saved, but Excel cleanup failed (" + res.cleanupError
-                                + "). Don't import again — remove the imported rows from the Excel manually.", true);
+                    if (!res.problems.isEmpty())
+                        showStatus("⚠ " + String.join("\n", res.problems), true);
                     else showStatus("Import finished", false);
                     renderLog();
                 });

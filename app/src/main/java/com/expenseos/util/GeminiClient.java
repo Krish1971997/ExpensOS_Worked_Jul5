@@ -28,7 +28,7 @@ public class GeminiClient implements AiProvider {
 
     private static final String ENDPOINT_BASE =
             "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final int MAX_ROUNDS = 12;
+    private static final int MAX_ROUNDS = 8;
     private static final int MAX_TOOL_RESULT_CHARS = 4000; // uncapped run_query output was the biggest token burner
 
     /**
@@ -116,7 +116,11 @@ public class GeminiClient implements AiProvider {
 
             cb.onProgress("Thinking…");
             for (int round = 0; round < MAX_ROUNDS; round++) {
-                JSONObject response = call(contents);
+                if (request.remainingMs() < 3000) {
+                    throw new AiException(AiException.Kind.NETWORK,
+                            "Timed out — question romba periyadhu. Narrow-a kelunga (e.g. 'top 10 expenses').");
+                }
+                JSONObject response = call(contents, request);
 
                 JSONArray candidates = response.optJSONArray("candidates");
                 if (candidates == null || candidates.length() == 0) {
@@ -311,7 +315,7 @@ public class GeminiClient implements AiProvider {
         return content;
     }
 
-    private JSONObject call(JSONArray contents) throws Exception {
+    private JSONObject call(JSONArray contents, AiRequest request) throws Exception {
         JSONObject body = new JSONObject();
         JSONObject systemInstruction = new JSONObject();
         systemInstruction.put("parts",
@@ -327,8 +331,8 @@ public class GeminiClient implements AiProvider {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setRequestProperty("x-goog-api-key", apiKey); // key in a header, never in the URL
         conn.setDoOutput(true);
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(30000);
+        conn.setConnectTimeout(request.readTimeoutMs(15000));
+        conn.setReadTimeout(request.readTimeoutMs(30000)); // capped to the turn's remaining budget
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));

@@ -16,6 +16,14 @@ public final class ExcelImportTemplate {
     private static final int[] WIDTHS = {22, 11, 13, 9, 12, 18, 20, 20, 30, 12, 50};
     private static final int S_DEFAULT = 0, S_HEADER = 1, S_DATE = 2, S_TIME = 3, S_AMOUNT = 4;
     private static final int MIN_VALIDATION_ROWS = 1000;
+    /**
+     * true = Subcategory list follows the chosen Category (needs Excel/LibreOffice). false = all subcategories (works in every app).
+     */
+    private static final boolean DEPENDENT_SUBS = false;
+    private static final int MATRIX_COL = 10; // K: one column per category that has subcategories
+    private static final String SUB_FORMULA =
+            "IFERROR(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,"
+                    + "COUNTA(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,200,1)),1),Reference!$J$2)";
 
     private ExcelImportTemplate() {
     }
@@ -85,7 +93,14 @@ public final class ExcelImportTemplate {
                 .append("\"><formula1>0</formula1></dataValidation>");
         list(sb, "F2:F" + lastRow, "Reference!$B$2:$B$" + Math.max(2, 1 + ref.paymentTypes.size()), "Pick a payment type from the dropdown");
         list(sb, "G2:G" + lastRow, "Reference!$C$2:$C$" + Math.max(2, 1 + ref.categories.size()), "Pick a category from the dropdown");
-        list(sb, "H2:H" + lastRow, "Reference!$D$2:$D$" + Math.max(2, 1 + ref.subCategories.size()), "Pick a subcategory from the dropdown");
+        String subSource = DEPENDENT_SUBS ? SUB_FORMULA
+                : "Reference!$D$2:$D$" + Math.max(2, 1 + ref.subCategories.size());
+        sb.append("<dataValidation type=\"list\" allowBlank=\"1\" showInputMessage=\"1\" showErrorMessage=\"1\" ")
+                .append("errorTitle=\"Invalid subcategory\" error=\"")
+                .append(DEPENDENT_SUBS ? "Pick a subcategory that belongs to the chosen category"
+                        : "Pick a subcategory from the dropdown")
+                .append("\" sqref=\"H2:H").append(lastRow).append("\"><formula1>")
+                .append(esc(subSource)).append("</formula1></dataValidation>");
         sb.append("</dataValidations></worksheet>");
         return sb.toString();
     }
@@ -102,11 +117,15 @@ public final class ExcelImportTemplate {
                 .append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
                 .append("<cols><col min=\"1\" max=\"4\" width=\"22\" customWidth=\"1\"/>")
                 .append("<col min=\"5\" max=\"5\" width=\"4\" customWidth=\"1\"/>")
-                .append("<col min=\"6\" max=\"9\" width=\"24\" customWidth=\"1\"/></cols><sheetData>");
+                .append("<col min=\"6\" max=\"9\" width=\"24\" customWidth=\"1\"/>")
+                .append("<col min=\"11\" max=\"60\" width=\"22\" customWidth=\"1\"/></cols><sheetData>");
+        List<String> matrixCats = new java.util.ArrayList<>(ref.subsByCategory.keySet());
+        int maxSubs = 0;
+        for (List<String> l : ref.subsByCategory.values()) maxSubs = Math.max(maxSubs, l.size());
         String[] head = {"Cashbooks", "Payment Types", "Categories", "Subcategories", null,
                 "Category", "Type", "Scope", "Its subcategories"};
-        int rows = 1 + Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
-                Math.max(Math.max(ref.categories.size(), ref.subCategories.size()), ref.categoryInfo.size()));
+        int rows = 1 + Math.max(maxSubs, Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
+                Math.max(Math.max(ref.categories.size(), ref.subCategories.size()), ref.categoryInfo.size())));
         for (int r = 1; r <= rows; r++) {
             sb.append("<row r=\"").append(r).append("\">");
             for (int c = 0; c < 9; c++) {
@@ -138,6 +157,12 @@ public final class ExcelImportTemplate {
                     }
                 }
                 if (v != null && !v.isEmpty()) str(sb, c, r, v, r == 1 ? S_HEADER : S_DEFAULT);
+            }
+            for (int j = 0; j < matrixCats.size(); j++) {
+                String cat = matrixCats.get(j);
+                String v = r == 1 ? cat : at(ref.subsByCategory.get(cat), r - 2);
+                if (v != null && !v.isEmpty())
+                    str(sb, MATRIX_COL + j, r, v, r == 1 ? S_HEADER : S_DEFAULT);
             }
             sb.append("</row>");
         }

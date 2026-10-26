@@ -291,7 +291,8 @@ public class PassbookCopyActivity extends AppCompatActivity {
         r.tvStatus = r.root.findViewById(R.id.tvCardStatus);
         r.tvChevron = r.root.findViewById(R.id.tvCardChevron);
         r.tvSms = r.root.findViewById(R.id.tvCardSms);
-        r.tvDateTime = r.root.findViewById(R.id.tvCardDateTime);
+        r.tvDate = r.root.findViewById(R.id.tvCardDate);
+        r.tvTime = r.root.findViewById(R.id.tvCardTime);
         r.spPayment = r.root.findViewById(R.id.spCardPayment);
         r.etAmount = r.root.findViewById(R.id.etCardAmount);
         r.spCategory = r.root.findViewById(R.id.spCardCategory);
@@ -312,7 +313,8 @@ public class PassbookCopyActivity extends AppCompatActivity {
         // ── Auto-captured fields ──
         r.etAmount.setText(e.getAmount().toPlainString());
         updateDateTimeText(r);
-        r.tvDateTime.setOnClickListener(v -> showDatePicker(r));
+        r.tvDate.setOnClickListener(v -> showDatePicker(r));
+        r.tvTime.setOnClickListener(v -> showTimePicker(r));
         loadPaymentTypes(r, e.getPaymentType());
 
         // SMS remark shown as a hint; tap = use it as description
@@ -399,7 +401,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
             r.tvSummary.setVisibility(line.isEmpty() ? View.GONE : View.VISIBLE);
             r.tvSummary.setTextColor(getColor(complete ? R.color.text_secondary : R.color.red));
         }
-        
+
         r.tvStatus.setText(complete ? "✓" : "⚠");
         r.tvStatus.setTextColor(getColor(complete ? R.color.green : R.color.red));
         updateSummary();
@@ -453,8 +455,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
     private void showDatePicker(CopyRow r) {
         new DatePickerDialog(this, (view, y, m, d) -> {
             r.date = LocalDate.of(y, m + 1, d);
-            updateDateTimeText(r); // time dialog cancel pannina kooda display sari aagum
-            mainHandler.post(() -> showTimePicker(r));
+            updateDateTimeText(r); // date only; time has its own picker now
         }, r.date.getYear(), r.date.getMonthValue() - 1, r.date.getDayOfMonth()).show();
     }
 
@@ -466,7 +467,8 @@ public class PassbookCopyActivity extends AppCompatActivity {
     }
 
     private void updateDateTimeText(CopyRow r) {
-        r.tvDateTime.setText(r.date.format(DATE_FMT) + " " + r.time.format(TIME_FMT));
+        r.tvDate.setText(r.date.format(DATE_FMT));
+        r.tvTime.setText(r.time.format(TIME_FMT));
         updateHeaderMeta(r);
     }
 
@@ -1029,7 +1031,7 @@ public class PassbookCopyActivity extends AppCompatActivity {
         boolean expanded;
 
         View root, header, body, badge, subWrap;
-        TextView tvIndex, tvAmountHead, tvHeadMeta, tvCat, tvSub, tvPay, tvSummary, tvStatus, tvChevron, tvSms, tvDateTime, btnMic, btnAttach, tvKw;
+        TextView tvIndex, tvAmountHead, tvHeadMeta, tvCat, tvSub, tvPay, tvSummary, tvStatus, tvChevron, tvSms, tvDate, tvTime, btnMic, btnAttach, tvKw;
         EditText etAmount, etNote;
         Spinner spPayment, spCategory, spSub;
         LinearLayout attachList;

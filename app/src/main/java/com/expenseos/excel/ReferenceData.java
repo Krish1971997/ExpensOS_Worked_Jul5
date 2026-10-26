@@ -12,4 +12,8 @@ public class ReferenceData {
      * {category, type, scope, "sub1, sub2"}
      */
     public final List<String[]> categoryInfo = new ArrayList<>();
+    /**
+     * category name (case-insensitive) -> its subcategories; only categories that HAVE subcategories.
+     */
+    public final java.util.Map<String, List<String>> subsByCategory = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 }

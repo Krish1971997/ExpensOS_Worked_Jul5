@@ -21,6 +21,7 @@ public class OpenAiCompatibleClient implements AiProvider {
 
     public static final String OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
     private static final int MAX_TOOL_RESULT_CHARS = 4000; // same fix as GeminiClient — uncapped tool output re-sent every round
+    private static final int MAX_ROUNDS = 8;
 
     private final ToolDispatcher dispatcher;
     private final String apiKey;
@@ -82,8 +83,12 @@ public class OpenAiCompatibleClient implements AiProvider {
             messages.put(request.imagePath != null ? userMsgWithImage(request.userMessage, request.imagePath) : msg("user", request.userMessage));
 
             cb.onProgress("Thinking…");
-            for (int round = 0; round < 12; round++) {
-                JSONObject response = call(messages);
+            for (int round = 0; round < MAX_ROUNDS; round++) {
+                if (request.remainingMs() < 3000) {
+                    throw new AiException(AiException.Kind.NETWORK,
+                            "Timed out — question romba periyadhu. Narrow-a kelunga (e.g. 'top 10 expenses').");
+                }
+                JSONObject response = call(messages, request);
                 JSONObject choice = response.getJSONArray("choices").getJSONObject(0);
                 JSONObject message = choice.getJSONObject("message");
 
@@ -171,7 +176,7 @@ public class OpenAiCompatibleClient implements AiProvider {
         return m;
     }
 
-    private JSONObject call(JSONArray messages) throws Exception {
+    private JSONObject call(JSONArray messages, AiRequest request) throws Exception {
         JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("messages", messages);
@@ -185,8 +190,8 @@ public class OpenAiCompatibleClient implements AiProvider {
         conn.setRequestProperty("Authorization", "Bearer " + apiKey);
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
-        conn.setConnectTimeout(20000);
-        conn.setReadTimeout(60000); // model "thinking" + tool round trips can run long
+        conn.setConnectTimeout(request.readTimeoutMs(20000));
+        conn.setReadTimeout(request.readTimeoutMs(60000)); // capped to the turn's remaining budget
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
