@@ -181,7 +181,7 @@ public class AiFailoverManager {
                     last = ae;
                     if (ae.kind == AiException.Kind.NETWORK || ae.kind == AiException.Kind.SERVER) {
                         // Don't restart a whole multi-round turn if there's no time left for it.
-                        if (attempts <= NET_RETRIES && request.remainingMs() > 20_000) {
+                        if (attempts <= NET_RETRIES && request.remainingMs() > 45_000) {
                             sleep(NET_BACKOFF_MS * attempts);
                             continue; // bounded retry on the same candidate
                         }

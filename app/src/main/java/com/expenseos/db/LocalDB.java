@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 46; // bumped: added session_id to ai_chat_messages (multi-chat history + new chat)
+    private static final int DB_VERSION = 47; // v47: icon/color on categories + sub_categories dropped (unused)
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -932,12 +932,22 @@ public class LocalDB extends SQLiteOpenHelper {
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_ai_chat_session ON ai_chat_messages(session_id, id)");
         }
 
-        if (oldV < 46) {
-            db.execSQL("ALTER TABLE categories     ADD COLUMN icon  TEXT");
-            db.execSQL("ALTER TABLE categories     ADD COLUMN color TEXT");
-            db.execSQL("ALTER TABLE sub_categories ADD COLUMN icon  TEXT");
-            db.execSQL("ALTER TABLE sub_categories ADD COLUMN color TEXT");
-            
+        // v46 once added icon + color to categories/sub_categories; not needed.
+        // v47 drops them where SQLite supports it (3.35+, i.e. Android 13+). On older devices the
+        // unused columns simply stay (nothing reads or writes them).
+        if (oldV < 47) {
+            String[][] unused = {
+                    {"categories", "icon"}, {"categories", "color"},
+                    {"sub_categories", "icon"}, {"sub_categories", "color"}
+            };
+            for (String[] tc : unused) {
+                try {
+                    if (isColumnExists(db, tc[0], tc[1]))
+                        db.execSQL("ALTER TABLE " + tc[0] + " DROP COLUMN " + tc[1]);
+                } catch (Exception e) {
+                    android.util.Log.w("LocalDB", "Could not drop " + tc[0] + "." + tc[1] + ": " + e.getMessage());
+                }
+            }
         }
 
     }
@@ -1068,6 +1078,17 @@ public class LocalDB extends SQLiteOpenHelper {
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('8161','AXIS Neo Card')");
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5265','Axis Flipkart Card')");
         db.execSQL("INSERT OR IGNORE INTO card_mappings(last4, payment_type) VALUES('5068','SBI Credit Card')");
+
+        // Excel auto-import scheduler row (hourly). Inserted only if missing, so every existing install gets it.
+        if (tableExists(db, "schedulers")) {
+            db.execSQL("INSERT INTO schedulers(id, name, display_name, enabled, repeat_type, repeat_days, "
+                    + "run_hour, run_minute, next_run_at, created_at, updated_at) "
+                    + "SELECT COALESCE((SELECT MAX(id) FROM schedulers),0)+1, 'EXCEL_SYNC', "
+                    + "'Excel Import Sync (hourly)', 1, 'HOURLY', '1', 0, 0, "
+                    + "datetime('now','localtime'), datetime('now','localtime'), datetime('now','localtime') "
+                    + "WHERE NOT EXISTS (SELECT 1 FROM schedulers WHERE name='EXCEL_SYNC')");
+            db.execSQL(nextIdSql(db, "schedulers"));   // keep id_sequences ahead of the row we just added
+        }
 
     }
 

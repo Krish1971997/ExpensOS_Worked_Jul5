@@ -19,7 +19,7 @@ public final class ExcelImportTemplate {
     /**
      * true = Subcategory list follows the chosen Category (needs Excel/LibreOffice). false = all subcategories (works in every app).
      */
-    private static final boolean DEPENDENT_SUBS = false;
+    private static final boolean DEPENDENT_SUBS = true;
     private static final int MATRIX_COL = 10; // K: one column per category that has subcategories
     private static final String SUB_FORMULA =
             "IFERROR(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,"

@@ -1,6 +1,7 @@
 package com.expenseos.util;
 
 import android.content.Context;
+import android.os.Build;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -39,6 +40,9 @@ public class GeminiClient implements AiProvider {
     private final ToolDispatcher dispatcher;
     private final String apiKey;
     private final String model;
+
+    // models that rejected the thinkingConfig we send; remembered for the whole process
+    private static final java.util.Set<String> THINKING_REJECTED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /**
      * Legacy single-provider construction (Config screen / AiClientFactory.create(ctx)).
@@ -120,7 +124,10 @@ public class GeminiClient implements AiProvider {
                     throw new AiException(AiException.Kind.NETWORK,
                             "Timed out — question romba periyadhu. Narrow-a kelunga (e.g. 'top 10 expenses').");
                 }
+                long t0 = System.currentTimeMillis();
                 JSONObject response = call(contents, request);
+                android.util.Log.d("AI", "Gemini round " + (round + 1) + ": " + (System.currentTimeMillis() - t0)
+                        + " ms, turn time left " + (request.remainingMs() / 1000) + " s");
 
                 JSONArray candidates = response.optJSONArray("candidates");
                 if (candidates == null || candidates.length() == 0) {
@@ -325,6 +332,16 @@ public class GeminiClient implements AiProvider {
         body.put("tools", new JSONArray().put(
                 new JSONObject().put("functionDeclarations", functionDeclarations())));
 
+        // Less thinking = much faster rounds. Gemini 2.5: thinkingBudget 0. Gemini 3.x: thinkingLevel "low".
+        if (!THINKING_REJECTED.contains(model)) {
+            String m = model.toLowerCase(Locale.ROOT);
+            JSONObject tc = new JSONObject();
+            if (m.contains("2.5")) tc.put("thinkingBudget", 0);
+            else if (m.contains("gemini-3")) tc.put("thinkingLevel", "low");
+            if (tc.length() > 0)
+                body.put("generationConfig", new JSONObject().put("thinkingConfig", tc));
+        }
+
         URL url = new URL(ENDPOINT_BASE + model + ":generateContent");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
@@ -332,7 +349,7 @@ public class GeminiClient implements AiProvider {
         conn.setRequestProperty("x-goog-api-key", apiKey); // key in a header, never in the URL
         conn.setDoOutput(true);
         conn.setConnectTimeout(request.readTimeoutMs(15000));
-        conn.setReadTimeout(request.readTimeoutMs(30000)); // capped to the turn's remaining budget
+        conn.setReadTimeout(request.readTimeoutMs(60000)); // capped to the turn's remaining budget
 
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.toString().getBytes(StandardCharsets.UTF_8));
@@ -348,8 +365,16 @@ public class GeminiClient implements AiProvider {
         }
 
         InputStream is = status >= 200 && status < 300 ? conn.getInputStream() : conn.getErrorStream();
-        String responseBody = is != null ? new String(is.readAllBytes(), StandardCharsets.UTF_8) : "";
+        String responseBody = null;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            responseBody = is != null ? new String(is.readAllBytes(), StandardCharsets.UTF_8) : "";
+        }
 
+        if (status == 400 && !THINKING_REJECTED.contains(model)
+                && responseBody.toLowerCase(Locale.ROOT).contains("thinking")) {
+            THINKING_REJECTED.add(model);      // this model doesn't accept that setting: retry once without it
+            return call(contents, request);
+        }
         if (status < 200 || status >= 300) {
             throw AiErrorClassifier.fromHttp("Gemini", status, responseBody, apiKey);
         }

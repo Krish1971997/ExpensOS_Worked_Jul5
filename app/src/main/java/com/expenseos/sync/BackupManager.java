@@ -102,6 +102,8 @@ public class BackupManager {
                 backup.put("app_config", tableToJson(db, "app_config"));
                 backup.put("ai_chat_messages", tableToJson(db, "ai_chat_messages"));
                 backup.put("settlement_links", tableToJson(db, "settlement_links"));
+                backup.put("import_log", tableToJson(db, "import_log"));
+                backup.put("card_mappings", tableToJson(db, "card_mappings"));
 
                 String ts = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
                 String fileName = "backup_" + ts + ".zip";
@@ -256,6 +258,8 @@ public class BackupManager {
             restoreTable(db, "app_config", backup.optJSONArray("app_config"));
             restoreTable(db, "ai_chat_messages", backup.optJSONArray("ai_chat_messages"));
             restoreTable(db, "settlement_links", backup.optJSONArray("settlement_links"));
+            restoreTable(db, "import_log", backup.optJSONArray("import_log"));
+            restoreTable(db, "card_mappings", backup.optJSONArray("card_mappings"));
 
             db.setTransactionSuccessful();
         } finally {
@@ -422,6 +426,11 @@ public class BackupManager {
 
     private void restoreTable(SQLiteDatabase db, String table, JSONArray arr) throws Exception {
         if (arr == null) return;
+        // Columns that exist right now. Backups made before a column was dropped (e.g. icon/color) still contain it.
+        java.util.Set<String> validCols = new java.util.HashSet<>();
+        try (android.database.Cursor pc = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+            while (pc.moveToNext()) validCols.add(pc.getString(1));
+        }
         db.delete(table, null, null);
         for (int i = 0; i < arr.length(); i++) {
             JSONObject row = arr.getJSONObject(i);
@@ -431,6 +440,8 @@ public class BackupManager {
                 for (int j = 0; j < names.length(); j++) {
                     String key = names.getString(j);
                     if (key.endsWith("_is_blob")) continue; // Skip helper key
+                    if (!validCols.isEmpty() && !validCols.contains(key))
+                        continue; // column no longer exists
 
                     Object val = row.get(key);
                     if (val == JSONObject.NULL) {

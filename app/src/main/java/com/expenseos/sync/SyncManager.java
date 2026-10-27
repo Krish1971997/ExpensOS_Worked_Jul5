@@ -78,6 +78,7 @@ public class SyncManager {
 
             int totalRows = 0;
             try (Connection remote = DBConnection.getInstance().getConnection()) {
+                ensureRemoteSchema(remote);          // while still autocommit, so a later rollback can't undo it
                 remote.setAutoCommit(false);
                 try {
                     // Parent tables first (FK order), then children.
@@ -153,26 +154,11 @@ public class SyncManager {
                     log.info("Starting deleted_records push...");
                     totalRows += pushDeletedRecords(local, remote, fromStr);
 
-                    try {
-                        log.info("Starting settlement_links push...");
-                        totalRows += pushSettlementLinks(local, remote);
-                    } catch (Exception e) {
-                        log.warn("pushSettlementLinks skipped/failed: " + e.getMessage());
-                    }
-
-                    try {
-                        log.info("Starting passbook_entries push...");
-                        totalRows += pushPassbookEntries(local, remote);
-                    } catch (Exception e) {
-                        log.warn("pushPassbookEntries skipped/failed: " + e.getMessage());
-                    }
-
-                    try {
-                        log.info("Starting ai_chat_messages push...");
-                        totalRows += pushAiChatMessages(local, remote);
-                    } catch (Exception e) {
-                        log.warn("pushAiChatMessages skipped/failed: " + e.getMessage());
-                    }
+                    totalRows += optional(remote, "settlement_links", () -> pushSettlementLinks(local, remote));
+                    totalRows += optional(remote, "passbook_entries", () -> pushPassbookEntries(local, remote));
+                    totalRows += optional(remote, "ai_chat_messages", () -> pushAiChatMessages(local, remote));
+                    totalRows += optional(remote, "import_log", () -> pushImportLog(local, remote));
+                    totalRows += optional(remote, "card_mappings", () -> pushCardMappings(local, remote));
 
                     remote.commit();
                     String summary = "Pushed " + totalRows + " rows across all tables";
@@ -214,6 +200,7 @@ public class SyncManager {
             log.info("Fetched date From : " + fromStr);
             int totalRows = 0;
             try (Connection remote = DBConnection.getInstance().getConnection()) {
+                ensureRemoteSchema(remote);
                 totalRows += pullCashBooks(remote, local, fromStr);
                 totalRows += pullCategories(remote, local, fromStr);
                 totalRows += pullSubCategories(remote, local, fromStr);
@@ -256,6 +243,18 @@ public class SyncManager {
                     totalRows += pullAiChatMessages(remote, local);
                 } catch (Exception e) {
                     log.warn("pullAiChatMessages skipped/failed: " + e.getMessage());
+                }
+
+                try {
+                    totalRows += pullImportLog(remote, local);
+                } catch (Exception e) {
+                    log.warn("pullImportLog skipped/failed: " + e.getMessage());
+                }
+
+                try {
+                    totalRows += pullCardMappings(remote, local);
+                } catch (Exception e) {
+                    log.warn("pullCardMappings skipped/failed: " + e.getMessage());
                 }
 
                 com.expenseos.db.LocalDB.getInstance(ctx).resyncSequences(
@@ -2076,6 +2075,89 @@ public class SyncManager {
         return n;
     }
 
+    private int pushImportLog(SQLiteDatabase local, Connection remote) throws Exception {
+        String sel = "SELECT id, imported_at, action, total_rows, success_count, failed_count, status, message "
+                + "FROM import_log ORDER BY id DESC LIMIT 500";
+        String sql = "INSERT INTO import_log (id, imported_at, action, total_rows, success_count, failed_count, status, message) "
+                + "VALUES (?, ?::timestamp, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET "
+                + "imported_at=EXCLUDED.imported_at, action=EXCLUDED.action, total_rows=EXCLUDED.total_rows, "
+                + "success_count=EXCLUDED.success_count, failed_count=EXCLUDED.failed_count, "
+                + "status=EXCLUDED.status, message=EXCLUDED.message";
+        try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setLong(1, c.getLong(0));
+                ps.setString(2, safeTs(c.getString(1)));
+                ps.setString(3, c.getString(2));
+                ps.setInt(4, c.getInt(3));
+                ps.setInt(5, c.getInt(4));
+                ps.setInt(6, c.getInt(5));
+                ps.setString(7, c.getString(6));
+                ps.setString(8, c.getString(7));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("import_log: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pullImportLog(Connection remote, SQLiteDatabase local) throws Exception {
+        String sql = "SELECT id, imported_at, action, total_rows, success_count, failed_count, status, message "
+                + "FROM import_log ORDER BY id DESC LIMIT 500";
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", rs.getLong("id"));
+                cv.put("imported_at", strTs(rs, "imported_at"));
+                cv.put("action", rs.getString("action"));
+                cv.put("total_rows", rs.getInt("total_rows"));
+                cv.put("success_count", rs.getInt("success_count"));
+                cv.put("failed_count", rs.getInt("failed_count"));
+                cv.put("status", rs.getString("status"));
+                cv.put("message", rs.getString("message"));
+                local.insertWithOnConflict("import_log", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("import_log: pulled " + n);
+        return n;
+    }
+
+    private int pushCardMappings(SQLiteDatabase local, Connection remote) throws Exception {
+        String sel = "SELECT last4, payment_type FROM card_mappings";
+        String sql = "INSERT INTO card_mappings (last4, payment_type) VALUES (?, ?) "
+                + "ON CONFLICT (last4) DO UPDATE SET payment_type=EXCLUDED.payment_type";
+        try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
+            int n = 0;
+            while (c.moveToNext()) {
+                ps.setString(1, c.getString(0));
+                ps.setString(2, c.getString(1));
+                ps.executeUpdate();
+                n++;
+            }
+            log.info("card_mappings: pushed " + n);
+            return n;
+        }
+    }
+
+    private int pullCardMappings(Connection remote, SQLiteDatabase local) throws Exception {
+        String sql = "SELECT last4, payment_type FROM card_mappings";
+        int n = 0;
+        try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ContentValues cv = new ContentValues();
+                cv.put("last4", rs.getString("last4"));
+                cv.put("payment_type", rs.getString("payment_type"));
+                local.insertWithOnConflict("card_mappings", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                n++;
+            }
+        }
+        log.info("card_mappings: pulled " + n);
+        return n;
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // Helpers
     // ════════════════════════════════════════════════════════════════════
@@ -2116,4 +2198,50 @@ public class SyncManager {
     public void restoreAllFromCloud(Context ctx, SyncCallback cb) {
         fetchFromCloud(ctx, null, cb);
     }
+
+    private static volatile boolean remoteSchemaReady = false;
+
+    /**
+     * Creates the new cloud columns/tables if missing. MUST run while the connection is still in autocommit.
+     */
+    private void ensureRemoteSchema(Connection remote) {
+        if (remoteSchemaReady) return;
+        String[] ddl = {
+                "CREATE TABLE IF NOT EXISTS import_log (id BIGINT PRIMARY KEY, imported_at TIMESTAMP, "
+                        + "action TEXT, total_rows INTEGER, success_count INTEGER, failed_count INTEGER, "
+                        + "status TEXT, message TEXT)",
+                "CREATE TABLE IF NOT EXISTS card_mappings (last4 VARCHAR(8) PRIMARY KEY, payment_type TEXT NOT NULL)"
+        };
+        boolean allOk = true;
+        for (String sql : ddl) {
+            try (java.sql.Statement st = remote.createStatement()) {
+                st.execute(sql);
+            } catch (Exception e) {
+                allOk = false;
+                log.warn("Remote schema step failed (" + sql + "): " + e.getMessage());
+            }
+        }
+        remoteSchemaReady = allOk;
+    }
+
+    /**
+     * Runs an optional table's push inside a savepoint so one failure can't abort the whole transaction.
+     */
+    private int optional(Connection remote, String label, java.util.concurrent.Callable<Integer> job) {
+        java.sql.Savepoint sp = null;
+        try {
+            sp = remote.setSavepoint();
+            int n = job.call();
+            remote.releaseSavepoint(sp);
+            return n;
+        } catch (Exception e) {
+            log.warn(label + " skipped/failed: " + e.getMessage());
+            try {
+                if (sp != null) remote.rollback(sp);
+            } catch (Exception ignored) {
+            }
+            return 0;
+        }
+    }
+
 }

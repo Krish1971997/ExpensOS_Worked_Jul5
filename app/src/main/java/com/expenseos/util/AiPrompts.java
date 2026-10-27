@@ -20,6 +20,8 @@ public final class AiPrompts {
                 + "Be efficient: use as FEW tool calls as possible (ideally 3-4 total). For vague questions like "
                 + "\"unwanted spend\", do NOT keep exploring the schema — run ONE aggregate query for the requested "
                 + "period (GROUP BY category, note ORDER BY SUM(amount) DESC LIMIT 20) and answer from that result. "
+                + "For comparisons (this week vs last week, month vs month) use ONE query that returns both periods "
+                + "(SUM(CASE WHEN date BETWEEN … THEN amount END) per category) — never one query per period. "
                 + "CHARTS: whenever the user's message asks for a chart/graph/plot (in any language, including words "
                 + "like \"chart\", \"graph\", or the 📈/📊 emoji) you MUST call render_chart — never answer with a "
                 + "text-only day-wise/category-wise breakdown instead. render_chart supports chart_type='bar' (default) "

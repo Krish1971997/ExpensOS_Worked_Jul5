@@ -16,4 +16,9 @@ public class ReferenceData {
      * category name (case-insensitive) -> its subcategories; only categories that HAVE subcategories.
      */
     public final java.util.Map<String, List<String>> subsByCategory = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    /**
+     * Zoho dropdown labels: "Category › Subcategory", sorted by category.
+     */
+    public final List<String> subLabels = new ArrayList<>();
+    public static final String SUB_SEP = " \u203A ";
 }

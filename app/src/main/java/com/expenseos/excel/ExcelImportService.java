@@ -294,7 +294,7 @@ public class ExcelImportService {
     }
 
     private static final int IMPORT_LAST_ROW = 1000;
-    private static final int DV_VERSION = 1; // bump to force re-applying dropdowns to every file
+    private static final int DV_VERSION = 2; // bump to force re-applying dropdowns to every file
 
     /**
      * Re-applies Import-sheet dropdowns + validation when the lists changed (or were never applied).
@@ -353,18 +353,20 @@ public class ExcelImportService {
         for (Map<String, String> m : sheet.fetchRecords(rid, REFERENCE_SHEET))
             oldLast = Math.max(oldLast, rowIndexOf(m));
 
-        int n = Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
-                Math.max(ref.categories.size(), ref.subCategories.size()));
+        int n = Math.max(Math.max(Math.max(ref.cashbooks.size(), ref.paymentTypes.size()),
+                Math.max(ref.categories.size(), ref.subCategories.size())), ref.subLabels.size());
         List<String[]> rows = new ArrayList<>();
         for (int i = 0; i < n; i++)
             rows.add(new String[]{cell(ref.cashbooks, i), cell(ref.paymentTypes, i),
-                    cell(ref.categories, i), cell(ref.subCategories, i)});
+                    cell(ref.categories, i), cell(ref.subCategories, i), cell(ref.subLabels, i)});
 
         try {
-            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 4, rows, oldLast);
+            sheet.setCsv(rid, REFERENCE_SHEET, 1, 5, "Subcategory Labels");   // header E1
+            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 5, rows, oldLast);
         } catch (Exception first) {
             Thread.sleep(1500);
-            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 4, rows, oldLast); // idempotent, safe to retry
+            sheet.setCsv(rid, REFERENCE_SHEET, 1, 5, "Subcategory Labels");
+            sheet.rewriteRows(rid, REFERENCE_SHEET, 2, 5, rows, oldLast); // idempotent, safe to retry
         }
     }
 
@@ -375,7 +377,7 @@ public class ExcelImportService {
     private static int referenceHash(ReferenceData r) {
         StringBuilder sb = new StringBuilder();
         sb.append(r.cashbooks).append(r.paymentTypes).append(r.categories)
-                .append(r.subCategories).append(r.subsByCategory);
+                .append(r.subCategories).append(r.subsByCategory).append(r.subLabels);
         for (String[] a : r.categoryInfo) sb.append(String.join("\u0001", a)).append('\u0002');
         return sb.toString().hashCode();
     }
@@ -466,22 +468,32 @@ public class ExcelImportService {
                     err.add("Category '" + r.category + "' not found for " + type + " in '" + book.getName() + "'");
                 else {
                     r.categoryId = chosen.getId();
+                    String subIn = r.subCategory;
+                    String subOf = null;                    // parent from a "Category › Sub" dropdown label
+                    int sepAt = subIn.indexOf('\u203A');
+                    if (sepAt >= 0) {
+                        subOf = subIn.substring(0, sepAt).trim();
+                        subIn = subIn.substring(sepAt + 1).trim();
+                    }
                     List<SubCategory> sl = subs.get(chosen.getId());
-                    if (sl != null && !sl.isEmpty()) {
-                        if (r.subCategory.isEmpty())
+                    if (subOf != null && !key(subOf).equals(key(chosen.getName())))
+                        err.add("Subcategory '" + r.subCategory + "' belongs to '" + subOf
+                                + "', but Category is '" + chosen.getName() + "'");
+                    else if (sl != null && !sl.isEmpty()) {
+                        if (subIn.isEmpty())
                             err.add("Subcategory is required for '" + chosen.getName() + "'");
                         else {
                             SubCategory m = null;
                             for (SubCategory s : sl)
-                                if (key(s.getName()).equals(key(r.subCategory))) {
+                                if (key(s.getName()).equals(key(subIn))) {
                                     m = s;
                                     break;
                                 }
                             if (m == null)
-                                err.add("Subcategory '" + r.subCategory + "' does not belong to '" + chosen.getName() + "'");
+                                err.add("Subcategory '" + subIn + "' does not belong to '" + chosen.getName() + "'");
                             else r.subCategoryId = m.getId();
                         }
-                    } else if (!r.subCategory.isEmpty())
+                    } else if (!subIn.isEmpty())
                         err.add("Category '" + chosen.getName() + "' has no subcategories — leave Subcategory blank");
                 }
             }
@@ -526,6 +538,9 @@ public class ExcelImportService {
         ref.categoryInfo.sort(Comparator.comparing((String[] a) -> a[0].toLowerCase(Locale.ROOT)).thenComparing(a -> a[1]));
         ref.categories.addAll(catNames);
         for (List<String> l : ref.subsByCategory.values()) l.sort(String.CASE_INSENSITIVE_ORDER);
+        for (Map.Entry<String, List<String>> e : ref.subsByCategory.entrySet())
+            for (String sn : e.getValue())
+                ref.subLabels.add(e.getKey() + ReferenceData.SUB_SEP + sn);
         ref.subCategories.addAll(subNames);
         return ref;
     }
