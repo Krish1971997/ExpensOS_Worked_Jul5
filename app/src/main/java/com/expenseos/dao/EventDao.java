@@ -95,7 +95,7 @@ public class EventDao {
         try (Cursor c = db.getReadableDatabase().rawQuery(
                 "SELECT er.id, er.event_id, er.reminder_id, r.name " +
                         "FROM event_reminders er JOIN reminders r ON r.id = er.reminder_id " +
-                        "WHERE er.event_id=? AND er.type=?",
+                        "WHERE er.event_id=? AND er.type=? ORDER BY er.id",
                 new String[]{String.valueOf(eventId), type})) {
             while (c.moveToNext()) {
                 EventReminder er = new EventReminder();
@@ -134,5 +134,29 @@ public class EventDao {
         cv.put("reminder_id", reminderId);
         cv.put("type", type);
         wdb.insert("event_reminders", null, cv);
+    }
+
+    /**
+     * Replaces ALL reminder links of one type (NOTIFICATION / ALARM) for an event,
+     * keeping the given order (event_reminders.id grows in list order).
+     */
+    public void setReminders(long eventId, String type, List<Long> reminderIds) {
+        SQLiteDatabase wdb = db.getWritableDatabase();
+        wdb.beginTransaction();
+        try {
+            wdb.delete("event_reminders", "event_id=? AND type=?",
+                    new String[]{String.valueOf(eventId), type});
+            for (long rid : reminderIds) {
+                ContentValues cv = new ContentValues();
+                cv.put("id", db.getNextId("event_reminders"));
+                cv.put("event_id", eventId);
+                cv.put("reminder_id", rid);
+                cv.put("type", type);
+                wdb.insert("event_reminders", null, cv);
+            }
+            wdb.setTransactionSuccessful();
+        } finally {
+            wdb.endTransaction();
+        }
     }
 }

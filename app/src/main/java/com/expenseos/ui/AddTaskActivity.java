@@ -13,6 +13,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -44,7 +45,9 @@ public class AddTaskActivity extends AppCompatActivity {
 
     private EditText etName, etDescription;
     private Button btnDate, btnTime, btnEvents;
+    private TextView tvScheduleSummary;
     private Spinner spColor;
+    private boolean colorManual = false; // true once the user touches the colour spinner
     private LocalDate date;
     private LocalTime time;
     private List<Event> allEvents;
@@ -66,6 +69,7 @@ public class AddTaskActivity extends AppCompatActivity {
         btnTime = findViewById(R.id.btnTaskTime);
         btnEvents = findViewById(R.id.btnTaskEvents);
         spColor = findViewById(R.id.spTaskColor);
+        tvScheduleSummary = findViewById(R.id.tvScheduleSummary);
 
         allEvents = eventDao.findAll();
         if (allEvents.isEmpty()) {
@@ -73,15 +77,21 @@ public class AddTaskActivity extends AppCompatActivity {
         }
 
         setupColorSpinner();
+        spColor.setOnTouchListener((v, ev) -> {
+            colorManual = true;
+            return false;
+        });
 
         String prefillDate = getIntent().getStringExtra(EXTRA_DATE);
         date = prefillDate != null ? LocalDate.parse(prefillDate, DATE_FMT) : LocalDate.now();
         time = LocalTime.of(9, 0);
         refreshDateTimeButtons();
+        autoPickColor();
 
         btnDate.setOnClickListener(v -> new DatePickerDialog(this, (p, y, m, d) -> {
             date = LocalDate.of(y, m + 1, d);
             refreshDateTimeButtons();
+            autoPickColor();
         }, date.getYear(), date.getMonthValue() - 1, date.getDayOfMonth()).show());
 
         btnTime.setOnClickListener(v ->
@@ -139,6 +149,15 @@ public class AddTaskActivity extends AppCompatActivity {
     private void refreshDateTimeButtons() {
         btnDate.setText(date.format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
         btnTime.setText(time.format(DateTimeFormatter.ofPattern("hh:mm a")));
+        refreshSummary();
+    }
+
+    /**
+     * Live "when will it ring" preview — updates on date / event changes.
+     */
+    private void refreshSummary() {
+        if (tvScheduleSummary == null) return;
+        tvScheduleSummary.setText(com.expenseos.util.ReminderSummary.build(this, date, selectedEventIds));
     }
 
     private void showEventPicker() {
@@ -166,6 +185,7 @@ public class AddTaskActivity extends AppCompatActivity {
                         }
                     }
                     btnEvents.setText(names.isEmpty() ? "Select event(s)" : String.join(", ", names));
+                    refreshSummary();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -188,6 +208,7 @@ public class AddTaskActivity extends AppCompatActivity {
         List<String> names = new ArrayList<>();
         for (Event e : allEvents) if (selectedEventIds.contains(e.getId())) names.add(e.getName());
         btnEvents.setText(names.isEmpty() ? "Select event(s)" : String.join(", ", names));
+        refreshSummary();
     }
 
     private void save() {
@@ -252,5 +273,35 @@ public class AddTaskActivity extends AppCompatActivity {
         Toast.makeText(this, "Saved!", Toast.LENGTH_SHORT).show();
         setResult(RESULT_OK);
         finish();
+    }
+
+    /**
+     * New task only: pick a colour not yet used by that day's tasks (random among the least-used).
+     */
+    private void autoPickColor() {
+        if (colorManual || getIntent().getLongExtra(EXTRA_TASK_ID, 0) > 0) return;
+
+        java.util.Map<String, Integer> used = new java.util.HashMap<>();
+        for (Task t : taskDao.findByDate(date.format(DATE_FMT))) {
+            String c = t.getColor();
+            if (c != null && !c.isEmpty()) used.merge(c.toUpperCase(), 1, Integer::sum);
+        }
+
+        List<String> names = new ArrayList<>();
+        int min = Integer.MAX_VALUE;
+        for (String n : TaskColors.names()) {
+            String hex = TaskColors.hexFor(n);
+            if (hex.isEmpty()) continue;               // skip the "no colour" entry
+            int cnt = used.getOrDefault(hex.toUpperCase(), 0);
+            if (cnt < min) {
+                min = cnt;
+                names.clear();
+            }
+            if (cnt == min) names.add(n);
+        }
+        if (names.isEmpty()) return;
+
+        String pick = names.get(new java.util.Random().nextInt(names.size()));
+        spColor.setSelection(java.util.Arrays.asList(TaskColors.names()).indexOf(pick));
     }
 }

@@ -77,6 +77,18 @@
                 android:layout_marginTop="12dp"
                 android:text="Select event(s) *" />
 
+            <TextView
+                android:id="@+id/tvScheduleSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@color/nav_bg"
+                android:lineSpacingExtra="4dp"
+                android:padding="12dp"
+                android:text="Select event(s) to see when notifications / alarms will fire"
+                android:textColor="@color/text_muted"
+                android:textSize="13sp" />
+
             <EditText
                 android:id="@+id/etTaskDescription"
                 android:layout_width="match_parent"

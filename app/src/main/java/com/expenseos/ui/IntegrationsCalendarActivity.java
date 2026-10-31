@@ -260,14 +260,22 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
                 int show = n <= fit ? n : Math.max(1, Math.min(4, (avail - (int) (12 * dp)) / (int) (17 * dp)));
 
                 for (int i = 0; i < 4; i++) {
-                    if (i < show) bindChip(h.chips[i], tasks.get(i), dp);
-                    else h.chips[i].setVisibility(View.GONE);
+                    if (i < show) {
+                        final Task chipTask = tasks.get(i);
+                        bindChip(h.chips[i], chipTask, dp);
+                        h.chips[i].setOnClickListener(v -> openTask(chipTask));
+                    } else {
+                        h.chips[i].setVisibility(View.GONE);
+                        h.chips[i].setOnClickListener(null);
+                    }
                 }
                 if (n > show) {
                     h.more.setVisibility(View.VISIBLE);
                     h.more.setText("+" + (n - show) + " more");
+                    h.more.setOnClickListener(v -> openDayDialog(date.format(DATE_FMT)));
                 } else {
                     h.more.setVisibility(View.GONE);
+                    h.more.setOnClickListener(null);
                 }
 
                 h.itemView.setOnClickListener(v ->
@@ -438,10 +446,7 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
                 Task task = tasks.get(pos);
                 h.tvName.setText(task.getName());
                 h.tvWhen.setText(task.getTaskDateTime());
-                h.itemView.setOnClickListener(v -> {
-                    String date = task.getTaskDateTime().substring(0, 10);
-                    DayTasksDialog.show(IntegrationsCalendarActivity.this, date, () -> render());
-                });
+                h.itemView.setOnClickListener(v -> openTask(task));
             }
 
             @Override
@@ -449,5 +454,25 @@ public class IntegrationsCalendarActivity extends AppCompatActivity {
                 return tasks.size();
             }
         });
+    }
+
+    private static final int DIALOG_MIN_TASKS = 5; // this many (or more) tasks on a day -> pick from list first
+
+    private void openDayDialog(String date) {
+        DayTasksDialog.show(this, date, () -> render());
+    }
+
+    /**
+     * 1..4 tasks that day -> straight to preview; 5+ -> day list dialog first.
+     */
+    private void openTask(Task task) {
+        String date = task.getTaskDateTime().substring(0, 10);
+        if (taskDao.findByDate(date).size() >= DIALOG_MIN_TASKS) {
+            openDayDialog(date);
+            return;
+        }
+        Intent i = new Intent(this, TaskPreviewActivity.class);
+        i.putExtra(AddTaskActivity.EXTRA_TASK_ID, task.getId());
+        startActivity(i);
     }
 }

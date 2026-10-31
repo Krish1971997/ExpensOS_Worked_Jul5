@@ -7,6 +7,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -36,8 +38,10 @@ public class AddEventActivity extends AppCompatActivity {
     private View blockNotification, blockAlarm;
     private Button btnNotifReminder, btnAlarmReminder;
 
-    private long notifReminderId = 0;
-    private long alarmReminderId = 0;
+    // Ordered lists — a notification/alarm can now have MANY reminders.
+    private final List<Long> notifIds = new ArrayList<>();
+    private final List<Long> alarmIds = new ArrayList<>();
+    private LinearLayout listNotif, listAlarm;
 
     private String toneUri = "";   // per-event alarm tone ("" = use global/default)
     private String toneName = "";
@@ -63,27 +67,33 @@ public class AddEventActivity extends AppCompatActivity {
         blockAlarm = findViewById(R.id.blockAlarm);
         btnNotifReminder = findViewById(R.id.btnNotifReminder);
         btnAlarmReminder = findViewById(R.id.btnAlarmReminder);
+        listNotif = findViewById(R.id.listNotif);
+        listAlarm = findViewById(R.id.listAlarm);
 
         ArrayAdapter<String> dirAdapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_dropdown_item, new String[]{"Before", "After"});
         spOffsetDirection.setAdapter(dirAdapter);
 
+        // "+ New" in the picker → AddReminderActivity returns the new id; append it.
         notifReminderLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
             if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                notifReminderId = result.getData().getLongExtra("reminder_id", 0);
-                refreshReminderButton(btnNotifReminder, notifReminderId);
+                addId(notifIds, result.getData().getLongExtra("reminder_id", 0));
+                renderList(true);
             }
         });
         alarmReminderLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
             if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                alarmReminderId = result.getData().getLongExtra("reminder_id", 0);
-                refreshReminderButton(btnAlarmReminder, alarmReminderId);
+                addId(alarmIds, result.getData().getLongExtra("reminder_id", 0));
+                renderList(false);
             }
         });
 
         setupTabs();
         btnNotifReminder.setOnClickListener(v -> showReminderPicker(true));
         btnAlarmReminder.setOnClickListener(v -> showReminderPicker(false));
+
+        renderList(true);
+        renderList(false);
 
         btnAlarmTone = findViewById(R.id.btnAlarmTone);
         ringtoneLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -221,37 +231,88 @@ public class AddEventActivity extends AppCompatActivity {
                 .show();
     }
 
-    // ── Reminder picker: popup list of existing reminders + "Create new" ──
+    // ── Multi-reminder picker: tick any number of existing reminders ──
+    private void addId(List<Long> list, long id) {
+        if (id > 0 && !list.contains(id)) list.add(id);
+    }
+
     private void showReminderPicker(boolean isNotif) {
-        List<Reminder> reminders = reminderDao.findAll();
-        List<String> labels = new ArrayList<>();
-        for (Reminder r : reminders) labels.add(r.getName() + " — " + r.getSummary());
-        labels.add("+ Create new reminder");
+        final List<Reminder> all = reminderDao.findAll();
+        final List<Long> current = isNotif ? notifIds : alarmIds;
+        final String[] labels = new String[all.size()];
+        final boolean[] checked = new boolean[all.size()];
+        for (int i = 0; i < all.size(); i++) {
+            Reminder r = all.get(i);
+            labels[i] = r.getName() + " — " + r.getSummary();
+            checked[i] = current.contains(r.getId());
+        }
 
         new AlertDialog.Builder(this)
-                .setTitle("Select reminder")
-                .setItems(labels.toArray(new String[0]), (d, which) -> {
-                    if (which == reminders.size()) {
-                        Intent i = new Intent(this, AddReminderActivity.class);
-                        (isNotif ? notifReminderLauncher : alarmReminderLauncher).launch(i);
-                    } else {
-                        long id = reminders.get(which).getId();
-                        if (isNotif) {
-                            notifReminderId = id;
-                            refreshReminderButton(btnNotifReminder, id);
-                        } else {
-                            alarmReminderId = id;
-                            refreshReminderButton(btnAlarmReminder, id);
-                        }
-                    }
+                .setTitle(isNotif ? "Notification reminders" : "Alarm reminders")
+                .setMultiChoiceItems(labels, checked, (d, which, isChecked) -> checked[which] = isChecked)
+                .setPositiveButton("OK", (d, w) -> {
+                    // keep the order of already-added reminders, append newly ticked ones
+                    List<Long> next = new ArrayList<>();
+                    for (Long id : current)
+                        for (int i = 0; i < all.size(); i++)
+                            if (all.get(i).getId() == id && checked[i]) next.add(id);
+                    for (int i = 0; i < all.size(); i++)
+                        if (checked[i] && !next.contains(all.get(i).getId())) next.add(all.get(i).getId());
+                    current.clear();
+                    current.addAll(next);
+                    renderList(isNotif);
+                })
+                .setNeutralButton("+ New", (d, w) -> {
+                    Intent i = new Intent(this, AddReminderActivity.class);
+                    (isNotif ? notifReminderLauncher : alarmReminderLauncher).launch(i);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
     }
 
-    private void refreshReminderButton(Button btn, long reminderId) {
-        Reminder r = reminderDao.findById(reminderId);
-        btn.setText(r != null ? r.getName() + " (" + r.getSummary() + ")" : "Select reminder");
+    /** Draws the selected reminders as numbered rows, each with a ✕ to remove. */
+    private void renderList(boolean isNotif) {
+        LinearLayout box = isNotif ? listNotif : listAlarm;
+        List<Long> ids = isNotif ? notifIds : alarmIds;
+        box.removeAllViews();
+        if (ids.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No reminders added");
+            empty.setPadding(0, 0, 0, 8);
+            box.addView(empty);
+            return;
+        }
+        int n = 1;
+        for (final Long id : new ArrayList<>(ids)) {
+            Reminder r = reminderDao.findById(id);
+            if (r == null) {
+                ids.remove(id);
+                continue;
+            }
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setPadding(0, 6, 0, 6);
+
+            TextView label = new TextView(this);
+            label.setText(n + ". " + r.getName() + " (" + r.getSummary() + ")");
+            label.setLayoutParams(new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView x = new TextView(this);
+            x.setText("✕");
+            x.setTextSize(18);
+            x.setPadding(24, 8, 8, 8);
+            x.setOnClickListener(v -> {
+                ids.remove(id);
+                renderList(isNotif);
+            });
+
+            row.addView(label);
+            row.addView(x);
+            box.addView(row);
+            n++;
+        }
     }
 
     // ── Load for edit ─────────────────────────────────────
@@ -265,16 +326,14 @@ public class AddEventActivity extends AppCompatActivity {
                 break;
             }
         }
-        List<EventReminder> notifs = eventDao.findReminders(editingEventId, "NOTIFICATION");
-        if (!notifs.isEmpty()) {
-            notifReminderId = notifs.get(0).getReminderId();
-            refreshReminderButton(btnNotifReminder, notifReminderId);
-        }
-        List<EventReminder> alarms = eventDao.findReminders(editingEventId, "ALARM");
-        if (!alarms.isEmpty()) {
-            alarmReminderId = alarms.get(0).getReminderId();
-            refreshReminderButton(btnAlarmReminder, alarmReminderId);
-        }
+        notifIds.clear();
+        for (EventReminder er : eventDao.findReminders(editingEventId, "NOTIFICATION"))
+            addId(notifIds, er.getReminderId());
+        alarmIds.clear();
+        for (EventReminder er : eventDao.findReminders(editingEventId, "ALARM"))
+            addId(alarmIds, er.getReminderId());
+        renderList(true);
+        renderList(false);
         if (com.expenseos.util.AlarmToneStore.hasEventTone(this, editingEventId)) {
             toneUri = com.expenseos.util.AlarmToneStore.getEventUri(this, editingEventId);
             toneName = com.expenseos.util.AlarmToneStore.getEventName(this, editingEventId);
@@ -294,7 +353,7 @@ public class AddEventActivity extends AppCompatActivity {
             Toast.makeText(this, "Days required", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (notifReminderId == 0 && alarmReminderId == 0) {
+        if (notifIds.isEmpty() && alarmIds.isEmpty()) {
             Toast.makeText(this, "Select a reminder for at least Notification or Alarm", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -309,8 +368,16 @@ public class AddEventActivity extends AppCompatActivity {
         long eventId = editingEventId > 0 ? editingEventId : eventDao.insert(e);
         if (editingEventId > 0) eventDao.update(e);
 
-        if (notifReminderId > 0) eventDao.setReminder(eventId, "NOTIFICATION", notifReminderId);
-        if (alarmReminderId > 0) eventDao.setReminder(eventId, "ALARM", alarmReminderId);
+        // Cancel every scheduled alarm FIRST: setReminders() deletes/re-creates event_reminders
+        // rows, and if task_alarms cascades from them the request codes would be lost and the
+        // old AlarmManager entries could never be cancelled.
+        com.expenseos.dao.TaskDao taskDaoForCancel = new com.expenseos.dao.TaskDao(this);
+        for (com.expenseos.model.Task t : taskDaoForCancel.findAll())
+            com.expenseos.scheduler.TaskAlarmScheduler.cancelForTask(this, t.getId());
+
+        // Replaces ALL reminders of that type for this event (see EventDao.setReminders)
+        eventDao.setReminders(eventId, "NOTIFICATION", notifIds);
+        eventDao.setReminders(eventId, "ALARM", alarmIds);
 
         if (toneUri.isEmpty()) com.expenseos.util.AlarmToneStore.clearForEvent(this, eventId);
         else com.expenseos.util.AlarmToneStore.saveForEvent(this, eventId, toneUri, toneName);

@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.CheckBox;
-import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -90,38 +89,10 @@ public class DayTasksDialog {
                         h.cb.setChecked(!h.cb.isChecked());
                         return;
                     }
-                    PopupMenu m = new PopupMenu(activity, view);
-                    m.getMenu().add(0, 1, 0, "Edit");
-                    m.getMenu().add(0, 2, 1, "Duplicate");
-                    m.getMenu().add(0, 3, 2, "Delete");
-                    m.setOnMenuItemClickListener(item -> {
-                        if (item.getItemId() == 1) {
-                            Intent i = new Intent(activity, AddTaskActivity.class);
-                            i.putExtra(AddTaskActivity.EXTRA_TASK_ID, task.getId());
-                            activity.startActivity(i);
-                            dialog.dismiss();
-                        } else if (item.getItemId() == 2) {
-                            confirmAction(activity, "Duplicate \"" + task.getName() + "\"?", () -> {
-                                duplicateTask(activity, dao, task);
-                                Toast.makeText(activity, "Duplicated", Toast.LENGTH_SHORT).show();
-                                dialog.dismiss();
-                                if (onChanged != null) onChanged.onChanged();
-                            });
-                            // single delete (Edit/Duplicate/Delete popup menu, item id 3):
-                        } else if (item.getItemId() == 3) {
-                            confirmAction(activity, "Delete \"" + task.getName() + "\"?", () -> {
-                                com.expenseos.scheduler.TaskAlarmScheduler.cancelForTask(activity, task.getId());
-                                com.expenseos.sync.GoogleCalendarSyncManager.delete(activity, task.getGoogleEventId(), (ok, msg) -> {
-                                });
-                                dao.delete(task.getId());
-                                Toast.makeText(activity, "Deleted", Toast.LENGTH_SHORT).show();
-                                dialog.dismiss();
-                                if (onChanged != null) onChanged.onChanged();
-                            });
-                        }
-                        return true;
-                    });
-                    m.show();
+                    dialog.dismiss();
+                    Intent i = new Intent(activity, TaskPreviewActivity.class);
+                    i.putExtra(AddTaskActivity.EXTRA_TASK_ID, task.getId());
+                    activity.startActivity(i);
                 });
             }
 

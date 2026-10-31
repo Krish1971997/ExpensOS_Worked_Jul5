@@ -84,6 +84,9 @@
             android:name=".ui.AddTaskActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.TaskPreviewActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.IntegrationsActivity"
             android:exported="false" />
         <activity
