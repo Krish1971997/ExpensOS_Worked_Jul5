@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 47; // v47: icon/color on categories + sub_categories dropped (unused)
+    private static final int DB_VERSION = 48; // v48: event_reminders allows many reminders per event+type
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -304,7 +304,7 @@ public class LocalDB extends SQLiteOpenHelper {
                 "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
                 "created_at  TEXT DEFAULT (datetime('now'))," +
                 "updated_at  TEXT DEFAULT (datetime('now'))," +
-                "UNIQUE(event_id, type))");
+                "UNIQUE(event_id, type, reminder_id))");
 
         // tasks — Phase 2 la use aagum, table ippove create pannitrom
         db.execSQL("CREATE TABLE IF NOT EXISTS tasks (" +
@@ -948,6 +948,25 @@ public class LocalDB extends SQLiteOpenHelper {
                     android.util.Log.w("LocalDB", "Could not drop " + tc[0] + "." + tc[1] + ": " + e.getMessage());
                 }
             }
+        }
+
+        // v48: SQLite can't drop a UNIQUE constraint, so rebuild event_reminders
+        // (copy data, drop, rename) without UNIQUE(event_id, type).
+        if (oldV < 48) {
+            db.execSQL("DROP TABLE IF EXISTS event_reminders_new");
+            db.execSQL("CREATE TABLE event_reminders_new (" +
+                    "id          INTEGER PRIMARY KEY," +
+                    "event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE," +
+                    "reminder_id INTEGER NOT NULL REFERENCES reminders(id)," +
+                    "type        TEXT NOT NULL CHECK(type IN ('NOTIFICATION','ALARM'))," +
+                    "created_at  TEXT DEFAULT (datetime('now'))," +
+                    "updated_at  TEXT DEFAULT (datetime('now'))," +
+                    "UNIQUE(event_id, type, reminder_id))");
+            db.execSQL("INSERT OR IGNORE INTO event_reminders_new " +
+                    "(id, event_id, reminder_id, type, created_at, updated_at) " +
+                    "SELECT id, event_id, reminder_id, type, created_at, updated_at FROM event_reminders");
+            db.execSQL("DROP TABLE event_reminders");
+            db.execSQL("ALTER TABLE event_reminders_new RENAME TO event_reminders");
         }
 
     }
