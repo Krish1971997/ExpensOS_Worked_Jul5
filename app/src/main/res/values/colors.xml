@@ -39,15 +39,15 @@
     <color name="amber_bg">#FFFBEB</color>
 
     <!-- Surfaces -->
-    <color name="bg">#F5F7FB</color>
-    <color name="background">#F5F7FB</color>
-    <color name="bg_card">#FFFFFF</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="surface_2">#F1F5F9</color>
-    <color name="surface_3">#E7EDF6</color>
-    <color name="nav_bg">#FFFFFF</color>
-    <color name="border">#E5EAF2</color>
-    <color name="divider">#EEF2F8</color>
+    <color name="bg">#F2F5FB</color>
+    <color name="background">#F2F5FB</color>
+    <color name="bg_card">#C2FFFFFF</color>
+    <color name="surface">#E9FFFFFF</color>
+    <color name="surface_2">#8CFFFFFF</color>
+    <color name="surface_3">#73FFFFFF</color>
+    <color name="nav_bg">#B9FFFFFF</color>
+    <color name="border">#8CFFFFFF</color>
+    <color name="divider">#59FFFFFF</color>
 
     <!-- Text -->
     <color name="text">#0F172A</color>
@@ -97,4 +97,18 @@
     <color name="ft_row_bg">#FFFFFF</color>
     <color name="ft_row_weekend_bg">#E8F1FD</color>
     <color name="ft_cell_filled_bg">#FFF6CC</color>
+
+    <!-- ══════════ GLASS DESIGN SYSTEM (Aurora + iOS-style glass) ══════════ -->
+    <color name="glass_fill">#B4FFFFFF</color>
+    <color name="glass_fill_strong">#E6FFFFFF</color>
+    <color name="glass_fill_soft">#99FFFFFF</color>
+    <color name="glass_stroke">#9CFFFFFF</color>
+    <color name="glass_stroke_soft">#59FFFFFF</color>
+    <color name="aurora_base">#F2F5FB</color>
+    <color name="aurora_blue">#BFDBFE</color>
+    <color name="aurora_violet">#DDD6FE</color>
+    <color name="aurora_mint">#A7F3D0</color>
+    <color name="aurora_sky">#BAE6FD</color>
+    <color name="hero_grad_start">#F00F1F44</color>
+    <color name="hero_grad_end">#F01D4ED8</color>
 </resources>

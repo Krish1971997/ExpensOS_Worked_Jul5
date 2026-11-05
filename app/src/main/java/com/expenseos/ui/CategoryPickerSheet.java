@@ -38,7 +38,9 @@ public class CategoryPickerSheet {
         BottomSheetDialog sheet = new BottomSheetDialog(activity);
         LinearLayout root = new LinearLayout(activity);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFFFFFFF);
+        // Glass design: frosted-light sheet surface + real backdrop blur (API 31+).
+        root.setBackgroundResource(R.drawable.bg_glass_sheet_light);
+        com.expenseos.ui.glass.GlassUi.applyRealBlur(sheet.getWindow(), root);
 
         // Header — app's primary blue instead of black, + a ✎ edit icon
         // that jumps to Settings > Categories for this book.

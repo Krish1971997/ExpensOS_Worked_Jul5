@@ -557,6 +557,7 @@ public class TransactionEntryActivity extends AppCompatActivity {
     private void pickAttachment() {
         BottomSheetDialog sheet =
                 new BottomSheetDialog(this);
+        com.expenseos.ui.glass.GlassUi.applyRealBlur(sheet.getWindow(), null);
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
         container.setPadding(0, dp(8), 0, dp(16));

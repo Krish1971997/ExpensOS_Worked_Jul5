@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean premiumLoaderGone = false;
 
 
+
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);

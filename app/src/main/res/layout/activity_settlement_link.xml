@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg"
+    android:background="@android:color/transparent"
     android:orientation="vertical">
 
     <LinearLayout
@@ -72,7 +72,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@color/bg"
+                android:background="@android:color/transparent"
                 android:padding="10dp"
                 android:text="LINKED"
                 android:textColor="@color/text_muted"
@@ -100,7 +100,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:background="@color/bg"
+                android:background="@android:color/transparent"
                 android:padding="10dp"
                 android:text="AVAILABLE TO LINK"
                 android:textColor="@color/text_muted"

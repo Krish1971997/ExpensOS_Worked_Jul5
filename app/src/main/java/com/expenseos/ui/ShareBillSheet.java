@@ -62,7 +62,9 @@ public final class ShareBillSheet {
         BottomSheetDialog sheet = new BottomSheetDialog(a);
         LinearLayout root = new LinearLayout(a);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.WHITE);
+        // Glass design: frosted-light sheet surface + real backdrop blur (API 31+).
+        root.setBackgroundResource(R.drawable.bg_glass_sheet_light);
+        com.expenseos.ui.glass.GlassUi.applyRealBlur(sheet.getWindow(), root);
 
         // header: ✕  Share Bill
         LinearLayout header = new LinearLayout(a);

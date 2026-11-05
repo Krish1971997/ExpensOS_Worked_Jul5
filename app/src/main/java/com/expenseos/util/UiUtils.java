@@ -170,7 +170,8 @@ public final class UiUtils {
     public static void styleStatusBar(@NonNull Window window, Context ctx) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            window.setStatusBarColor(ContextCompat.getColor(ctx, R.color.bg));
+            // Glass design: aurora flows under the status bar → transparent.
+            window.setStatusBarColor(android.graphics.Color.TRANSPARENT);
         }
         View decor = window.getDecorView();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

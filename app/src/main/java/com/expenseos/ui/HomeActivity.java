@@ -114,6 +114,11 @@ public class HomeActivity extends AppCompatActivity {
 
     // ── Bottom Navigation ─────────────────────────────────
     private void setupBottomNav() {
+        // Glass design: iOS-style press scale on every nav item.
+        com.expenseos.ui.glass.GlassUi.press(findViewById(R.id.navHome));
+        com.expenseos.ui.glass.GlassUi.press(findViewById(R.id.navLog));
+        com.expenseos.ui.glass.GlassUi.press(findViewById(R.id.navBackup));
+        com.expenseos.ui.glass.GlassUi.press(findViewById(R.id.navConfig));
         findViewById(R.id.navHome).setOnClickListener(v -> loadTab(NAV_HOME));
 //        findViewById(R.id.navReports).setOnClickListener(v -> loadTab(NAV_REPORTS));
         findViewById(R.id.navLog).setOnClickListener(v -> loadTab(NAV_LOG));               // <-- new

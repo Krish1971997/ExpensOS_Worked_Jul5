@@ -120,6 +120,8 @@ public class CategoryStatsActivity extends AppCompatActivity {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        // Glass design: real backdrop blur on Android 12+, soft dim below.
+        com.expenseos.ui.glass.GlassUi.applyRealBlur(dialog.getWindow(), null);
 
         final int[] selectedYear = {currentCal.get(Calendar.YEAR)};
         TextView tvPickerYear = dialog.findViewById(R.id.tvPickerYear);

@@ -4,13 +4,13 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg">
+    android:background="@android:color/transparent">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/bg"
+        android:background="@android:color/transparent"
         app:elevation="0dp">
 
         <LinearLayout
@@ -401,7 +401,7 @@
                 android:id="@+id/rv_transactions"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@color/bg"
+                android:background="@android:color/transparent"
                 android:clipToPadding="false"
                 android:layoutAnimation="@anim/layout_animation_fall_down"
                 android:paddingHorizontal="@dimen/space_2"
@@ -414,7 +414,7 @@
             android:id="@+id/layoutNoTransactions"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/bg"
+            android:background="@android:color/transparent"
             android:gravity="center"
             android:orientation="vertical"
             android:padding="@dimen/space_8"

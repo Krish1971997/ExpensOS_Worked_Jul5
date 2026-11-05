@@ -46,6 +46,8 @@ public class CalculatorDialog {
         AlertDialog dialog = new AlertDialog.Builder(ctx).setView(v).setCancelable(true).create();
         if (dialog.getWindow() != null)
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        // Glass design: real backdrop blur on Android 12+, soft dim below.
+        com.expenseos.ui.glass.GlassUi.applyRealBlur(dialog.getWindow(), v);
 
         // ── Digits + decimal point ───────────────────────────────
         View.OnClickListener digitClick = view -> {

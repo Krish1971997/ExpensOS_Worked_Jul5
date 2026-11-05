@@ -85,7 +85,7 @@
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
         <item name="cornerRadius">14dp</item>
-        <item name="android:stateListAnimator">@null</item>
+        <item name="android:stateListAnimator">@animator/btn_press_scale</item>
     </style>
 
     <style name="BtnPrimary" parent="BtnBase">
@@ -104,15 +104,15 @@
     </style>
 
     <style name="BtnOutline" parent="BtnBase">
-        <item name="backgroundTint">@color/bg_card</item>
-        <item name="strokeColor">@color/border</item>
+        <item name="backgroundTint">@color/glass_fill</item>
+        <item name="strokeColor">@color/glass_stroke_soft</item>
         <item name="strokeWidth">1.5dp</item>
         <item name="android:textColor">@color/text</item>
         <item name="cornerRadius">14dp</item>
     </style>
 
     <style name="BtnGhost" parent="BtnBase">
-        <item name="backgroundTint">@color/surface_2</item>
+        <item name="backgroundTint">@color/glass_fill_soft</item>
         <item name="android:textColor">@color/text</item>
     </style>
 
@@ -135,10 +135,10 @@
 
     <!-- ══════════════ CARDS ══════════════ -->
     <style name="CardBase" parent="Widget.MaterialComponents.CardView">
-        <item name="cardBackgroundColor">@color/bg_card</item>
+        <item name="cardBackgroundColor">@color/glass_fill</item>
         <item name="cardElevation">0dp</item>
         <item name="cardCornerRadius">@dimen/radius_lg</item>
-        <item name="strokeColor">@color/border</item>
+        <item name="strokeColor">@color/glass_stroke_soft</item>
         <item name="strokeWidth">1dp</item>
     </style>
 
@@ -172,7 +172,7 @@
     </style>
 
     <style name="InputBox" parent="">
-        <item name="android:background">@drawable/bg_input_field</item>
+        <item name="android:background">@drawable/bg_glass_input</item>
         <item name="android:backgroundTint">@android:color/transparent</item>
         <item name="android:minHeight">@dimen/input_height</item>
         <item name="android:paddingStart">14dp</item>
@@ -192,7 +192,7 @@
     </style>
 
     <style name="SearchField" parent="InputBox">
-        <item name="android:background">@drawable/bg_search_field</item>
+        <item name="android:background">@drawable/bg_glass_search</item>
         <item name="android:backgroundTint">@android:color/transparent</item>
         <item name="android:minHeight">46dp</item>
     </style>
@@ -209,7 +209,7 @@
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">@dimen/chip_height</item>
         <item name="android:layout_marginEnd">@dimen/space_2</item>
-        <item name="android:background">@drawable/selector_chip</item>
+        <item name="android:background">@drawable/selector_chip_glass</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
         <item name="android:gravity">center_vertical</item>
@@ -261,7 +261,7 @@
     <style name="ListRow" parent="">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/selector_row</item>
+        <item name="android:background">@drawable/selector_row_glass</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
         <item name="android:gravity">center_vertical</item>
@@ -273,8 +273,8 @@
     <style name="TopBar">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">@dimen/topbar_height</item>
-        <item name="android:background">@color/nav_bg</item>
-        <item name="android:elevation">@dimen/elevation_1</item>
+        <item name="android:background">@drawable/bg_glass_topbar</item>
+        <item name="android:elevation">0dp</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
         <item name="android:paddingHorizontal">@dimen/space_3</item>
@@ -367,5 +367,17 @@
         <item name="android:activityOpenExitAnimation">@anim/slide_out_left</item>
         <item name="android:activityCloseEnterAnimation">@anim/slide_in_left</item>
         <item name="android:activityCloseExitAnimation">@anim/slide_out_right</item>
+    </style>
+
+    <!-- Glass bottom sheet (used by GlassUi.showGlassSheet) -->
+    <style name="ThemeOverlay.ExpenseOS.GlassSheet" parent="ThemeOverlay.MaterialComponents.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Widget.ExpenseOS.GlassSheetBody</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+
+    <style name="Widget.ExpenseOS.GlassSheetBody" parent="Widget.MaterialComponents.BottomSheet.Modal">
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="android:background">@android:color/transparent</item>
     </style>
 </resources>

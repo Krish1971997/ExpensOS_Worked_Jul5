@@ -15,8 +15,8 @@
     <dimen name="radius_xs">8dp</dimen>
     <dimen name="radius_sm">12dp</dimen>
     <dimen name="radius_md">16dp</dimen>
-    <dimen name="radius_lg">20dp</dimen>
-    <dimen name="radius_xl">26dp</dimen>
+    <dimen name="radius_lg">24dp</dimen>
+    <dimen name="radius_xl">28dp</dimen>
     <dimen name="radius_pill">28dp</dimen>
 
     <!-- Elevation -->

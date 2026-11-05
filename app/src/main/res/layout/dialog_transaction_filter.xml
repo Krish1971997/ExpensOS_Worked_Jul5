@@ -48,7 +48,7 @@
             android:id="@+id/tabListContainer"
             android:layout_width="92dp"
             android:layout_height="match_parent"
-            android:background="@color/bg"
+            android:background="@color/glass_fill_strong"
             android:orientation="vertical">
 
             <TextView

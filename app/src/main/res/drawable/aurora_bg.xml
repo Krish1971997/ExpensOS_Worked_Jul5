@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aurora backdrop — soft blue / violet / mint light blobs over a calm base.
+     Dark mode automatically switches to the deep-navy variant via values-night colors. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/aurora_base" />
+    <item android:width="380dp" android:height="380dp"
+        android:gravity="top|end"
+        android:drawable="@drawable/aurora_blob_blue" />
+    <item android:width="360dp" android:height="360dp"
+        android:gravity="start" android:top="120dp"
+        android:drawable="@drawable/aurora_blob_violet" />
+    <item android:width="340dp" android:height="340dp"
+        android:gravity="bottom|end" android:bottom="30dp"
+        android:drawable="@drawable/aurora_blob_mint" />
+    <item android:width="300dp" android:height="300dp"
+        android:gravity="bottom|start"
+        android:drawable="@drawable/aurora_blob_sky" />
+</layer-list>

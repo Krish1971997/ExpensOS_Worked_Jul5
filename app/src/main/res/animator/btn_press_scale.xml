@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iOS-style press feel: button scales to 0.97 while pressed. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <set>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:valueType="floatType"
+                android:valueFrom="1.0"
+                android:valueTo="0.97"
+                android:duration="80" />
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueType="floatType"
+                android:valueFrom="1.0"
+                android:valueTo="0.97"
+                android:duration="80" />
+        </set>
+    </item>
+    <item>
+        <set>
+            <objectAnimator
+                android:propertyName="scaleX"
+                android:valueType="floatType"
+                android:valueFrom="0.97"
+                android:valueTo="1.0"
+                android:duration="150" />
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:valueType="floatType"
+                android:valueFrom="0.97"
+                android:valueTo="1.0"
+                android:duration="150" />
+        </set>
+    </item>
+</selector>
