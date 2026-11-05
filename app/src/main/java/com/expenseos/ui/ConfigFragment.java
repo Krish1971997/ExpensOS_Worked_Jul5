@@ -24,6 +24,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
+import com.expenseos.android.timesheet.OdooClient;
 import com.expenseos.util.AppConfig;
 
 import java.sql.Connection;
@@ -44,6 +45,8 @@ public class ConfigFragment extends Fragment {
     // Gmail Config
     private EditText etGmailFrom, etGmailPass, etAlertEmail;
     private EditText etZohoClientId, etZohoClientSecret, etZohoRefreshToken, etWorkdriveFolderId, etImportExcelFileName;
+    // Odoo Timesheet
+    private EditText etOdooUrl, etOdooDb, etOdooUser, etOdooApiKey;
 
     // Status & AI Spinner views
     private Button btnTestConnection, btnSyncConfigToDb;
@@ -83,6 +86,10 @@ public class ConfigFragment extends Fragment {
         enhanceField(etZohoRefreshToken, true);
         enhanceField(etWorkdriveFolderId, false);
         enhanceField(etImportExcelFileName, false);
+        enhanceField(etOdooUrl, false);
+        enhanceField(etOdooDb, false);
+        enhanceField(etOdooUser, false);
+        enhanceField(etOdooApiKey, true);
     }
 
     private void enhanceField(EditText et, boolean isSecret) {
@@ -205,6 +212,11 @@ public class ConfigFragment extends Fragment {
         etImportExcelFileName.setHint("File1.zsheetlnk, File2.xlsx (comma separated)");
         etImportExcelFileName.setSingleLine(false);
         etImportExcelFileName.setMaxLines(4);
+
+        etOdooUrl = v.findViewById(R.id.etCfgOdooUrl);
+        etOdooDb = v.findViewById(R.id.etCfgOdooDb);
+        etOdooUser = v.findViewById(R.id.etCfgOdooUser);
+        etOdooApiKey = v.findViewById(R.id.etCfgOdooApiKey);
         btnTestConnection = v.findViewById(R.id.btnTestConnection);
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
@@ -225,6 +237,10 @@ public class ConfigFragment extends Fragment {
         etZohoRefreshToken.setText(cfg.getZohoRefreshToken());
         etWorkdriveFolderId.setText(cfg.getWorkdriveFolderId());
         etImportExcelFileName.setText(cfg.getImportExcelFileNamesRaw());
+        etOdooUrl.setText(cfg.getOdooUrl());
+        etOdooDb.setText(cfg.getOdooDb());
+        etOdooUser.setText(cfg.getOdooUser());
+        etOdooApiKey.setText(cfg.getOdooApiKey());
 
     }
 
@@ -249,6 +265,12 @@ public class ConfigFragment extends Fragment {
                     etImportExcelFileName.getText().toString().trim());
             toast("✓ Zoho Config saved!");
         });
+
+        requireView().findViewById(R.id.btnSaveCfgOdoo).setOnClickListener(v -> {
+            saveOdooPrefs();
+            toast("✓ Odoo Config saved!");
+        });
+        requireView().findViewById(R.id.btnTestCfgOdoo).setOnClickListener(v -> testOdoo());
 
         btnTestConnection.setOnClickListener(v -> testConnection());
         btnSyncConfigToDb.setOnClickListener(v -> syncConfigToDb());
@@ -393,6 +415,43 @@ public class ConfigFragment extends Fragment {
                 .putString("gmail_from", from)
                 .putString("gmail_pass", pass)
                 .apply();
+    }
+
+    private void saveOdooPrefs() {
+        AppConfig.get(requireContext()).setOdoo(
+                etOdooUrl.getText().toString().trim(),
+                etOdooDb.getText().toString().trim(),
+                etOdooUser.getText().toString().trim(),
+                etOdooApiKey.getText().toString().trim());
+    }
+
+    private void testOdoo() {
+        saveOdooPrefs();
+        final Button btn = requireView().findViewById(R.id.btnTestCfgOdoo);
+        final TextView tv = requireView().findViewById(R.id.tvCfgOdooResult);
+        setButtonState(btn, false, "Testing…");
+        showResult(tv, "⏳ Connecting to Odoo…", null);
+
+        final Context app = requireContext().getApplicationContext();
+        exec.execute(() -> {
+            String result;
+            boolean ok;
+            try {
+                OdooClient.init(app);
+                result = "✓ Odoo connected";
+                ok = true;
+            } catch (Exception e) {
+                result = "✗ " + e.getMessage();
+                ok = false;
+            }
+            final String finalResult = result;
+            final boolean finalOk = ok;
+            mainHandler.post(() -> {
+                if (!isAdded() || getView() == null) return;
+                setButtonState(btn, true, "🔗 Test Odoo Connection");
+                showResult(tv, finalResult, finalOk);
+            });
+        });
     }
 
     private void setButtonState(Button btn, boolean enabled, String text) {

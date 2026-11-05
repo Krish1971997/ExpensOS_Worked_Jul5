@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.expenseos.R;
 import com.expenseos.adapter.SearchResultAdapter;
+import com.expenseos.android.timesheet.TimesheetActivity;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.db.LocalDB;
 import com.expenseos.model.CashBook;
@@ -117,13 +118,15 @@ public class GlobalSearchActivity extends AppCompatActivity {
         SCREENS.add(new ScreenEntry("Generate Report", "Build a PDF / Excel report",
                 "generate report pdf excel export download", "genreport"));
         SCREENS.add(new ScreenEntry("Configuration", "App configuration and preferences",
-                "configuration config configure setup preferences options", "config"));
+                "configuration config configure setup preferences options odoo api key url", "config"));
         SCREENS.add(new ScreenEntry("Configure Budget", "Set up budget categories and limits",
                 "configure budget config setup limits categories allocation", "budgetconfig"));
         SCREENS.add(new ScreenEntry("Monthly Category Report", "Category-wise totals for each month",
                 "monthly category report month wise breakdown", "monthlyreport"));
         SCREENS.add(new ScreenEntry("Sequence", "Entry sequence and numbering",
                 "sequence number numbering order series", "sequence"));
+        SCREENS.add(new ScreenEntry("Timesheet", "Odoo timesheet entry, day summary and attendance",
+                "timesheet odoo hours attendance project task activity log work", "timesheet"));
     }
 
     private SQLiteDatabase db;
@@ -479,6 +482,9 @@ public class GlobalSearchActivity extends AppCompatActivity {
             }
             case "sequence":
                 startActivity(new Intent(this, SequenceActivity.class));
+                return;
+            case "timesheet":
+                startActivity(new Intent(this, TimesheetActivity.class));
                 return;
             default:
                 Toast.makeText(this, "No screen registered for " + r.action, Toast.LENGTH_SHORT).show();

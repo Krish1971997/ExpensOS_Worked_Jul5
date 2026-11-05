@@ -15,6 +15,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
+import com.expenseos.android.timesheet.TimesheetActivity;
 import com.expenseos.ui.backup.BackupFragment;
 import com.expenseos.ui.home.HomeFragment;
 
@@ -283,6 +284,12 @@ public class HomeActivity extends AppCompatActivity {
         if (drawerSqlConsole != null) drawerSqlConsole.setOnClickListener(v -> {
             drawerLayout.closeDrawer(GravityCompat.START);
             startActivity(new Intent(this, SqlConsoleActivity.class));
+        });
+
+        View drawerTimesheet = findViewById(R.id.drawerTimesheet);
+        if (drawerTimesheet != null) drawerTimesheet.setOnClickListener(v -> {
+            drawerLayout.closeDrawer(GravityCompat.START);
+            startActivity(new Intent(this, TimesheetActivity.class));
         });
     }
 

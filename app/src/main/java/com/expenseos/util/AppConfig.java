@@ -40,6 +40,12 @@ public class AppConfig {
     public static final String KEY_ALARM_VOLUME_RAMP_SEC = "alarm.volume.ramp.sec";
     public static final String KEY_ALARM_VIBRATE = "alarm.vibrate";
 
+    // ── Odoo Timesheet ──
+    public static final String KEY_ODOO_URL = "odoo.url";
+    public static final String KEY_ODOO_DB = "odoo.db";
+    public static final String KEY_ODOO_USER = "odoo.user";
+    public static final String KEY_ODOO_APIKEY = "odoo.apikey";
+
     private final SharedPreferences prefs;
     private static AppConfig instance;
 
@@ -193,6 +199,22 @@ public class AppConfig {
         return prefs.getString(KEY_ACTIVE_BOOK_NAME, "General");
     }
 
+    public String getOdooUrl() {
+        return prefs.getString(KEY_ODOO_URL, "").trim();
+    }
+
+    public String getOdooDb() {
+        return prefs.getString(KEY_ODOO_DB, "").trim();
+    }
+
+    public String getOdooUser() {
+        return prefs.getString(KEY_ODOO_USER, "").trim();
+    }
+
+    public String getOdooApiKey() {
+        return prefs.getString(KEY_ODOO_APIKEY, "").trim();
+    }
+
     /**
      * If the cashbook name contains "credit card" (case-insensitive), the chosen
      * payment type must itself contain "card" — e.g. a book named "HDFC Credit Card"
@@ -265,6 +287,15 @@ public class AppConfig {
 
     public void setActiveBook(int id, String name) {
         prefs.edit().putInt(KEY_ACTIVE_BOOK_ID, id).putString(KEY_ACTIVE_BOOK_NAME, name).apply();
+    }
+
+    public void setOdoo(String url, String db, String user, String apiKey) {
+        prefs.edit()
+                .putString(KEY_ODOO_URL, url)
+                .putString(KEY_ODOO_DB, db)
+                .putString(KEY_ODOO_USER, user)
+                .putString(KEY_ODOO_APIKEY, apiKey)
+                .apply();
     }
 
     public boolean isConfigured() {
