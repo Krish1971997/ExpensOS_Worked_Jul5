@@ -46,12 +46,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean premiumLoaderGone = false;
 
 
-
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
         setContentView(R.layout.activity_main);
         com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
+        // Splash theme's blue window background shows behind the transparent bars; switch to the app background
+        getWindow().setBackgroundDrawableResource(R.drawable.aurora_bg);
         dao = new CashBookDao(this);
 
         // Premium cold-start loader — shown while the shell initialises, then faded out.

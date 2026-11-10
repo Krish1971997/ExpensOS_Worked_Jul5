@@ -1100,6 +1100,51 @@ public class TransactionDao {
         }
     }
 
+    // Stats breakdown honouring the full TransactionFilter (home-page filters)
+    public List<Map<String, Object>> breakdownByFilter(TransactionFilter f, String mode) {
+        String label, groupBy, join, extra = "";
+        switch (mode) {
+            case "SUBCATEGORY":
+                label = "c.name || ' › ' || COALESCE(sc.name, 'No subcategory')";
+                groupBy = "grp_name";
+                join = "JOIN categories c ON t.category_id = c.id "
+                        + "LEFT JOIN sub_categories sc ON t.sub_categories_id = sc.id ";
+                break;
+            case "DATE":
+                label = "date(t.txn_datetime)";
+                groupBy = "grp_name";
+                join = "";
+                break;
+            case "PAYMENT":
+                label = "COALESCE(t.payment_type, 'UPI')";
+                groupBy = "grp_name";
+                join = "";
+                break;
+            default: // CATEGORY
+                label = "c.name";
+                extra = ", c.id AS cat_id";
+                groupBy = "c.id, c.name";
+                join = "JOIN categories c ON t.category_id = c.id ";
+        }
+        BuildResult q = buildSQL(f, true);
+        String sql = q.sql().replace("SELECT COUNT(*) FROM transactions t",
+                "SELECT " + label + " AS grp_name" + extra
+                        + ", COALESCE(SUM(t.amount),0) AS total FROM transactions t " + join)
+                + " GROUP BY " + groupBy + " ORDER BY total DESC";
+        try (Cursor c = db.rawQuery(sql, q.params().toArray(new String[0]))) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            while (c.moveToNext()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                if ("CATEGORY".equals(mode))
+                    m.put("id", c.getInt(c.getColumnIndexOrThrow("cat_id")));
+                m.put("name", c.getString(c.getColumnIndexOrThrow("grp_name")));
+                m.put("total", toBigDecimal(c, "total"));
+                rows.add(m);
+            }
+            return rows;
+        }
+    }
+
     /**
      * Monthly trend for ONE category across ALL books (i.e. all months, since
      * this app is one-book-per-month) — works directly because global/common

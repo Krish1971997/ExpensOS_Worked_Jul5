@@ -189,6 +189,8 @@ public class HomeFragment extends Fragment {
         rowStats.setOnClickListener(v -> {
             Intent i = new Intent(requireContext(), com.expenseos.ui.StatsActivity.class);
             i.putExtra("scopeBookId", AppConfig.get(requireContext()).getActiveBookId());
+            // Carry the home-page filter (chips + search) only when one is active
+            if (currentFilter.isFiltered()) i.putExtra("filter", currentFilter);
             startActivity(i);
         });
 

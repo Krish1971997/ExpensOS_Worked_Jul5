@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-public class TransactionFilter {
+public class TransactionFilter implements java.io.Serializable {
 
     private String type; // INCOME | EXPENSE | null = all
     private Integer bookId;

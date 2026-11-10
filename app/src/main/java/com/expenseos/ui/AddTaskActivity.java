@@ -262,6 +262,23 @@ public class AddTaskActivity extends AppCompatActivity {
                     })
                     .setNegativeButton("Later", null)
                     .show();
+        } else if (Build.VERSION.SDK_INT >= 34) {
+            android.app.NotificationManager nm = getSystemService(android.app.NotificationManager.class);
+            if (nm != null && !nm.canUseFullScreenIntent()) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Allow full-screen alarms")
+                        .setMessage("Without this the alarm screen won't open on a locked phone.")
+                        .setPositiveButton("Open settings", (d, w) -> {
+                            try {
+                                startActivity(new android.content.Intent(
+                                        android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                        android.net.Uri.parse("package:" + getPackageName())));
+                            } catch (Exception ignored) {
+                            }
+                        })
+                        .setNegativeButton("Later", null)
+                        .show();
+            }
         }
 
         if (com.expenseos.sync.GoogleCalendarSyncManager.isSignedIn(this)) {

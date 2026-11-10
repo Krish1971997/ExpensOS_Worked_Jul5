@@ -71,7 +71,10 @@ public class TaskAlarmScheduler {
             while (c.moveToNext()) {
                 int reqCode = c.getInt(0);
                 String type = c.getString(1);
-                Intent intent = new Intent(ctx, "ALARM".equals(type) ? AlarmReceiver.class : TaskNotificationReceiver.class);
+                Class<?> cls = "ALARM".equals(type) ? AlarmReceiver.class
+                        : "PRE_ALARM".equals(type) ? com.expenseos.receiver.PreAlarmReceiver.class
+                          : TaskNotificationReceiver.class;
+                Intent intent = new Intent(ctx, cls);
                 PendingIntent pi = PendingIntent.getBroadcast(ctx, reqCode, intent,
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
                 if (am != null) am.cancel(pi);
@@ -137,8 +140,37 @@ public class TaskAlarmScheduler {
             }
 
             recordAlarm(ctx, taskId, er.getId(), requestCode, trigger.format(TASK_FMT), type);
+            if ("ALARM".equals(type))
+                schedulePreAlarm(ctx, taskId, er.getId(), requestCode, triggerMillis, am, canExact);
             count++;
         }
         return count;
+    }
+
+    /**
+     * Pre-ringing notification N minutes before an ALARM (0 = off). Tracked as type PRE_ALARM.
+     */
+    private static void schedulePreAlarm(Context ctx, long taskId, long eventReminderId, int alarmRequestCode,
+                                         long alarmMillis, AlarmManager am, boolean canExact) {
+        int mins = com.expenseos.util.AppConfig.get(ctx).getPreAlarmMinutes();
+        if (mins <= 0 || am == null) return;
+        long preMillis = alarmMillis - mins * 60_000L;
+        if (preMillis <= System.currentTimeMillis()) return; // too close / already passed
+
+        int preCode = nextRequestCode(ctx);
+        Intent i = new Intent(ctx, com.expenseos.receiver.PreAlarmReceiver.class)
+                .putExtra("task_id", taskId)
+                .putExtra("event_reminder_id", eventReminderId)
+                .putExtra("alarm_request_code", alarmRequestCode)
+                .putExtra("alarm_millis", alarmMillis)
+                .putExtra("pre_minutes", mins);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, preCode, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        if (canExact) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, preMillis, pi);
+        else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, preMillis, pi);
+
+        recordAlarm(ctx, taskId, eventReminderId, preCode,
+                java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(preMillis),
+                        java.time.ZoneId.systemDefault()).format(TASK_FMT), "PRE_ALARM");
     }
 }

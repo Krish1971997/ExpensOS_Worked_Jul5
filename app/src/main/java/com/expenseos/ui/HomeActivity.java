@@ -37,6 +37,9 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(s);
         setContentView(R.layout.activity_home);
         com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
+        getWindow().setBackgroundDrawableResource(R.drawable.aurora_bg);
+        ((androidx.drawerlayout.widget.DrawerLayout) findViewById(R.id.drawerLayout))
+                .setStatusBarBackgroundColor(android.graphics.Color.TRANSPARENT);
 
 //        SharedPreferences prefs = getSharedPreferences("expenseos_prefs", MODE_PRIVATE);
 //        bookId = prefs.getInt("active_book_id", 0);

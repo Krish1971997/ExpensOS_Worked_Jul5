@@ -21,6 +21,7 @@ import com.expenseos.R;
 import com.expenseos.dao.CashBookDao;
 import com.expenseos.dao.TransactionDao;
 import com.expenseos.model.CashBook;
+import com.expenseos.model.TransactionFilter;
 import com.expenseos.util.GmailSender;
 import com.expenseos.util.MonthBookResolver;
 import com.github.mikephil.charting.charts.PieChart;
@@ -63,6 +64,7 @@ public class StatsActivity extends AppCompatActivity {
     private YearMonth currentMonth = YearMonth.now();
     private boolean showExpense = true; // default tab = Expense, per screenshot
     private String seriesSuffix = ""; // "" = plain month books; "Credit Card" etc = scoped to that series
+    private TransactionFilter activeFilter; // from home page; null = no filter
 
     // Set only when we were launched from a cashbook whose NAME does NOT match
     // the "<Month> <Year>[suffix]" pattern (e.g. "Temple trip August 2026",
@@ -90,6 +92,11 @@ public class StatsActivity extends AppCompatActivity {
     private static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     // Last-rendered category breakdown, kept for export — set inside refresh()
     private final List<StatsCategoryRow> lastCategoryRows = new ArrayList<>();
+    // "Group by" selector — Category (default) / Subcategory / Date / Payment type
+    private static final String[] GROUP_LABELS = {"Category", "Subcategory", "Date", "Payment type"};
+    private static final String[] GROUP_MODES = {"CATEGORY", "SUBCATEGORY", "DATE", "PAYMENT"};
+    private Spinner spGroupBy;
+    private int groupIdx = 0;
 
     @Override
     protected void onCreate(Bundle s) {
@@ -107,6 +114,10 @@ public class StatsActivity extends AppCompatActivity {
         btnNextMonth = findViewById(R.id.btnNextMonth);
         btnPrevMonth.setOnClickListener(v -> {
             if (directBook != null) return; // no cycling for standalone/irregular books
+            if (activeFilter != null) {
+                activeFilter.setDateFrom(null);
+                activeFilter.setDateTo(null);
+            }
             currentMonth = currentMonth.minusMonths(1);
             refresh();
         });
@@ -124,6 +135,27 @@ public class StatsActivity extends AppCompatActivity {
 
         cbNetSettlements = findViewById(R.id.cbNetSettlements);
         cbNetSettlements.setOnCheckedChangeListener((btn, checked) -> refresh());
+
+        spGroupBy = findViewById(R.id.spGroupBy);
+        ArrayAdapter<String> groupAdp = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, GROUP_LABELS);
+        groupAdp.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spGroupBy.setAdapter(groupAdp);
+        spGroupBy.setSelection(0, false); // before listener, so no auto-fire
+        spGroupBy.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                if (pos == groupIdx) return;
+                groupIdx = pos;
+                // Net settlements is category-linked, so only meaningful in Category mode
+                cbNetSettlements.setEnabled(groupIdx == 0);
+                cbNetSettlements.setAlpha(groupIdx == 0 ? 1f : 0.4f);
+                refresh();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> p) {
+            }
+        });
 
         spSeriesFilter = findViewById(R.id.spSeriesFilter);
         spBookFilter = findViewById(R.id.spBookFilter);
@@ -143,6 +175,9 @@ public class StatsActivity extends AppCompatActivity {
         // month-pattern book ("August 2026", "August 2026 Expense",
         // "August 2026 Credit Card") or an irregular one-off book
         // ("Temple trip August 2026", "trip expense aug 2026").
+
+        activeFilter = (TransactionFilter) getIntent().getSerializableExtra("filter");
+
         int scopeBookId = getIntent().getIntExtra("scopeBookId", -1);
         isHomeEntry = scopeBookId <= 0;
         if (scopeBookId > 0) {
@@ -321,6 +356,12 @@ public class StatsActivity extends AppCompatActivity {
 
     // ── Spending forecast: current month, Expense tab only ──────────────
     private void updateForecast(CashBook book) {
+
+        if (activeFilter != null) {
+            findViewById(R.id.llForecast).setVisibility(View.GONE);
+            return;
+        }
+
         android.widget.LinearLayout host = findViewById(R.id.llForecast);
         host.removeAllViews();
         host.setVisibility(View.GONE);
@@ -335,15 +376,12 @@ public class StatsActivity extends AppCompatActivity {
             if (pb != null) collectDaily(dao, pm, pb, daily);
         }
 
-        String label = currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT,
-                java.util.Locale.ENGLISH) + " " + currentMonth.getYear();
-        host.addView(com.expenseos.util.ForecastCard.build(this,
-                com.expenseos.util.SpendingForecast.compute(daily, java.time.LocalDate.now()), label));
+        String label = currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + currentMonth.getYear();
+        host.addView(com.expenseos.util.ForecastCard.build(this, com.expenseos.util.SpendingForecast.compute(daily, java.time.LocalDate.now()), label));
         host.setVisibility(View.VISIBLE);
     }
 
-    private void collectDaily(TransactionDao dao, YearMonth ym, CashBook b,
-                              Map<java.time.LocalDate, BigDecimal> out) {
+    private void collectDaily(TransactionDao dao, YearMonth ym, CashBook b, Map<java.time.LocalDate, BigDecimal> out) {
         for (Map<String, Object> row : dao.dailyTotals(ym.getYear(), ym.getMonthValue(), b.getId())) {
             BigDecimal exp = (BigDecimal) row.get("expense");
             if (exp != null) out.put(java.time.LocalDate.parse((String) row.get("day")), exp);
@@ -359,8 +397,10 @@ public class StatsActivity extends AppCompatActivity {
         if (directBook != null) {
             book = directBook;
             tvMonth.setText(book.getName());
+            if (activeFilter != null) tvMonth.setText(tvMonth.getText() + " 🔍");
         } else {
             tvMonth.setText(currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + currentMonth.getYear() + (seriesSuffix.isEmpty() ? "" : " · " + seriesSuffix));
+            if (activeFilter != null) tvMonth.setText(tvMonth.getText() + " 🔍");
             book = MonthBookResolver.findBookForMonth(this, currentMonth, seriesSuffix);
         }
 
@@ -379,7 +419,11 @@ public class StatsActivity extends AppCompatActivity {
 
         TransactionDao dao = new TransactionDao(this);
         String currentType = showExpense ? "EXPENSE" : "INCOME";
-        List<Map<String, Object>> rows = dao.categoryBreakdownWithId(currentType, book.getId());
+        TransactionFilter f = activeFilter != null ? activeFilter : new TransactionFilter();
+        f.setBookId(book.getId()); // Stats owns book + type (month nav & tabs)
+        f.setBookIds(null);
+        f.setType(currentType);
+        List<Map<String, Object>> rows = dao.breakdownByFilter(f, GROUP_MODES[groupIdx]);
 
         // "Net Settlements" ON pannirundha, ovvoru category-oda total-la
         // irundhu, andha category-oda transactions-la SettlementLinkActivity
@@ -387,7 +431,7 @@ public class StatsActivity extends AppCompatActivity {
         // Food expense-ah oru single "Others" income settle pannirundha,
         // andha 3 categories-um correspondingly reduce aagum — category
         // matching venaam, transaction-level link mattum podhum).
-        if (cbNetSettlements.isChecked()) {
+        if (groupIdx == 0 && activeFilter == null && cbNetSettlements.isChecked()) {
             com.expenseos.dao.SettlementLinkDao settleDao = new com.expenseos.dao.SettlementLinkDao(this);
             Map<Integer, BigDecimal> linkedByCategory = settleDao.sumLinkedByCategory(book.getId(), currentType);
             for (Map<String, Object> r : rows) {
@@ -398,8 +442,18 @@ public class StatsActivity extends AppCompatActivity {
             }
         }
 
-        // Sort descending by amount — screenshot shows highest first
-        rows.sort((a, b) -> ((BigDecimal) b.get("total")).compareTo((BigDecimal) a.get("total")));
+        if (groupIdx == 2) { // Date -> chronological, "dd MMM" labels
+            rows.sort((a, b) -> ((String) a.get("name")).compareTo((String) b.get("name")));
+            for (Map<String, Object> r : rows) {
+                try {
+                    r.put("name", java.time.LocalDate.parse((String) r.get("name")).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", java.util.Locale.ENGLISH)));
+                } catch (Exception ignored) {
+                }
+            }
+        } else {
+            // Sort descending by amount — screenshot shows highest first
+            rows.sort((a, b) -> ((BigDecimal) b.get("total")).compareTo((BigDecimal) a.get("total")));
+        }
 
         BigDecimal total = BigDecimal.ZERO;
         for (Map<String, Object> r : rows) total = total.add((BigDecimal) r.get("total"));
@@ -432,9 +486,7 @@ public class StatsActivity extends AppCompatActivity {
             StatsCategoryRow row = new StatsCategoryRow();
             row.name = (String) r.get("name");
             row.amount = amount;
-            row.percent = amount.multiply(BigDecimal.valueOf(100))
-                    .divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP)
-                    .doubleValue();
+            row.percent = amount.multiply(BigDecimal.valueOf(100)).divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP).doubleValue();
             lastCategoryRows.add(row);
         }
         PieDataSet ds = new PieDataSet(entries, "");
@@ -458,12 +510,10 @@ public class StatsActivity extends AppCompatActivity {
         int ci = 0;
         float dens = getResources().getDisplayMetrics().density;
         for (Map<String, Object> r : rows) {
-            final int cid = (int) r.get("id");
+            final int cid = groupIdx == 0 ? (int) r.get("id") : -1;
             final String cname = (String) r.get("name");
             BigDecimal amt = (BigDecimal) r.get("total");
-            int pct = amt.multiply(BigDecimal.valueOf(100))
-                    .divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP)
-                    .intValue();
+            int pct = amt.multiply(BigDecimal.valueOf(100)).divide(total.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ONE : total, 0, java.math.RoundingMode.HALF_UP).intValue();
 
             LinearLayout rowV = new LinearLayout(this);
             rowV.setOrientation(LinearLayout.HORIZONTAL);
@@ -502,7 +552,7 @@ public class StatsActivity extends AppCompatActivity {
             av.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.text));
             rowV.addView(av);
 
-            rowV.setOnClickListener(v -> {
+            if (groupIdx == 0) rowV.setOnClickListener(v -> {
                 Intent ii = new Intent(this, CategoryStatsActivity.class);
                 ii.putExtra("bookId", resolvedBook.getId());
                 ii.putExtra("categoryId", cid);
@@ -539,8 +589,7 @@ public class StatsActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════
 // NEW — same three actions, icon-capable bottom sheet instead of PopupMenu
     private void showExportMenu(View anchor) {
-        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
-                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
         android.widget.LinearLayout container = new android.widget.LinearLayout(this);
         container.setOrientation(android.widget.LinearLayout.VERTICAL);
         container.setPadding(0, dp(8), 0, dp(16));
@@ -582,8 +631,7 @@ public class StatsActivity extends AppCompatActivity {
         tvLabel.setText(label);
         tvLabel.setTextSize(16);
         tvLabel.setTextColor(getColor(R.color.text_primary));
-        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(
-                0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        android.widget.LinearLayout.LayoutParams lp = new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         lp.leftMargin = dp(16);
         tvLabel.setLayoutParams(lp);
         row.addView(tvLabel);
@@ -669,9 +717,7 @@ public class StatsActivity extends AppCompatActivity {
         // (scheduler.alert.email) — no confirm dialog, no manual typing.
         String configuredEmail = com.expenseos.util.AppConfig.get(this).getSchedulerAlertEmail();
         if (configuredEmail == null || configuredEmail.isBlank()) {
-            Toast.makeText(this,
-                    "No email configured — set it under Config first.",
-                    Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "No email configured — set it under Config first.", Toast.LENGTH_LONG).show();
             return;
         }
         sendEmail(configuredEmail);
@@ -687,8 +733,7 @@ public class StatsActivity extends AppCompatActivity {
 
                 String subject = reportTitle();
                 String html = buildStatsEmailHtml(subject);
-                GmailSender.Attachment attachment = new GmailSender.Attachment(
-                        "stats.pdf", pdfBytes.toByteArray(), "application/pdf");
+                GmailSender.Attachment attachment = new GmailSender.Attachment("stats.pdf", pdfBytes.toByteArray(), "application/pdf");
                 GmailSender.send(this, toAddress, subject, html, attachment);
                 runOnUiThread(() -> Toast.makeText(this, "✔ Email sent!", Toast.LENGTH_SHORT).show());
             } catch (Exception e) {
@@ -708,20 +753,10 @@ public class StatsActivity extends AppCompatActivity {
         sb.append("<p style='color:#555;'>Total Balance: <b>").append(tvTotalBalance.getText()).append("</b></p>");
 
         sb.append("<table style='border-collapse:collapse;width:100%;max-width:480px;'>");
-        sb.append("<tr style='background:#2563EB;color:#fff;'>")
-                .append("<th style='padding:6px;text-align:left;'>Category</th>")
-                .append("<th style='padding:6px;text-align:right;'>%</th>")
-                .append("<th style='padding:6px;text-align:right;'>Amount</th>")
-                .append("</tr>");
+        sb.append("<tr style='background:#2563EB;color:#fff;'>").append("<th style='padding:6px;text-align:left;'>Category</th>").append("<th style='padding:6px;text-align:right;'>%</th>").append("<th style='padding:6px;text-align:right;'>Amount</th>").append("</tr>");
 
         for (StatsCategoryRow row : lastCategoryRows) {
-            sb.append("<tr style='border-bottom:1px solid #eee;'>")
-                    .append("<td style='padding:6px;'>").append(row.name).append("</td>")
-                    .append("<td style='padding:6px;text-align:right;'>")
-                    .append(String.format(java.util.Locale.US, "%.0f%%", row.percent)).append("</td>")
-                    .append("<td style='padding:6px;text-align:right;'>₹")
-                    .append(row.amount.toPlainString()).append("</td>")
-                    .append("</tr>");
+            sb.append("<tr style='border-bottom:1px solid #eee;'>").append("<td style='padding:6px;'>").append(row.name).append("</td>").append("<td style='padding:6px;text-align:right;'>").append(String.format(java.util.Locale.US, "%.0f%%", row.percent)).append("</td>").append("<td style='padding:6px;text-align:right;'>₹").append(row.amount.toPlainString()).append("</td>").append("</tr>");
         }
         sb.append("</table>");
         sb.append("<p style='color:#888;font-size:12px;margin-top:16px;'>A PDF copy of this report is attached.</p>");
@@ -743,8 +778,7 @@ public class StatsActivity extends AppCompatActivity {
         title.setSpacingAfter(4);
         doc.add(title);
 
-        Paragraph balance = new Paragraph("Total Balance: " + tvTotalBalance.getText(),
-                new Font(Font.FontFamily.HELVETICA, 11, Font.NORMAL, BaseColor.GRAY));
+        Paragraph balance = new Paragraph("Total Balance: " + tvTotalBalance.getText(), new Font(Font.FontFamily.HELVETICA, 11, Font.NORMAL, BaseColor.GRAY));
         balance.setAlignment(Element.ALIGN_CENTER);
         balance.setSpacingAfter(16);
         doc.add(balance);

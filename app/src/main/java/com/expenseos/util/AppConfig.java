@@ -285,6 +285,49 @@ public class AppConfig {
         prefs.edit().putBoolean(KEY_ALARM_VIBRATE, on).apply();
     }
 
+    public int getPreAlarmMinutes() {
+        return prefs.getInt("pre_alarm_minutes", 30);
+    } // 0 = off
+
+    public void setPreAlarmMinutes(int m) {
+        prefs.edit().putInt("pre_alarm_minutes", m).apply();
+    }
+
+    static void showPreAlarmDialog(android.app.Activity a, Runnable onDone) {
+        com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(a);
+        String[] opts = {"Off", "15 minutes", "30 minutes", "60 minutes", "Custom…"};
+        int[] vals = {0, 15, 30, 60, -1};
+        new androidx.appcompat.app.AlertDialog.Builder(a)
+                .setTitle("Pre-alarm notification")
+                .setItems(opts, (d, which) -> {
+                    if (vals[which] >= 0) {
+                        cfg.setPreAlarmMinutes(vals[which]);
+                        com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAllAsync(a);
+                        if (onDone != null) onDone.run();
+                        return;
+                    }
+                    android.widget.EditText et = new android.widget.EditText(a);
+                    et.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+                    et.setHint("Minutes before (1–720)");
+                    new androidx.appcompat.app.AlertDialog.Builder(a)
+                            .setTitle("Custom minutes")
+                            .setView(et)
+                            .setPositiveButton("Save", (d2, w) -> {
+                                try {
+                                    int m = Integer.parseInt(et.getText().toString().trim());
+                                    if (m < 1 || m > 720) throw new NumberFormatException();
+                                    cfg.setPreAlarmMinutes(m);
+                                    com.expenseos.scheduler.TaskAlarmRescheduler.rescheduleAllAsync(a);
+                                    if (onDone != null) onDone.run();
+                                } catch (NumberFormatException ex) {
+                                    android.widget.Toast.makeText(a, "Enter 1–720", android.widget.Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNegativeButton("Cancel", null).show();
+                })
+                .show();
+    }
+
     public void setActiveBook(int id, String name) {
         prefs.edit().putInt(KEY_ACTIVE_BOOK_ID, id).putString(KEY_ACTIVE_BOOK_NAME, name).apply();
     }

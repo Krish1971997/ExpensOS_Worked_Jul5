@@ -1,6 +1,8 @@
 package com.expenseos.android.timesheet;
 
 import android.app.DatePickerDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
@@ -73,6 +75,7 @@ public class TimesheetActivity extends AppCompatActivity {
     private EditText etHours, etDesc;
     private TextView tvHoursHint, tvAttNet, tvAttInfo, tvTsTotal, tvTsInfo;
     private LinearLayout llEntries;
+    private JSONArray lastRows = new JSONArray();   // saved entries of the loaded date (for Copy)
     private ProgressBar pbBusy;
 
     private String dateIso;
@@ -110,6 +113,7 @@ public class TimesheetActivity extends AppCompatActivity {
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnRefresh).setOnClickListener(v -> loadDay());
+        findViewById(R.id.btnCopy).setOnClickListener(v -> copyTimesheets());
 
         // Smooth entrance animation
         svMain.setAlpha(0f);
@@ -186,6 +190,39 @@ public class TimesheetActivity extends AppCompatActivity {
     private void setBusy(boolean on) {
         busy += on ? 1 : -1;
         pbBusy.setVisibility(busy > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    // true adds the hours after each line, example: 1. Description (2.30 Hrs)
+    private static final boolean COPY_WITH_HOURS = false;
+
+    /**
+     * Copies the loaded date's timesheets as numbered lines: 1. text, 2. text ...
+     */
+    private void copyTimesheets() {
+        if (lastRows.length() == 0) {
+            toast("No timesheet entries to copy for this date");
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lastRows.length(); i++) {
+            JSONObject r = lastRows.optJSONObject(i);
+            if (r == null) continue;
+            // line breaks inside a description become spaces
+            String line = r.optString("description").replaceAll("\\s*[\\r\\n]+\\s*", " ").trim();
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(i + 1).append(". ").append(line);
+            if (COPY_WITH_HOURS) {
+                sb.append(" (").append(fmtHM(decToMin(r.optDouble("hours")))).append(" Hrs)");
+            }
+        }
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) {
+            toast("Clipboard is not available");
+            return;
+        }
+        cm.setPrimaryClip(ClipData.newPlainText("Timesheets", sb.toString()));
+        int n = lastRows.length();
+        toast("Copied " + n + (n == 1 ? " entry" : " entries"));
     }
 
     private void toast(String msg) {
@@ -271,6 +308,7 @@ public class TimesheetActivity extends AppCompatActivity {
 
             // Timesheet box + entry cards
             JSONArray rows = d.getJSONArray("timesheets");
+            lastRows = rows;
             int totalMin = 0;
             for (int i = 0; i < rows.length(); i++)
                 totalMin += decToMin(rows.getJSONObject(i).optDouble("hours"));
