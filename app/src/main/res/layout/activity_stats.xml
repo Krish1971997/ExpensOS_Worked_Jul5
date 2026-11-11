@@ -193,6 +193,18 @@
                 android:textColor="@color/text_muted"
                 android:textSize="12sp" />
 
+            <TextView
+                android:id="@+id/tvFilterSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:background="@drawable/bg_input_box"
+                android:padding="12dp"
+                android:layout_marginBottom="12dp"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/text_muted"
+                android:textSize="13sp" />
+
             <!-- Spending forecast card (filled from StatsActivity.updateForecast) -->
             <LinearLayout
                 android:id="@+id/llForecast"

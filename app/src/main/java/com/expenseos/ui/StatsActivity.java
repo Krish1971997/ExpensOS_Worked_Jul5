@@ -65,6 +65,8 @@ public class StatsActivity extends AppCompatActivity {
     private boolean showExpense = true; // default tab = Expense, per screenshot
     private String seriesSuffix = ""; // "" = plain month books; "Credit Card" etc = scoped to that series
     private TransactionFilter activeFilter; // from home page; null = no filter
+    private TextView tvFilterSummary;
+    private boolean filterExpanded = false; // filter card collapsed by default
 
     // Set only when we were launched from a cashbook whose NAME does NOT match
     // the "<Month> <Year>[suffix]" pattern (e.g. "Temple trip August 2026",
@@ -130,6 +132,11 @@ public class StatsActivity extends AppCompatActivity {
         tvMonth = findViewById(R.id.tvStatsMonth);
         tvTotalBalance = findViewById(R.id.tvStatsTotal);
         tvEmpty = findViewById(R.id.tvStatsEmpty);
+        tvFilterSummary = findViewById(R.id.tvFilterSummary);
+        tvFilterSummary.setOnClickListener(v -> {
+            filterExpanded = !filterExpanded;
+            refresh(); // re-renders card + shows/hides forecast
+        });
         pieChart = findViewById(R.id.pieStats);
         rvCategories = findViewById(R.id.rvStatsCategories);
 
@@ -357,7 +364,7 @@ public class StatsActivity extends AppCompatActivity {
     // ── Spending forecast: current month, Expense tab only ──────────────
     private void updateForecast(CashBook book) {
 
-        if (activeFilter != null) {
+        if (activeFilter != null && filterExpanded) {
             findViewById(R.id.llForecast).setVisibility(View.GONE);
             return;
         }
@@ -376,16 +383,85 @@ public class StatsActivity extends AppCompatActivity {
             if (pb != null) collectDaily(dao, pm, pb, daily);
         }
 
-        String label = currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + currentMonth.getYear();
+        String label = currentMonth.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + " " + currentMonth.getYear()
+                + (activeFilter != null ? " · filtered" : "");
         host.addView(com.expenseos.util.ForecastCard.build(this, com.expenseos.util.SpendingForecast.compute(daily, java.time.LocalDate.now()), label));
         host.setVisibility(View.VISIBLE);
     }
 
     private void collectDaily(TransactionDao dao, YearMonth ym, CashBook b, Map<java.time.LocalDate, BigDecimal> out) {
+        if (activeFilter != null) { // forecast on the filtered spend only
+            out.putAll(dao.dailyTotalsByFilter(forecastFilterFor(b, ym)));
+            return;
+        }
         for (Map<String, Object> row : dao.dailyTotals(ym.getYear(), ym.getMonthValue(), b.getId())) {
             BigDecimal exp = (BigDecimal) row.get("expense");
             if (exp != null) out.put(java.time.LocalDate.parse((String) row.get("day")), exp);
         }
+    }
+
+    // Home filter, re-scoped for one month's book: full month range (the home
+    // date range is dropped on purpose), expense only, everything else kept.
+    private TransactionFilter forecastFilterFor(CashBook b, YearMonth ym) {
+        TransactionFilter s = activeFilter;
+        TransactionFilter c = new TransactionFilter();
+        c.setBookId(b.getId());
+        c.setType("EXPENSE");
+        c.setDateFrom(ym.atDay(1));
+        c.setDateTo(ym.atEndOfMonth());
+        c.setCategoryIds(s.getCategoryIds());
+        c.setSubCategoryIds(s.getSubCategoryIds());
+        c.setAmountOp1(s.getAmountOp1());
+        c.setAmount1(s.getAmount1());
+        c.setAmountOp2(s.getAmountOp2());
+        c.setAmount2(s.getAmount2());
+        c.setPaymentTypes(s.getPaymentTypes());
+        c.setNoteSearch(s.getNoteSearch());
+        c.setHasAttachment(s.getHasAttachment());
+        return c;
+    }
+
+    // Shows exactly which home-page filters are active on this Stats screen
+    private void renderFilterSummary(TransactionDao dao) {
+        TransactionFilter f = activeFilter;
+        if (f == null) {
+            tvFilterSummary.setVisibility(View.GONE);
+            return;
+        }
+        List<String> lines = new java.util.ArrayList<>();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", java.util.Locale.ENGLISH);
+        if (f.getDateFrom() != null || f.getDateTo() != null) {
+            String from = f.getDateFrom() != null ? f.getDateFrom().format(fmt) : "…";
+            String to = f.getDateTo() != null ? f.getDateTo().format(fmt) : "…";
+            lines.add("<b>Date:</b> " + (from.equals(to) ? from : from + " → " + to));
+        }
+        List<String> cats = dao.namesOf("categories", f.getCategoryIds());
+        if (!cats.isEmpty())
+            lines.add("<b>Category:</b> " + android.text.TextUtils.htmlEncode(android.text.TextUtils.join(", ", cats)));
+        List<String> subs = dao.namesOf("sub_categories", f.getSubCategoryIds());
+        if (!subs.isEmpty())
+            lines.add("<b>Subcategory:</b> " + android.text.TextUtils.htmlEncode(android.text.TextUtils.join(", ", subs)));
+        if (f.getAmount1() != null) {
+            String amt = TransactionFilter.safeOp(f.getAmountOp1()) + f.getAmount1().toPlainString();
+            if (f.getAmount2() != null)
+                amt += " &amp; " + TransactionFilter.safeOp(f.getAmountOp2()) + f.getAmount2().toPlainString();
+            lines.add("<b>Amount:</b> " + android.text.TextUtils.htmlEncode(amt).replace("&amp;amp;", "&amp;"));
+        }
+        if (f.getPaymentTypes() != null && !f.getPaymentTypes().isEmpty())
+            lines.add("<b>Payment:</b> " + android.text.TextUtils.htmlEncode(android.text.TextUtils.join(", ", f.getPaymentTypes())));
+        if (f.getNoteSearch() != null && !f.getNoteSearch().isBlank())
+            lines.add("<b>Search:</b> “" + android.text.TextUtils.htmlEncode(f.getNoteSearch()) + "”");
+        if (f.getHasAttachment() != null)
+            lines.add("<b>Attachment:</b> " + (f.getHasAttachment() ? "With" : "Without"));
+
+        if (lines.isEmpty()) {
+            tvFilterSummary.setVisibility(View.GONE);
+            return;
+        }
+        String html = "<b>🔍 Filter applied (from Home)</b> " + (filterExpanded ? "▴" : "▾");
+        if (filterExpanded) html += "<br>" + android.text.TextUtils.join("<br>", lines);
+        tvFilterSummary.setText(android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_COMPACT));
+        tvFilterSummary.setVisibility(View.VISIBLE);
     }
 
     private void refresh() {
@@ -423,6 +499,7 @@ public class StatsActivity extends AppCompatActivity {
         f.setBookId(book.getId()); // Stats owns book + type (month nav & tabs)
         f.setBookIds(null);
         f.setType(currentType);
+        renderFilterSummary(dao);
         List<Map<String, Object>> rows = dao.breakdownByFilter(f, GROUP_MODES[groupIdx]);
 
         // "Net Settlements" ON pannirundha, ovvoru category-oda total-la
@@ -431,9 +508,10 @@ public class StatsActivity extends AppCompatActivity {
         // Food expense-ah oru single "Others" income settle pannirundha,
         // andha 3 categories-um correspondingly reduce aagum — category
         // matching venaam, transaction-level link mattum podhum).
-        if (groupIdx == 0 && activeFilter == null && cbNetSettlements.isChecked()) {
+        if (groupIdx == 0 && cbNetSettlements.isChecked()) {
             com.expenseos.dao.SettlementLinkDao settleDao = new com.expenseos.dao.SettlementLinkDao(this);
-            Map<Integer, BigDecimal> linkedByCategory = settleDao.sumLinkedByCategory(book.getId(), currentType);
+            Map<Integer, BigDecimal> linkedByCategory = activeFilter != null ? dao.sumLinkedByCategoryFiltered(f) // links inside the home filter only
+                    : settleDao.sumLinkedByCategory(book.getId(), currentType);
             for (Map<String, Object> r : rows) {
                 int catId = (int) r.get("id");
                 BigDecimal linked = linkedByCategory.getOrDefault(catId, BigDecimal.ZERO);

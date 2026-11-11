@@ -1145,6 +1145,60 @@ public class TransactionDao {
         }
     }
 
+    // Resolve category / sub-category ids to names (Stats filter summary)
+    public List<String> namesOf(String table, List<Integer> ids) {
+        List<String> out = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) return out;
+        if (!table.equals("categories") && !table.equals("sub_categories")) return out; // whitelist
+        StringBuilder ph = new StringBuilder();
+        String[] args = new String[ids.size()];
+        for (int i = 0; i < ids.size(); i++) {
+            ph.append(i == 0 ? "?" : ",?");
+            args[i] = String.valueOf(ids.get(i));
+        }
+        try (Cursor c = db.rawQuery("SELECT name FROM " + table + " WHERE id IN (" + ph + ") ORDER BY name", args)) {
+            while (c.moveToNext()) out.add(c.getString(0));
+        }
+        return out;
+    }
+
+    // Stats "Net settlements" under a home-page filter: only links whose
+    // (type-matching) transaction is INSIDE the filter are counted, so the
+    // subtraction lines up with the filtered category totals.
+    public Map<Integer, BigDecimal> sumLinkedByCategoryFiltered(TransactionFilter f) {
+        BuildResult q = buildSQL(f, true);
+        String idSql = q.sql().replace("SELECT COUNT(*) FROM transactions t",
+                "SELECT t.id FROM transactions t");
+        String sql = "SELECT x.category_id, SUM(sl.amount) FROM settlement_links sl "
+                + "JOIN transactions x ON (x.id = sl.settlement_txn_id OR x.id = sl.linked_txn_id) "
+                + "WHERE x.id IN (" + idSql + ") GROUP BY x.category_id";
+        Map<Integer, BigDecimal> result = new LinkedHashMap<>();
+        try (Cursor c = db.rawQuery(sql, q.params().toArray(new String[0]))) {
+            while (c.moveToNext()) {
+                if (c.isNull(0)) continue;
+                result.put(c.getInt(0), BigDecimal.valueOf(c.getDouble(1)));
+            }
+        }
+        return result;
+    }
+
+    // Day-wise totals honouring a TransactionFilter (Stats forecast under a home filter)
+    public Map<java.time.LocalDate, BigDecimal> dailyTotalsByFilter(TransactionFilter f) {
+        BuildResult q = buildSQL(f, true);
+        String sql = q.sql().replace("SELECT COUNT(*) FROM transactions t",
+                "SELECT date(t.txn_datetime) AS day, COALESCE(SUM(t.amount),0) AS total FROM transactions t")
+                + " GROUP BY date(t.txn_datetime)";
+        Map<java.time.LocalDate, BigDecimal> out = new LinkedHashMap<>();
+        try (Cursor c = db.rawQuery(sql, q.params().toArray(new String[0]))) {
+            while (c.moveToNext()) {
+                String day = c.getString(c.getColumnIndexOrThrow("day"));
+                if (day == null) continue;
+                out.put(java.time.LocalDate.parse(day), toBigDecimal(c, "total"));
+            }
+        }
+        return out;
+    }
+
     /**
      * Monthly trend for ONE category across ALL books (i.e. all months, since
      * this app is one-book-per-month) — works directly because global/common

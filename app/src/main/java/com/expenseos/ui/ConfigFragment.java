@@ -3,11 +3,13 @@ package com.expenseos.ui;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,6 +21,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -26,6 +30,7 @@ import androidx.fragment.app.Fragment;
 import com.expenseos.R;
 import com.expenseos.android.timesheet.OdooClient;
 import com.expenseos.util.AppConfig;
+import com.expenseos.util.AppLockManager;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -52,6 +57,14 @@ public class ConfigFragment extends Fragment {
     private Button btnTestConnection, btnSyncConfigToDb;
     private TextView tvConnectionResult, tvSyncConfigStatus;
 
+    // App Lock rows (built in code)
+    private androidx.appcompat.widget.SwitchCompat swAppLock, swAppLockBio;
+    private View rowAppLockBio, rowAppLockPin, rowAppLockTimeout;
+    private TextView tvAppLockTimeout;
+    private final ActivityResultLauncher<Intent> lockLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                    r -> refreshAppLockUi());
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inf, ViewGroup pg, Bundle s) {
         return inf.inflate(R.layout.fragment_config, pg, false);
@@ -68,6 +81,7 @@ public class ConfigFragment extends Fragment {
         loadSavedValues();
         setupButtons();
         setupAlarmSettings(v);
+        setupAppLockSettings(v);
     }
 
     /**
@@ -163,8 +177,140 @@ public class ConfigFragment extends Fragment {
         vib.setChecked(cfg.isAlarmVibrationEnabled());
         vib.setOnCheckedChangeListener((b, on) -> cfg.setAlarmVibrationEnabled(on));
         v.findViewById(R.id.rowAlarmVibration).setOnClickListener(x -> vib.toggle());
+
+        // Pre-alarm notification (Off / 15 / 30 / 60 / Custom)
+        TextView preValue = v.findViewById(R.id.tvPreAlarmValue);
+        preValue.setText(AppConfig.preAlarmLabel(cfg.getPreAlarmMinutes()));
+        v.findViewById(R.id.rowPreAlarm).setOnClickListener(x ->
+                AppConfig.showPreAlarmDialog(requireActivity(),
+                        () -> preValue.setText(AppConfig.preAlarmLabel(cfg.getPreAlarmMinutes()))));
     }
 
+
+    // ── App Lock (built in code, inserted right below the Pre-alarm row) ──
+    private static final int[] LOCK_TIMEOUT_OPTIONS = {0, 30, 60, 300, 900};
+
+    private static String lockTimeoutLabel(int sec) {
+        if (sec == 0) return "Immediately";
+        if (sec < 60) return sec + " seconds";
+        return (sec / 60) + (sec == 60 ? " minute" : " minutes");
+    }
+
+    private int appLockDp(int v) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
+                getResources().getDisplayMetrics());
+    }
+
+    private LinearLayout appLockRow(View styleSource, String title) {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(styleSource.getPaddingLeft(), styleSource.getPaddingTop(),
+                styleSource.getPaddingRight(), styleSource.getPaddingBottom());
+        row.setClickable(true);
+        TypedValue tv = new TypedValue();
+        requireContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+        row.setBackgroundResource(tv.resourceId);
+
+        TextView t = new TextView(requireContext());
+        t.setText(title);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        t.setTextColor(requireContext().getColor(R.color.text));
+        row.addView(t, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
+    }
+
+    private boolean appLockBiometricAvailable() {
+        return androidx.biometric.BiometricManager.from(requireContext())
+                .canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS;
+    }
+
+    private void setupAppLockSettings(View v) {
+        View anchor = v.findViewById(R.id.rowPreAlarm);
+        if (anchor == null || !(anchor.getParent() instanceof LinearLayout parent)) return;
+        if (parent.getOrientation() != LinearLayout.VERTICAL) return;
+        Context ctx = requireContext();
+        int at = parent.indexOfChild(anchor) + 1;
+
+        TextView header = new TextView(ctx);
+        header.setText("APP LOCK");
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        header.setTypeface(header.getTypeface(), android.graphics.Typeface.BOLD);
+        header.setTextColor(ctx.getColor(R.color.primary));
+        header.setPadding(anchor.getPaddingLeft(), appLockDp(16),
+                anchor.getPaddingRight(), appLockDp(4));
+
+        LinearLayout rowLock = appLockRow(anchor, "App Lock (PIN)");
+        swAppLock = new androidx.appcompat.widget.SwitchCompat(ctx);
+        rowLock.addView(swAppLock);
+
+        LinearLayout rowBio = appLockRow(anchor, "Unlock with fingerprint / face");
+        swAppLockBio = new androidx.appcompat.widget.SwitchCompat(ctx);
+        rowBio.addView(swAppLockBio);
+        rowAppLockBio = rowBio;
+
+        LinearLayout rowPin = appLockRow(anchor, "Change PIN");
+        rowAppLockPin = rowPin;
+
+        LinearLayout rowTimeout = appLockRow(anchor, "Lock after leaving app");
+        tvAppLockTimeout = new TextView(ctx);
+        tvAppLockTimeout.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        tvAppLockTimeout.setTextColor(ctx.getColor(R.color.text_muted));
+        rowTimeout.addView(tvAppLockTimeout);
+        rowAppLockTimeout = rowTimeout;
+
+        ViewGroup.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        parent.addView(header, at++, lp);
+        parent.addView(rowLock, at++, new LinearLayout.LayoutParams(lp));
+        parent.addView(rowBio, at++, new LinearLayout.LayoutParams(lp));
+        parent.addView(rowPin, at++, new LinearLayout.LayoutParams(lp));
+        parent.addView(rowTimeout, at, new LinearLayout.LayoutParams(lp));
+
+        rowLock.setOnClickListener(x -> swAppLock.performClick());
+        swAppLock.setOnClickListener(x -> lockLauncher.launch(swAppLock.isChecked()
+                ? LockActivity.setupIntent(ctx) : LockActivity.disableIntent(ctx)));
+        rowBio.setOnClickListener(x -> swAppLockBio.performClick());
+        swAppLockBio.setOnClickListener(x ->
+                AppLockManager.setBiometricEnabled(ctx, swAppLockBio.isChecked()));
+        rowPin.setOnClickListener(x -> lockLauncher.launch(LockActivity.setupIntent(ctx)));
+        rowTimeout.setOnClickListener(x -> showLockTimeoutDialog());
+
+        refreshAppLockUi();
+    }
+
+    private void refreshAppLockUi() {
+        if (swAppLock == null || !isAdded()) return;
+        Context ctx = requireContext();
+        boolean on = AppLockManager.isEnabled(ctx);
+        swAppLock.setChecked(on);
+        swAppLockBio.setChecked(AppLockManager.isBiometricEnabled(ctx));
+        tvAppLockTimeout.setText(lockTimeoutLabel(AppLockManager.getTimeoutSeconds(ctx)));
+        rowAppLockPin.setVisibility(on ? View.VISIBLE : View.GONE);
+        rowAppLockTimeout.setVisibility(on ? View.VISIBLE : View.GONE);
+        rowAppLockBio.setVisibility(on && appLockBiometricAvailable() ? View.VISIBLE : View.GONE);
+    }
+
+    private void showLockTimeoutDialog() {
+        Context ctx = requireContext();
+        String[] labels = new String[LOCK_TIMEOUT_OPTIONS.length];
+        int checked = 0;
+        int current = AppLockManager.getTimeoutSeconds(ctx);
+        for (int i = 0; i < LOCK_TIMEOUT_OPTIONS.length; i++) {
+            labels[i] = lockTimeoutLabel(LOCK_TIMEOUT_OPTIONS[i]);
+            if (LOCK_TIMEOUT_OPTIONS[i] == current) checked = i;
+        }
+        new androidx.appcompat.app.AlertDialog.Builder(ctx)
+                .setTitle("Lock after leaving app")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    AppLockManager.setTimeoutSeconds(ctx, LOCK_TIMEOUT_OPTIONS[which]);
+                    tvAppLockTimeout.setText(labels[which]);
+                    d.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
 
     private void showRampDialog(TextView valueView) {
         AppConfig cfg = AppConfig.get(requireContext());

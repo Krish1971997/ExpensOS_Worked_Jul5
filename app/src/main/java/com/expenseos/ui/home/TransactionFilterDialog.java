@@ -66,6 +66,25 @@ public class TransactionFilterDialog extends Dialog {
     private List<SubCategory> allSubCategories = new ArrayList<>();
     private List<PaymentType> allPaymentTypes = new ArrayList<>();
 
+    // Income / Expense grouping for the Category and Sub Category panels
+    private final List<Category> incomeCategories = new ArrayList<>();
+    private final List<Category> expenseCategories = new ArrayList<>();
+    private final List<Opt> incomeSubs = new ArrayList<>();
+    private final List<Opt> expenseSubs = new ArrayList<>();
+    private int currentTab = -1;
+
+    private record Opt(int id, String label) {
+    }
+
+    private static class Group {
+        final CheckBox header;
+        final List<CheckBox> items = new ArrayList<>();
+
+        Group(CheckBox header) {
+            this.header = header;
+        }
+    }
+
     // NEW — "Select All" checkboxes for multi-select panels
     private CheckBox cbSelectAllCategory, cbSelectAllSubCategory, cbSelectAllPaymentType;
 
@@ -132,6 +151,14 @@ public class TransactionFilterDialog extends Dialog {
         wireDatePanel();
         wireAmountPanel();
         prefillFromFilter();
+
+        // live badges on the tab list
+        watch(etAmount1);
+        watch(etSingleDay);
+        watch(etDateFrom);
+        watch(etDateTo);
+        rgAttachment.setOnCheckedChangeListener((g, id) -> refreshTabs());
+        refreshTabs();
 
         if (singleFieldMode) {
             findViewById(R.id.tabListContainer).setVisibility(View.GONE);
@@ -238,22 +265,83 @@ public class TransactionFilterDialog extends Dialog {
         selectTab(isSingleBookContext() && initialTab == 0 ? 1 : initialTab);
     }
 
+    private static final String[] TAB_TITLES =
+            {"Cash Book", "Date", "Category", "Sub Category", "Amount", "Payment Type", "Attachment"};
+
     private void selectTab(int index) {
+        currentTab = index;
+        refreshTabs();
+    }
+
+    // Tab with an active selection shows "(n)" or a dot and stays blue + bold, even when it is not the open tab
+    private void refreshTabs() {
         TextView[] tabs = {tabCashBook, tabDate, tabCategory, tabSubCategory, tabAmount, tabPaymentType, tabAttachment};
         View[] panels = {panelCashBook, panelDate, panelCategory, panelSubCategory, panelAmount, panelPaymentType, panelAttachment};
 
         int selColor = getContext().getResources().getColor(R.color.primary);
         int normColor = getContext().getResources().getColor(R.color.text);
 
+        int[] n = new int[7];
+        n[0] = countChecked(cashBookChecks);
+        n[1] = isDateActive() ? 1 : 0;
+        n[2] = countChecked(categoryChecks);
+        n[3] = countChecked(subCategoryChecks);
+        n[4] = etAmount1.getText().toString().trim().isEmpty() ? 0 : 1;
+        n[5] = countChecked(paymentTypeChecks);
+        int att = rgAttachment.getCheckedRadioButtonId();
+        n[6] = (att == R.id.rbAttachmentYes || att == R.id.rbAttachmentNo) ? 1 : 0;
+        boolean[] showCount = {true, false, true, true, false, true, false};
+
         for (int i = 0; i < tabs.length; i++) {
-            boolean sel = (i == index);
-            if (tabs[i] != null && panels[i] != null) {
-                tabs[i].setTextColor(sel ? selColor : normColor);
-                tabs[i].setBackgroundColor(sel ? 0xFFE8F0FE : 0x00000000);
-                tabs[i].setTypeface(null, sel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
-                panels[i].setVisibility(sel ? View.VISIBLE : View.GONE);
-            }
+            if (tabs[i] == null || panels[i] == null) continue;
+            boolean sel = (i == currentTab);
+            boolean active = n[i] > 0;
+            String label = TAB_TITLES[i];
+            if (active) label += showCount[i] ? " (" + n[i] + ")" : " \u25CF";
+            tabs[i].setText(label);
+            tabs[i].setTextColor(sel || active ? selColor : normColor);
+            tabs[i].setBackgroundColor(sel ? 0xFFE8F0FE : 0x00000000);
+            tabs[i].setTypeface(null, sel || active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            panels[i].setVisibility(sel ? View.VISIBLE : View.GONE);
         }
+    }
+
+    private boolean isDateActive() {
+        int id = rgDatePreset.getCheckedRadioButtonId();
+        if (id == R.id.rbSingleDay) return !etSingleDay.getText().toString().trim().isEmpty();
+        if (id == R.id.rbDateRange)
+            return !etDateFrom.getText().toString().trim().isEmpty()
+                    || !etDateTo.getText().toString().trim().isEmpty();
+        return id == R.id.rbToday || id == R.id.rbYesterday || id == R.id.rbThisMonth || id == R.id.rbLastMonth;
+    }
+
+    private static int countChecked(List<CheckBox> l) {
+        int n = 0;
+        for (CheckBox cb : l) if (cb.isChecked()) n++;
+        return n;
+    }
+
+    private static boolean areAllChecked(List<CheckBox> l) {
+        if (l.isEmpty()) return false;
+        for (CheckBox cb : l) if (!cb.isChecked()) return false;
+        return true;
+    }
+
+    private void watch(EditText e) {
+        e.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                refreshTabs();
+            }
+        });
     }
 
     // ── Date panel ──────────────────────────────────────────
@@ -261,6 +349,7 @@ public class TransactionFilterDialog extends Dialog {
         rgDatePreset.setOnCheckedChangeListener((group, checkedId) -> {
             layoutSingleDay.setVisibility(checkedId == R.id.rbSingleDay ? View.VISIBLE : View.GONE);
             layoutDateRange.setVisibility(checkedId == R.id.rbDateRange ? View.VISIBLE : View.GONE);
+            refreshTabs();
         });
 
         etSingleDay.setOnClickListener(v -> pickDate(etSingleDay));
@@ -321,18 +410,31 @@ public class TransactionFilterDialog extends Dialog {
     private void loadCategoriesAndSubCategories() {
         CategoryDao categoryDao = new CategoryDao(getContext());
         Map<Integer, Category> merged = new LinkedHashMap<>();
+        incomeCategories.clear();
+        expenseCategories.clear();
 
         if (bookId != null && bookId > 0) {
-            for (Category c : categoryDao.findByType("INCOME", bookId)) merged.put(c.getId(), c);
-            for (Category c : categoryDao.findByType("EXPENSE", bookId)) merged.put(c.getId(), c);
+            incomeCategories.addAll(categoryDao.findByType("INCOME", bookId));
+            expenseCategories.addAll(categoryDao.findByType("EXPENSE", bookId));
         } else {
-            for (Category c : categoryDao.findAllByType("INCOME")) merged.put(c.getId(), c);
-            for (Category c : categoryDao.findAllByType("EXPENSE")) merged.put(c.getId(), c);
+            incomeCategories.addAll(categoryDao.findAllByType("INCOME"));
+            expenseCategories.addAll(categoryDao.findAllByType("EXPENSE"));
         }
+        for (Category c : incomeCategories) merged.put(c.getId(), c);
+        for (Category c : expenseCategories) merged.put(c.getId(), c);
         allCategories = new ArrayList<>(merged.values());
 
         SubCategoryDao subCategoryDao = new SubCategoryDao(getContext());
         allSubCategories = subCategoryDao.findAll();
+        // Sub categories follow their category's type; "(Category)" keeps duplicate names like "Other" clear
+        incomeSubs.clear();
+        expenseSubs.clear();
+        for (Category c : incomeCategories)
+            for (SubCategory s : subCategoryDao.findByCategoryId(c.getId()))
+                incomeSubs.add(new Opt(s.getId(), s.getName() + " (" + c.getName() + ")"));
+        for (Category c : expenseCategories)
+            for (SubCategory s : subCategoryDao.findByCategoryId(c.getId()))
+                expenseSubs.add(new Opt(s.getId(), s.getName() + " (" + c.getName() + ")"));
 
         buildCategoryCheckboxes();
         buildSubCategoryCheckboxes();
@@ -362,53 +464,95 @@ public class TransactionFilterDialog extends Dialog {
             if (selected != null && selected.contains(cbBook.getId())) {
                 cb.setChecked(true);
             }
+            cb.setOnCheckedChangeListener((b, c) -> refreshTabs());
             cashBookContainer.addView(cb);
             cashBookChecks.add(cb);
         }
     }
 
     private void buildCategoryCheckboxes() {
-        categoryContainer.removeAllViews();
-        categoryChecks.clear();
-        List<Integer> selected = filter.getCategoryIds();
-        for (Category cat : allCategories) {
-            CheckBox cb = new CheckBox(getContext());
-            cb.setText(cat.getName());
-            cb.setTag(cat.getId());
-            cb.setPadding(0, 12, 0, 12);
-            if (selected != null && selected.contains(cat.getId())) cb.setChecked(true);
-            categoryContainer.addView(cb);
-            categoryChecks.add(cb);
-        }
-        if (allCategories.isEmpty()) {
-            TextView empty = new TextView(getContext());
-            empty.setText("No categories found for this book.");
-            empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
-            categoryContainer.addView(empty);
-        }
-        setupSelectAll(cbSelectAllCategory, categoryChecks);
+        List<Opt> inc = new ArrayList<>();
+        for (Category c : incomeCategories) inc.add(new Opt(c.getId(), c.getName()));
+        List<Opt> exp = new ArrayList<>();
+        for (Category c : expenseCategories) exp.add(new Opt(c.getId(), c.getName()));
+        buildGroupedPanel(categoryContainer, cbSelectAllCategory, categoryChecks,
+                filter.getCategoryIds(), inc, exp, "No categories found for this book.");
     }
 
     private void buildSubCategoryCheckboxes() {
-        subCategoryContainer.removeAllViews();
-        subCategoryChecks.clear();
-        List<Integer> selected = filter.getSubCategoryIds();
-        for (SubCategory sub : allSubCategories) {
-            CheckBox cb = new CheckBox(getContext());
-            cb.setText(sub.getName());
-            cb.setTag(sub.getId());
-            cb.setPadding(0, 12, 0, 12);
-            if (selected != null && selected.contains(sub.getId())) cb.setChecked(true);
-            subCategoryContainer.addView(cb);
-            subCategoryChecks.add(cb);
-        }
-        if (allSubCategories.isEmpty()) {
+        buildGroupedPanel(subCategoryContainer, cbSelectAllSubCategory, subCategoryChecks,
+                filter.getSubCategoryIds(), incomeSubs, expenseSubs, "No sub categories found.");
+    }
+
+    // Income / Expense sections. Each header checkbox selects its whole group,
+    // the top "Select All" selects both, and every change refreshes the tab badges.
+    private void buildGroupedPanel(LinearLayout container, CheckBox selectAllAll, List<CheckBox> allChecks,
+                                   List<Integer> selected, List<Opt> income, List<Opt> expense, String emptyText) {
+        container.removeAllViews();
+        allChecks.clear();
+        final List<Group> groups = new ArrayList<>();
+        addGroup(container, "Income", income, selected, allChecks, groups);
+        addGroup(container, "Expense", expense, selected, allChecks, groups);
+
+        if (allChecks.isEmpty()) {
             TextView empty = new TextView(getContext());
-            empty.setText("No sub categories found.");
+            empty.setText(emptyText);
             empty.setTextColor(getContext().getResources().getColor(R.color.text_muted));
-            subCategoryContainer.addView(empty);
+            container.addView(empty);
+            if (selectAllAll != null) selectAllAll.setVisibility(View.GONE);
+            return;
         }
-        setupSelectAll(cbSelectAllSubCategory, subCategoryChecks);
+
+        final Runnable sync = () -> {
+            for (Group g : groups) g.header.setChecked(areAllChecked(g.items));
+            if (selectAllAll != null) selectAllAll.setChecked(areAllChecked(allChecks));
+            refreshTabs();
+        };
+
+        for (Group g : groups) {
+            g.header.setOnClickListener(v -> {
+                boolean c = g.header.isChecked();
+                for (CheckBox cb : g.items) cb.setChecked(c);
+            });
+        }
+        if (selectAllAll != null) {
+            selectAllAll.setVisibility(View.VISIBLE);
+            selectAllAll.setOnClickListener(v -> {
+                boolean c = selectAllAll.isChecked();
+                for (CheckBox cb : allChecks) cb.setChecked(c);
+            });
+        }
+        for (CheckBox cb : allChecks) cb.setOnCheckedChangeListener((b, c) -> sync.run());
+        sync.run();
+    }
+
+    private void addGroup(LinearLayout container, String title, List<Opt> opts, List<Integer> selected,
+                          List<CheckBox> allChecks, List<Group> groups) {
+        if (opts.isEmpty()) return;
+
+        CheckBox header = new CheckBox(getContext());
+        header.setText(title);
+        header.setTypeface(null, android.graphics.Typeface.BOLD);
+        header.setTextColor(getContext().getResources().getColor(R.color.primary));
+        header.setPadding(0, 16, 0, 12);
+        container.addView(header);
+
+        Group g = new Group(header);
+        int indent = (int) (24 * getContext().getResources().getDisplayMetrics().density);
+        for (Opt o : opts) {
+            CheckBox cb = new CheckBox(getContext());
+            cb.setText(o.label);
+            cb.setTag(o.id);
+            cb.setPadding(0, 12, 0, 12);
+            if (selected != null && selected.contains(o.id)) cb.setChecked(true);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMarginStart(indent);
+            container.addView(cb, lp);
+            g.items.add(cb);
+            allChecks.add(cb);
+        }
+        groups.add(g);
     }
 
     private void buildPaymentTypeCheckboxes() {
@@ -468,6 +612,7 @@ public class TransactionFilterDialog extends Dialog {
             }
         }
         selectAllCb.setChecked(allChecked);
+        refreshTabs();
     }
 
     private void applyCashBookSelection() {

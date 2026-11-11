@@ -293,7 +293,14 @@ public class AppConfig {
         prefs.edit().putInt("pre_alarm_minutes", m).apply();
     }
 
-    static void showPreAlarmDialog(android.app.Activity a, Runnable onDone) {
+    /**
+     * "Off" / "30 minutes before" — for the Config row summary.
+     */
+    public static String preAlarmLabel(int m) {
+        return m <= 0 ? "Off" : m + " minutes before";
+    }
+
+    public static void showPreAlarmDialog(android.app.Activity a, Runnable onDone) {
         com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(a);
         String[] opts = {"Off", "15 minutes", "30 minutes", "60 minutes", "Custom…"};
         int[] vals = {0, 15, 30, 60, -1};

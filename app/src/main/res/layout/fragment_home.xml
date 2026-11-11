@@ -173,6 +173,7 @@
 
             <!-- ═══════════ FILTER CHIPS ═══════════ -->
             <HorizontalScrollView
+                android:id="@+id/chipsScroll"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="@dimen/space_3"
@@ -210,6 +211,11 @@
                         android:id="@+id/chipPaymentType"
                         style="@style/FilterChip"
                         android:text="Payment type ▾" />
+
+                    <TextView
+                        android:id="@+id/chipAttachment"
+                        style="@style/FilterChip"
+                        android:text="Attachment ▾" />
                 </LinearLayout>
             </HorizontalScrollView>
 

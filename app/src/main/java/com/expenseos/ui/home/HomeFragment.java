@@ -67,7 +67,8 @@ public class HomeFragment extends Fragment {
 
     private EditText etSearch;
     private ImageButton btnFilter;
-    private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType;
+    private TextView chipDate, chipCategory, chipSubCategory, chipAmount, chipPaymentType, chipAttachment;
+    private View chipsScroll;
     private View rowViewReports, rowStats; //, rowFoodTracker;
     private TextView tvEntryCount, btnSortField, btnSortToggle;
     private boolean sortAscending = false;
@@ -96,6 +97,8 @@ public class HomeFragment extends Fragment {
         chipSubCategory = root.findViewById(R.id.chipSubCategory);
         chipAmount = root.findViewById(R.id.chipAmount);
         chipPaymentType = root.findViewById(R.id.chipPaymentType);
+        chipAttachment = root.findViewById(R.id.chipAttachment);
+        chipsScroll = root.findViewById(R.id.chipsScroll);
         rowViewReports = root.findViewById(R.id.rowViewReports);
         rowStats = root.findViewById(R.id.rowStats);
         // rowStats bind aana adjacent line-ku apparam add pannunga
@@ -181,7 +184,8 @@ public class HomeFragment extends Fragment {
         chipCategory.setOnClickListener(v -> openFilterDialog(2, true));      // Category = Index 2
         chipSubCategory.setOnClickListener(v -> openFilterDialog(3, true));   // Sub Category = Index 3
         chipAmount.setOnClickListener(v -> openFilterDialog(4, true));        // Amount = Index 4
-        chipPaymentType.setOnClickListener(v -> openFilterDialog(5, true));    // Payment Type = Index 5
+        chipPaymentType.setOnClickListener(v -> openFilterDialog(5, true));
+        chipAttachment.setOnClickListener(v -> openFilterDialog(6, true));    // Attachment = Index 6
         // ───────────────────────────────────────────────────
 
         rowViewReports.setOnClickListener(v ->
@@ -370,11 +374,27 @@ public class HomeFragment extends Fragment {
         int ptCount = currentFilter.getPaymentTypes() != null ? currentFilter.getPaymentTypes().size() : 0;
         chipPaymentType.setText(ptCount == 0 ? "Payment Type ▾" : "Payment Type (" + ptCount + ") ▾");
         setChipActive(chipPaymentType, ptCount > 0, normalColor, activeColor);
+
+        Boolean att = currentFilter.getHasAttachment();
+        chipAttachment.setText(att == null ? "Attachment ▾" : (att ? "Attachment: Yes ▾" : "Attachment: No ▾"));
+        setChipActive(chipAttachment, att != null, normalColor, activeColor);
+
+        // Chip row + toolbar filter icon show only while a filter is applied
+        boolean anyActive = dateActive || catCount > 0 || subCount > 0
+                || currentFilter.getAmount1() != null || ptCount > 0 || att != null;
+        chipsScroll.setVisibility(anyActive ? View.VISIBLE : View.GONE);
+        androidx.core.widget.ImageViewCompat.setImageTintList(btnFilter,
+                android.content.res.ColorStateList.valueOf(
+                        anyActive ? activeColor : getResources().getColor(R.color.text_muted)));
     }
 
     private void setChipActive(TextView chip, boolean active, int normalColor, int activeColor) {
         chip.setTextColor(active ? activeColor : normalColor);
         chip.setTypeface(null, active ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+        // filled blue-soft background on active chips
+        chip.setBackgroundTintList(active
+                ? android.content.res.ColorStateList.valueOf(getResources().getColor(R.color.primary_container))
+                : null);
     }
 
     private void openEntryScreen(Transaction.Type type) {
