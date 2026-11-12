@@ -466,8 +466,12 @@ public class StatsActivity extends AppCompatActivity {
 
     private void refresh() {
         findViewById(R.id.llForecast).setVisibility(View.GONE); // stays hidden on the early returns below
-        tabExpense.setTextColor(showExpense ? Color.parseColor("#DC2626") : Color.GRAY);
-        tabIncome.setTextColor(!showExpense ? Color.parseColor("#16A34A") : Color.GRAY);
+        tabExpense.setTextColor(showExpense
+                ? androidx.core.content.ContextCompat.getColor(this, R.color.danger)
+                : androidx.core.content.ContextCompat.getColor(this, R.color.text_muted));
+        tabIncome.setTextColor(!showExpense
+                ? androidx.core.content.ContextCompat.getColor(this, R.color.green)
+                : androidx.core.content.ContextCompat.getColor(this, R.color.text_muted));
 
         CashBook book;
         if (directBook != null) {

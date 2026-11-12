@@ -275,8 +275,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="42dp"
                     android:text="☁ Save Zoho Config"
-                    android:backgroundTint="#1565C0"
-                    android:textColor="@android:color/white" />
+                    android:backgroundTint="@color/primary"
+                    android:textColor="@color/on_primary" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -449,7 +449,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="#22808080" />
+                    android:background="@color/divider" />
 
                 <LinearLayout
                     android:id="@+id/rowAlarmVibration"
@@ -479,7 +479,7 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:background="#22808080" />
+                    android:background="@color/divider" />
 
                 <LinearLayout
                     android:id="@+id/rowPreAlarm"

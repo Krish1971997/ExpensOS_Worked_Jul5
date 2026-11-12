@@ -22,6 +22,7 @@ import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
 
+import com.expenseos.R;
 import com.expenseos.util.AppLockManager;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
@@ -115,7 +116,7 @@ public class LockActivity extends AppCompatActivity {
 
         error = new TextView(this);
         error.setGravity(Gravity.CENTER);
-        error.setTextColor(0xFFD32F2F);
+        error.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.danger));
         error.setPadding(0, dp(12), 0, dp(12));
 
         primary = new MaterialButton(this);

@@ -637,8 +637,8 @@ public class ChatActivity extends AppCompatActivity {
             if (isHeader) tv.setTypeface(null, android.graphics.Typeface.BOLD);
 
             android.graphics.drawable.GradientDrawable cellBg = new android.graphics.drawable.GradientDrawable();
-            cellBg.setColor(isHeader ? android.graphics.Color.parseColor("#E8EAF0") : android.graphics.Color.TRANSPARENT);
-            cellBg.setStroke(1, android.graphics.Color.parseColor("#33000000"));
+            cellBg.setColor(isHeader ? androidx.core.content.ContextCompat.getColor(this, R.color.surface_sunken) : android.graphics.Color.TRANSPARENT);
+            cellBg.setStroke(1, androidx.core.content.ContextCompat.getColor(this, R.color.divider));
             tv.setBackground(cellBg);
 
             android.widget.TableRow.LayoutParams lp =

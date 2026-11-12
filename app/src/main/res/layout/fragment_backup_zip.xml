@@ -10,7 +10,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#1565C0"
+        android:background="@drawable/bg_banner_hero"
         android:orientation="vertical"
         android:padding="16dp">
 
@@ -18,7 +18,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🔒 Backup &amp; Restore"
-            android:textColor="@android:color/white"
+            android:textColor="@color/hero_text"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -26,7 +26,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Create, export, and restore backups"
-            android:textColor="#CCFFFFFF"
+            android:textColor="@color/hero_text_muted"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -216,18 +216,18 @@
                     android:layout_height="40dp"
                     android:layout_marginEnd="6dp"
                     android:layout_weight="1"
-                    android:backgroundTint="#1565C0"
+                    android:backgroundTint="@color/primary"
                     android:text="+ Create Backup"
-                    android:textColor="@android:color/white" />
+                    android:textColor="@color/on_primary" />
 
                 <Button
                     android:id="@+id/btn_upload_backup"
                     android:layout_width="0dp"
                     android:layout_height="40dp"
                     android:layout_weight="1"
-                    android:backgroundTint="#546E7A"
+                    android:backgroundTint="@color/text_muted"
                     android:text="↑ Restore ZIP"
-                    android:textColor="@android:color/white" />
+                    android:textColor="@color/on_primary" />
             </LinearLayout>
         </LinearLayout>
     </androidx.cardview.widget.CardView>

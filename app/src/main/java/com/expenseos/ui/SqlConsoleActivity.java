@@ -560,7 +560,7 @@ public class SqlConsoleActivity extends AppCompatActivity {
         tv.setSingleLine(true);
         if (header) {
             tv.setTypeface(null, android.graphics.Typeface.BOLD);
-            tv.setBackgroundColor(0xFFF1F5F9);
+            tv.setBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.surface_sunken));
         } else {
             tv.setBackgroundResource(android.R.drawable.list_selector_background);
             tv.setOnLongClickListener(v -> {

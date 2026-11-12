@@ -68,6 +68,7 @@ public class AllTransactionsActivity extends AppCompatActivity {
             i.putExtra("txnId", txn.getId());
             startActivity(i);
         }, true); // showBookLabel = true
+        com.expenseos.util.UiUtils.tuneList(rvTransactions);
         rvTransactions.setAdapter(adapter);
 
         currentFilter.setPageSize(Integer.MAX_VALUE);

@@ -102,12 +102,12 @@ public final class ShareBillSheet {
         LinearLayout r2 = new LinearLayout(a);
         r2.setOrientation(LinearLayout.HORIZONTAL);
         r2.setPadding(0, (int) (18 * dp), 0, (int) (8 * dp));
-        r2.addView(text(a, "Details", 13, 0xFF757575, false), weight());
-        r2.addView(text(a, "Amount", 13, 0xFF757575, false));
+        r2.addView(text(a, "Details", 13, a.getColor(R.color.text_muted), false), weight());
+        r2.addView(text(a, "Amount", 13, a.getColor(R.color.text_muted), false));
         card.addView(r2);
 
         View line = new View(a);
-        line.setBackgroundColor(0x22000000);
+        line.setBackgroundColor(a.getColor(R.color.divider));
         card.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) dp));
 
         LinearLayout r3 = new LinearLayout(a);
@@ -159,10 +159,10 @@ public final class ShareBillSheet {
         btn.setText("Share on WhatsApp");
         btn.setAllCaps(false);
         btn.setTextSize(16);
-        btn.setTextColor(Color.WHITE);
+        btn.setTextColor(a.getColor(R.color.on_primary));
         btn.setTypeface(null, Typeface.BOLD);
         btn.setCornerRadius((int) (14 * dp));
-        btn.setBackgroundTintList(ColorStateList.valueOf(0xFF16A34A));
+        btn.setBackgroundTintList(ColorStateList.valueOf(a.getColor(R.color.green)));
         btn.setOnClickListener(v -> share(a, frame, t, title));
         btnBox.addView(btn, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (52 * dp)));

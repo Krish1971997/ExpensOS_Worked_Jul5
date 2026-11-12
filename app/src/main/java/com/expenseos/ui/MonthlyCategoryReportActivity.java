@@ -125,6 +125,7 @@ public class MonthlyCategoryReportActivity extends AppCompatActivity {
 
         TextView emptyView = findViewById(R.id.tvMcrEmpty);
         RecyclerView rv = findViewById(R.id.rvComparison);
+        com.expenseos.util.UiUtils.tuneList(rv);
 
         List<YearMonth> months = currentResult.months;
         tvRange.setText(MONTH_FMT.format(months.get(0)) + " – " + MONTH_FMT.format(months.get(months.size() - 1)));

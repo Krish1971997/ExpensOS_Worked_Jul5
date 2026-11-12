@@ -52,7 +52,7 @@ public class CategoryPickerSheet {
 
         TextView title = new TextView(activity);
         title.setText("Category");
-        title.setTextColor(0xFFFFFFFF);
+        title.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.on_primary));
         title.setTextSize(18);
         title.setTypeface(null, Typeface.BOLD);
         title.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -60,7 +60,7 @@ public class CategoryPickerSheet {
 
         TextView edit = new TextView(activity);
         edit.setText("✎");
-        edit.setTextColor(0xFFFFFFFF);
+        edit.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.on_primary));
         edit.setTextSize(18);
         edit.setPadding(dp(activity, 12), 0, dp(activity, 12), 0);
         edit.setOnClickListener(v -> {
@@ -75,7 +75,7 @@ public class CategoryPickerSheet {
 
         TextView close = new TextView(activity);
         close.setText("✕");
-        close.setTextColor(0xFFFFFFFF);
+        close.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.on_primary));
         close.setTextSize(20);
         close.setPadding(dp(activity, 16), 0, 0, 0);
         close.setOnClickListener(v -> sheet.dismiss());
@@ -97,7 +97,7 @@ public class CategoryPickerSheet {
         ScrollView rightScroll = new ScrollView(activity);
         LinearLayout rightList = new LinearLayout(activity);
         rightList.setOrientation(LinearLayout.VERTICAL);
-        rightScroll.setBackgroundColor(0xFFFAFAFA);
+        rightScroll.setBackgroundColor(androidx.core.content.ContextCompat.getColor(activity, R.color.surface_sunken));
         rightScroll.addView(rightList);
         rightScroll.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.58f));
 
@@ -117,7 +117,7 @@ public class CategoryPickerSheet {
             if (preselected) highlighted[0] = row;
             row.setOnClickListener(v -> {
                 if (highlighted[0] != null) highlighted[0].setBackgroundColor(0x00000000);
-                row.setBackgroundColor(0xFFFCE4EC);
+                row.setBackgroundColor(androidx.core.content.ContextCompat.getColor(activity, R.color.cell_highlight));
                 highlighted[0] = row;
 
                 if (hasSubs) {
@@ -144,7 +144,7 @@ public class CategoryPickerSheet {
         row.setPadding(dp(activity, 16), dp(activity, 14), dp(activity, 8), dp(activity, 14));
         row.setClickable(true);
         row.setFocusable(true);
-        if (selected) row.setBackgroundColor(0xFFFCE4EC);
+        if (selected) row.setBackgroundColor(androidx.core.content.ContextCompat.getColor(activity, R.color.cell_highlight));
 
         TextView label = new TextView(activity);
         label.setText(name);
@@ -157,7 +157,7 @@ public class CategoryPickerSheet {
             TextView chevron = new TextView(activity);
             chevron.setText("›");
             chevron.setTextSize(18);
-            chevron.setTextColor(0xFF9E9E9E);
+            chevron.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.text_hint));
             row.addView(chevron);
         }
         return row;
@@ -170,7 +170,7 @@ public class CategoryPickerSheet {
             TextView row = new TextView(activity);
             row.setText(sc.getName());
             row.setTextSize(15);
-            row.setTextColor(0xFF212121);
+            row.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.text));
             row.setPadding(dp(activity, 16), dp(activity, 14), dp(activity, 16), dp(activity, 14));
             row.setClickable(true);
             row.setFocusable(true);

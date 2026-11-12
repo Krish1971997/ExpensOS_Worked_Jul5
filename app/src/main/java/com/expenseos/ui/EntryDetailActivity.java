@@ -187,7 +187,7 @@ public class EntryDetailActivity extends AppCompatActivity {
                 ImageView iv = new ImageView(this);
                 iv.setLayoutParams(new LinearLayout.LayoutParams(size, size));
                 iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                iv.setBackgroundColor(0xFFF1F5F9);
+                iv.setBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.surface_sunken));
                 thumb = iv;
                 // Thumbnail loaded lazily from full receipt row (findMetaByTransactionId
                 // doesn't include file_data) — fetch bytes only when we actually render it.
@@ -204,7 +204,7 @@ public class EntryDetailActivity extends AppCompatActivity {
                 tv.setGravity(android.view.Gravity.CENTER);
                 tv.setText("📄");
                 tv.setTextSize(28);
-                tv.setBackgroundColor(0xFFF1F5F9);
+                tv.setBackgroundColor(androidx.core.content.ContextCompat.getColor(this, R.color.surface_sunken));
                 thumb = tv;
             }
 

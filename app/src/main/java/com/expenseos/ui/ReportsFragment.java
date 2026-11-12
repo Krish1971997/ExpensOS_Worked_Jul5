@@ -83,9 +83,9 @@ public class ReportsFragment extends Fragment {
             expE.add(new BarEntry(i, ((BigDecimal) row.get("expense")).floatValue()));
         }
         BarDataSet incSet = new BarDataSet(incE, "Income");
-        incSet.setColor(Color.parseColor("#16A34A"));
+        incSet.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.chart_2));
         BarDataSet expSet = new BarDataSet(expE, "Expense");
-        expSet.setColor(Color.parseColor("#DC2626"));
+        expSet.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.chart_5));
         BarData barData = new BarData(incSet, expSet);
         barData.setBarWidth(0.35f);
         barData.groupBars(0f, 0.1f, 0.05f);

@@ -75,18 +75,21 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.VH> {
         BigDecimal net = income.subtract(expense);
         boolean negative = net.signum() < 0;
         h.tvNet.setText((negative ? "-₹" : "₹") + net.abs().toPlainString());
-        h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
+        h.tvNet.setTextColor(androidx.core.content.ContextCompat.getColor(
+                    h.itemView.getContext(), negative ? R.color.danger : R.color.green));
 
         // Status bar color based on active or positive status
         boolean isSelected = b.getId() == activeId;
         boolean isActiveBook = isSelected || b.isActive();
-        int statusColor = Color.parseColor(isActiveBook ? "#4CAF50" : "#DC2626"); // Green for active, Red for inactive
+        int statusColor = androidx.core.content.ContextCompat.getColor(
+                h.itemView.getContext(), isActiveBook ? R.color.green : R.color.danger);
 
         if (h.vStatusBar != null) {
             h.vStatusBar.setBackgroundColor(statusColor);
         }
 
-        h.itemView.setBackgroundColor(isSelected ? Color.parseColor("#E8F5E9") : Color.WHITE);
+        h.itemView.setBackgroundColor(androidx.core.content.ContextCompat.getColor(
+                h.itemView.getContext(), isSelected ? R.color.selection : android.R.color.transparent));
 
         boolean canOpen = b.isActive();
         h.row.setOnClickListener(v -> {

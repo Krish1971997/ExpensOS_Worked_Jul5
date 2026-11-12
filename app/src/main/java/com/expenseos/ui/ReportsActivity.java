@@ -84,9 +84,9 @@ public class ReportsActivity extends AppCompatActivity {
         }
 
         BarDataSet incSet = new BarDataSet(incEntries, "Income");
-        incSet.setColor(Color.parseColor("#16A34A"));
+        incSet.setColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_2));
         BarDataSet expSet = new BarDataSet(expEntries, "Expense");
-        expSet.setColor(Color.parseColor("#DC2626"));
+        expSet.setColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_5));
 
         BarData barData = new BarData(incSet, expSet);
         barData.setBarWidth(0.35f);
@@ -110,9 +110,12 @@ public class ReportsActivity extends AppCompatActivity {
         List<Map<String, Object>> cats = dao.expenseByCategory(bookId);
         List<PieEntry> entries = new ArrayList<>();
         int[] colors = {
-                Color.parseColor("#2563EB"), Color.parseColor("#DC2626"),
-                Color.parseColor("#16A34A"), Color.parseColor("#D97706"),
-                Color.parseColor("#7C3AED"), Color.parseColor("#0891B2")
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_1),
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_5),
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_2),
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_4),
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_3),
+                androidx.core.content.ContextCompat.getColor(this, R.color.chart_6)
         };
 
         for (Map<String, Object> row : cats) {

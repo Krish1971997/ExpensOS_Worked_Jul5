@@ -83,7 +83,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textSize="11sp"
-                android:textColor="#999" />
+                android:textColor="@color/text_muted" />
 
             <TextView
                 android:id="@+id/tv_backup_status"
@@ -107,8 +107,8 @@
                 android:layout_marginEnd="6dp"
                 android:text="⤺ Restore"
                 android:textSize="12sp"
-                android:backgroundTint="#2E7D32"
-                android:textColor="@android:color/white" />
+                android:backgroundTint="@color/green"
+                android:textColor="@color/on_primary" />
 
             <Button
                 android:id="@+id/btn_backup_download"
@@ -117,8 +117,8 @@
                 android:layout_weight="1"
                 android:text="↗ Share"
                 android:textSize="12sp"
-                android:backgroundTint="#1565C0"
-                android:textColor="@android:color/white" />
+                android:backgroundTint="@color/primary"
+                android:textColor="@color/on_primary" />
 
             <Button
                 android:id="@+id/btn_backup_delete"
@@ -128,8 +128,8 @@
                 android:layout_marginStart="6dp"
                 android:text="🗑 Delete"
                 android:textSize="12sp"
-                android:backgroundTint="#C0392B"
-                android:textColor="@android:color/white" />
+                android:backgroundTint="@color/danger"
+                android:textColor="@color/on_primary" />
         </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>

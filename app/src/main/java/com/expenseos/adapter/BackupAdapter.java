@@ -69,11 +69,13 @@ public class BackupAdapter extends RecyclerView.Adapter<BackupAdapter.VH> {
 
         boolean ok = "SUCCESS".equals(e.status);
         h.tvStatus.setText(ok ? "✔ SUCCESS" : e.status);
-        h.tvStatus.setTextColor(ok ? Color.parseColor("#1B8A1B") : Color.parseColor("#C0392B"));
+        h.tvStatus.setTextColor(androidx.core.content.ContextCompat.getColor(
+                h.itemView.getContext(), ok ? R.color.green : R.color.danger));
 
         boolean cloud = "CLOUD".equals(e.backupMode);
         h.tvMode.setText(cloud ? "☁ CLOUD" : "📱 LOCAL");
-        h.tvMode.setTextColor(cloud ? Color.parseColor("#1565C0") : Color.parseColor("#546E7A"));
+        h.tvMode.setTextColor(androidx.core.content.ContextCompat.getColor(
+                h.itemView.getContext(), cloud ? R.color.primary : R.color.text_muted));
 
         // Share only makes sense for LOCAL files (a real File exists)
         h.btnShare.setOnClickListener(v -> shareListener.onShare(e));  // now fires for both LOCAL & CLOUD        h.btnShare.setOnClickListener(v -> shareListener.onShare(e));

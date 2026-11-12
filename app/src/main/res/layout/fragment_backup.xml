@@ -9,7 +9,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#1565C0"
+        android:background="@drawable/bg_banner_hero"
         android:padding="16dp"
         android:orientation="vertical">
 
@@ -17,7 +17,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="🔒 Backup &amp; Restore"
-            android:textColor="@android:color/white"
+            android:textColor="@color/hero_text"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -25,7 +25,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Sync your data with the cloud"
-            android:textColor="#CCFFFFFF"
+            android:textColor="@color/hero_text_muted"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -85,7 +85,7 @@
                 android:layout_height="48dp"
                 android:text="⟳ Sync to Cloud (Push + Pull)"
                 android:backgroundTint="@color/primary"
-                android:textColor="@android:color/white"
+                android:textColor="@color/on_primary"
                 android:layout_marginBottom="10dp" />
 
             <Button
@@ -93,8 +93,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
                 android:text="↓ Pull from Cloud"
-                android:backgroundTint="#546E7A"
-                android:textColor="@android:color/white"
+                android:backgroundTint="@color/text_muted"
+                android:textColor="@color/on_primary"
                 android:layout_marginBottom="14dp" />
 
             <!-- Status message -->

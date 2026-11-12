@@ -40,7 +40,7 @@ public class ConsoleFragment extends Fragment implements ConsoleLogger.Observer 
 
         tvConsole.setTypeface(Typeface.MONOSPACE);
         tvConsole.setTextSize(12f);
-        tvConsole.setTextColor(Color.parseColor("#E0E0E0"));
+        tvConsole.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_text));
 
         Button btnClear = root.findViewById(R.id.btn_clear_console);
         Button btnCopy = root.findViewById(R.id.btn_copy_console);
@@ -93,12 +93,12 @@ public class ConsoleFragment extends Fragment implements ConsoleLogger.Observer 
 
         // Color the last line based on level
         int color = switch (entry.level) {
-            case SUCCESS -> Color.parseColor("#4CAF50");
-            case ERROR -> Color.parseColor("#F44336");
-            case WARN -> Color.parseColor("#FFC107");
-            default -> Color.parseColor("#E0E0E0");
+            case SUCCESS -> androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_success);
+            case ERROR -> androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_error);
+            case WARN -> androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_warn);
+            default -> androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_text);
         };
-        tvConsole.setTextColor(Color.parseColor("#E0E0E0")); // reset bulk
+        tvConsole.setTextColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.console_text)); // reset bulk
         scrollToBottom();
     }
 

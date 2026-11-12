@@ -111,4 +111,27 @@
     <color name="aurora_sky">#BAE6FD</color>
     <color name="hero_grad_start">#F00F1F44</color>
     <color name="hero_grad_end">#F01D4ED8</color>
+
+    <!-- ══════════ SHARED SURFACE / OVERLAY TOKENS (added: full light+dark parity) ══════════ -->
+    <color name="on_primary_soft">#CCFFFFFF</color>
+    <color name="surface_sunken">#FFF1F5F9</color>
+    <color name="cell_highlight">#FCE4EC</color>
+    <color name="aurora_blue_fade">#00BFDBFE</color>
+    <color name="aurora_violet_fade">#00DDD6FE</color>
+    <color name="aurora_mint_fade">#00A7F3D0</color>
+    <color name="aurora_sky_fade">#00BAE6FD</color>
+    <color name="splash_bg">#2563EB</color>
+    <color name="console_bg">#12161F</color>
+    <color name="console_text">#D6DEEA</color>
+    <color name="console_success">#4CAF50</color>
+    <color name="console_error">#EF5350</color>
+    <color name="console_warn">#FFC107</color>
+    <color name="alarm_bg">#15171A</color>
+    <color name="alarm_text">#FFFFFF</color>
+    <color name="alarm_text_soft">#C8C8C8</color>
+    <color name="alarm_text_dim">#B0B0B0</color>
+    <color name="alarm_text_faint">#9E9E9E</color>
+    <color name="alarm_stroke">#555555</color>
+    <color name="scrim_soft">#CC000000</color>
+    <color name="code_bg">#1E1E1E</color>
 </resources>

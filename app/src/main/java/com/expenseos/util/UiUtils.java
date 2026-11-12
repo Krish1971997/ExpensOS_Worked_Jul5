@@ -201,6 +201,31 @@ public final class UiUtils {
         return Math.round(value * ctx.getResources().getDisplayMetrics().density);
     }
 
+    /**
+     * Performance: tells the RecyclerView its size is fixed and that item
+     * changes do not need cross-fade animations, which removes layout passes
+     * on every bind/scroll and keeps fast flings from janking.
+     */
+    public static void tuneList(@NonNull androidx.recyclerview.widget.RecyclerView rv) {
+        if (rv == null) return;
+        rv.setHasFixedSize(true);
+        rv.setItemViewCacheSize(12);
+        if (rv.getItemAnimator() instanceof androidx.recyclerview.widget.DefaultItemAnimator) {
+            androidx.recyclerview.widget.DefaultItemAnimator a =
+                    (androidx.recyclerview.widget.DefaultItemAnimator) rv.getItemAnimator();
+            a.setSupportsChangeAnimations(false);
+            a.setAddDuration(160);
+            a.setRemoveDuration(140);
+            a.setMoveDuration(160);
+        }
+        rv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    }
+
+    /** Theme colour lookup (works in light + dark; never a hardcoded hex). */
+    public static int color(Context ctx, int resId) {
+        return ContextCompat.getColor(ctx, resId);
+    }
+
     /** Ripple-free transparent background, handy for custom list rows. */
     public static void clearBackground(@NonNull View v) {
         v.setBackground(new ColorDrawable(Color.TRANSPARENT));

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-bleed hero banner for page headers. Same tone in light + dark
+     (hero_* tokens are identical in both palettes) so text contrast is safe. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="315"
+        android:startColor="@color/hero_bg"
+        android:endColor="@color/hero_bg_2"
+        android:type="linear" />
+</shape>

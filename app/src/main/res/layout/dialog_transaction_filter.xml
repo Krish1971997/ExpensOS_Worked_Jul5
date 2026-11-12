@@ -534,6 +534,6 @@
             android:layout_weight="1"
             android:backgroundTint="@color/primary"
             android:text="APPLY"
-            android:textColor="@android:color/white" />
+            android:textColor="@color/on_primary" />
     </LinearLayout>
 </LinearLayout>

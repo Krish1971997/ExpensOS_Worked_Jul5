@@ -417,7 +417,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         start = builder.length();
         builder.append(monthYear);
         builder.setSpan(new AbsoluteSizeSpan(13, true), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        builder.setSpan(new ForegroundColorSpan(Color.parseColor("#6B7280")), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(ContextCompat.getColor(ctx, R.color.text_muted)), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         return builder;
     }
@@ -431,13 +431,13 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         int start = sb.length();
         sb.append(incStr);
-        sb.setSpan(new ForegroundColorSpan(Color.parseColor("#1565C0")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(ctx, R.color.primary)), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         sb.append("   ");
 
         start = sb.length();
         sb.append(expStr);
-        sb.setSpan(new ForegroundColorSpan(Color.parseColor("#D32F2F")), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(ContextCompat.getColor(ctx, R.color.danger)), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         return sb;
     }

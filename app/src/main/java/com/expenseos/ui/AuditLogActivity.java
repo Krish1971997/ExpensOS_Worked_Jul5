@@ -44,6 +44,7 @@ public class AuditLogActivity extends AppCompatActivity {
                 .setText(totalCount + " records");
 
         RecyclerView rv = findViewById(R.id.rvAuditLog);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setAdapter(new AuditAdapter(auditLogs));
     }

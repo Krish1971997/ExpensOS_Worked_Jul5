@@ -37,6 +37,7 @@ public class SequenceActivity extends AppCompatActivity implements SequenceAdapt
         localDB = LocalDB.getInstance(this);
 
         RecyclerView rv = findViewById(R.id.rvSequences);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
 

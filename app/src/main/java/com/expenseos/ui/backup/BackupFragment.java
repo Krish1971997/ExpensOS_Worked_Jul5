@@ -53,6 +53,7 @@ public class BackupFragment extends Fragment {
         tvScheduleBanner = root.findViewById(R.id.tv_schedule_banner);
         rgBackupMode = root.findViewById(R.id.rgBackupMode);
         rvBackups = root.findViewById(R.id.rv_backups);
+        com.expenseos.util.UiUtils.tuneList(rvBackups);
         rvBackups.setLayoutManager(new LinearLayoutManager(getContext()));
 
         Button btnCreate = root.findViewById(R.id.btn_create_backup);

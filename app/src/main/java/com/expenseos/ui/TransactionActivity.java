@@ -214,6 +214,7 @@ public class TransactionActivity extends AppCompatActivity {
         int totalPages = (int) Math.ceil((double) total / PAGE_SIZE);
 
         RecyclerView rv = findViewById(R.id.rvTransactions);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new LinearLayoutManager(this));
 
         // Adapter with click → detail, long-click → options menu

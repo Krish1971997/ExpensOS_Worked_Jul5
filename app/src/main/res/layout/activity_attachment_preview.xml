@@ -58,7 +58,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
             android:layout_marginBottom="16dp"
-            android:background="#CC000000"
+            android:background="@color/scrim_soft"
             android:paddingHorizontal="14dp"
             android:paddingVertical="6dp"
             android:textColor="@android:color/white"

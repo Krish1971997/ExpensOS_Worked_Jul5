@@ -72,6 +72,6 @@
         android:contentDescription="New Book"
         android:elevation="6dp"
         android:src="@android:drawable/ic_input_add"
-        android:tint="@android:color/white" />
+        android:tint="@color/on_primary" />
 
 </FrameLayout>

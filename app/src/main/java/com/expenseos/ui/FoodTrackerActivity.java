@@ -108,6 +108,7 @@ public class FoodTrackerActivity extends AppCompatActivity {
         tvGrandTotal = findViewById(R.id.tvFoodTrackerGrandTotal);
 
         RecyclerView rv = findViewById(R.id.rvFoodTracker);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new LinearLayoutManager(this));
         adapter = new FoodGridAdapter();
         rv.setAdapter(adapter);

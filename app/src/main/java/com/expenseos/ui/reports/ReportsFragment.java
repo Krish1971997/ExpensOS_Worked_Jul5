@@ -283,9 +283,9 @@ public class ReportsFragment extends Fragment {
         }
 
         BarDataSet dsInc = new BarDataSet(incEntries, "Income");
-        dsInc.setColor(Color.parseColor("#16A34A"));
+        dsInc.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.chart_2));
         BarDataSet dsExp = new BarDataSet(expEntries, "Expense");
-        dsExp.setColor(Color.parseColor("#DC2626"));
+        dsExp.setColor(androidx.core.content.ContextCompat.getColor(requireContext(), R.color.chart_5));
 
         BarData barData = new BarData(dsInc, dsExp);
         barData.setBarWidth(0.35f);

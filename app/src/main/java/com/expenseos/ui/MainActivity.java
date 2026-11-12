@@ -144,6 +144,7 @@ public class MainActivity extends AppCompatActivity {
      */
     private void scrollToTop() {
         RecyclerView rv = findViewById(R.id.rvBooks);
+        com.expenseos.util.UiUtils.tuneList(rv);
         if (rv != null) rv.smoothScrollToPosition(0);
     }
 
@@ -318,10 +319,12 @@ public class MainActivity extends AppCompatActivity {
 
             boolean negative = net.signum() < 0;
             h.tvNet.setText((negative ? "-₹" : "₹") + String.format("%,.2f", net.abs()));
-            h.tvNet.setTextColor(Color.parseColor(negative ? "#B91C1C" : "#2E7D32"));
+            h.tvNet.setTextColor(androidx.core.content.ContextCompat.getColor(
+                    h.itemView.getContext(), negative ? R.color.danger : R.color.green));
 
             if (h.vStatusBar != null) {
-                int statusColor = Color.parseColor(b.isActive() ? "#4CAF50" : "#DC2626");
+                int statusColor = androidx.core.content.ContextCompat.getColor(
+                    h.itemView.getContext(), b.isActive() ? R.color.green : R.color.danger);
                 h.vStatusBar.setBackgroundColor(statusColor);
             }
 

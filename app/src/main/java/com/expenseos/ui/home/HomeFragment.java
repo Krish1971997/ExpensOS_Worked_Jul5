@@ -89,6 +89,7 @@ public class HomeFragment extends Fragment {
         tvNetBalance = root.findViewById(R.id.tv_net_balance);
         swipeRefresh = root.findViewById(R.id.swipe_refresh);
         rvTransactions = root.findViewById(R.id.rv_transactions);
+        com.expenseos.util.UiUtils.tuneList(rvTransactions);
         layoutNoTransactions = root.findViewById(R.id.layoutNoTransactions);
         etSearch = root.findViewById(R.id.etTxnSearch);
         btnFilter = root.findViewById(R.id.btnTxnFilter);

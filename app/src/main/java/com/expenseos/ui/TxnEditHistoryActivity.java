@@ -42,6 +42,7 @@ public class TxnEditHistoryActivity extends AppCompatActivity {
         TextView tvCount = findViewById(R.id.tvHistoryCount);
         View emptyState = findViewById(R.id.emptyHistoryState);
         RecyclerView rv = findViewById(R.id.rvHistory);
+        com.expenseos.util.UiUtils.tuneList(rv);
 
         if (newestFirst.isEmpty()) {
             tvCount.setVisibility(View.GONE);

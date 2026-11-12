@@ -170,10 +170,10 @@ public class CategoryStatsActivity extends AppCompatActivity {
 
             // Highlight current selected month
             if (i == currentSelectedMonth && selectedYear[0] == currentCal.get(Calendar.YEAR)) {
-                tvMonth.setTextColor(Color.parseColor("#EF4444")); // Red/Orange active color
+                tvMonth.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.danger));
                 tvMonth.setTypeface(null, android.graphics.Typeface.BOLD);
             } else {
-                tvMonth.setTextColor(Color.WHITE);
+                tvMonth.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.on_primary));
             }
 
             final int monthIndex = i;
@@ -244,6 +244,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
             View subSection = findViewById(R.id.llSubcategorySection);
             if (subSection != null) subSection.setVisibility(View.GONE);
             RecyclerView rv = findViewById(R.id.rvCategoryTxns);
+        com.expenseos.util.UiUtils.tuneList(rv);
             if (rv != null)
                 rv.setAdapter(new TransactionAdapter(this, new ArrayList<>(), null, null));
             return;
@@ -344,8 +345,8 @@ public class CategoryStatsActivity extends AppCompatActivity {
         }
 
 //        LineDataSet ds = new LineDataSet(entries, categoryName);
-//        ds.setColor(Color.parseColor("#EF4444"));
-//        ds.setCircleColor(Color.parseColor("#EF4444"));
+//        ds.setColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_5));
+//        ds.setCircleColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_5));
 //        ds.setLineWidth(2.5f);
 //        ds.setCircleRadius(4.5f);
 //        ds.setDrawCircleHole(false);
@@ -371,8 +372,8 @@ public class CategoryStatsActivity extends AppCompatActivity {
 //        chart.invalidate();
 
         LineDataSet ds = new LineDataSet(entries, categoryName);
-        ds.setColor(Color.parseColor("#EF4444"));
-        ds.setCircleColor(Color.parseColor("#EF4444"));
+        ds.setColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_5));
+        ds.setCircleColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_5));
         ds.setLineWidth(2.5f);
         ds.setCircleRadius(4.5f);
         ds.setDrawCircleHole(false);
@@ -381,7 +382,7 @@ public class CategoryStatsActivity extends AppCompatActivity {
         // --- புதிய மாற்ங்கள் (Marker Enable செய்ய) ---
         ds.setHighlightEnabled(true);             // Click highlight-ஐ ஆன் செய்கிறது
         ds.setDrawHighlightIndicators(true);     // Highlight கோடுகளைக் காட்டுகிறது
-        ds.setHighLightColor(Color.parseColor("#FCA5A5")); // கோட்டின் நிறம்
+        ds.setHighLightColor(androidx.core.content.ContextCompat.getColor(this, R.color.chart_axis));
 
         chart.setData(new LineData(ds));
         chart.getAxisRight().setEnabled(false);

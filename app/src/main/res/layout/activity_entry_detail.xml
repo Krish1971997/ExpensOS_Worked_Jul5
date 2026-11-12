@@ -344,10 +344,10 @@
             android:layout_height="56dp"
             android:text="Share entry"
             android:textAllCaps="false"
-            android:textColor="@android:color/white"
+            android:textColor="@color/on_primary"
             android:textSize="17sp"
             android:textStyle="bold"
-            app:backgroundTint="#16A34A"
+            app:backgroundTint="@color/green"
             app:cornerRadius="16dp" />
     </FrameLayout>
 </LinearLayout>

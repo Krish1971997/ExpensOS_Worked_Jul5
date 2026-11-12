@@ -34,6 +34,7 @@ public class RemindersListActivity extends AppCompatActivity {
                 startActivity(new Intent(this, AddReminderActivity.class)));
 
         rv = findViewById(R.id.rvReminders);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new LinearLayoutManager(this));
     }
 

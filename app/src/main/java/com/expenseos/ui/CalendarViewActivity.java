@@ -106,6 +106,7 @@ public class CalendarViewActivity extends AppCompatActivity {
         while (cells.size() % 7 != 0) cells.add(null);
 
         RecyclerView rv = findViewById(R.id.rvCalendarDays);
+        com.expenseos.util.UiUtils.tuneList(rv);
         rv.setLayoutManager(new GridLayoutManager(this, 7));
         rv.setAdapter(new CalendarDayAdapter(cells, byDate));
     }

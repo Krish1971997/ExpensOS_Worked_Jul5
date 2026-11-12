@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Soft aurora light blob — radial gradient fades to transparent. -->
+<!-- Aurora blob — colours come from values/ + values-night/ tokens. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
     <gradient
         android:type="radial"
         android:gradientRadius="180dp"
-        android:startColor="#BAE6FD"
-        android:endColor="#00BAE6FD" />
+        android:startColor="@color/aurora_sky"
+        android:endColor="@color/aurora_sky_fade" />
 </shape>

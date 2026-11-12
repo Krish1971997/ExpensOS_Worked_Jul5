@@ -1,23 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Timesheet entry row — design-system card, theme-token colours only. -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/CardSoft"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="10dp"
+    android:layout_marginBottom="@dimen/space_2"
     android:clickable="true"
     android:focusable="true"
-    android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="#B3FFFFFF"
-    app:cardCornerRadius="18dp"
-    app:cardElevation="0dp"
-    app:strokeColor="#66FFFFFF"
-    app:strokeWidth="1dp">
+    android:foreground="?attr/selectableItemBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="14dp">
+        android:padding="@dimen/space_3">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -26,45 +23,47 @@
 
             <TextView
                 android:id="@+id/tvTask"
+                style="@style/Text.Subtitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textColor="#2B1F28"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:textColor="@color/text" />
 
             <TextView
                 android:id="@+id/tvHours"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:textColor="#714B67"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:layout_marginStart="@dimen/space_2"
+                android:background="@drawable/bg_chip_suggestion"
+                android:fontFamily="sans-serif-medium"
+                android:paddingHorizontal="9dp"
+                android:paddingVertical="3dp"
+                android:textColor="@color/primary"
+                android:textSize="@dimen/type_caption" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/tvProject"
+            style="@style/Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="#666666"
-            android:textSize="12sp" />
+            android:layout_marginTop="2dp" />
 
         <TextView
             android:id="@+id/tvActivity"
+            style="@style/Text.Caption"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:textColor="#714B67"
-            android:textSize="12sp" />
+            android:textColor="@color/primary"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvDesc"
+            style="@style/Text.Body"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="#333333"
-            android:textSize="13sp" />
+            android:layout_marginTop="@dimen/space_2"
+            android:textSize="@dimen/type_body_sm" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
