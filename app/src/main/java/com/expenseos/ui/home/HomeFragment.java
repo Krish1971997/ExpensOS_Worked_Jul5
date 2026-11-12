@@ -63,6 +63,13 @@ public class HomeFragment extends Fragment {
     private SwipeRefreshLayout swipeRefresh;
     private View layoutNoTransactions;
     private TransactionAdapter adapter;
+
+    private final java.util.concurrent.ExecutorService io =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private final android.os.Handler ui =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private int loadSeq = 0;
+    private final Runnable searchRun = this::loadTransactions;
     private final List<Transaction> transactions = new ArrayList<>();
 
     private EditText etSearch;
@@ -79,6 +86,7 @@ public class HomeFragment extends Fragment {
     private ActionMode actionMode;
     private static final int REQ_STORAGE_PERM = 3001;
     private String pendingExportAction; // "csv" or "pdf-save", resumed after a permission grant
+
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -175,7 +183,8 @@ public class HomeFragment extends Fragment {
             public void afterTextChanged(Editable e) {
                 String q = e.toString().trim();
                 currentFilter.setNoteSearch(q.isEmpty() ? null : q);
-                loadTransactions();
+                ui.removeCallbacks(searchRun);
+                ui.postDelayed(searchRun, 300);   // typing nindra 300ms apparam dhaan query
             }
         });
 
@@ -243,7 +252,7 @@ public class HomeFragment extends Fragment {
             swipeRefresh.setRefreshing(false);
         });
 
-        loadTransactions();
+        // loadTransactions() — onResume() already calls it right after this
         return root;
     }
 
@@ -293,34 +302,40 @@ public class HomeFragment extends Fragment {
     }
 
     private void loadTransactions() {
-        int bookId = AppConfig.get(requireContext()).getActiveBookId();
-        TransactionDao dao = new TransactionDao(requireContext());
-
+        if (!isAdded()) return;
+        final android.content.Context appCtx = requireContext().getApplicationContext();
+        final int bookId = AppConfig.get(appCtx).getActiveBookId();
         currentFilter.setBookId(bookId);
         currentFilter.setType(null);
-        List<Transaction> all = dao.findByFilter(currentFilter);
+        final int seq = ++loadSeq;
 
-        BigDecimal income = BigDecimal.ZERO, expense = BigDecimal.ZERO;
-        for (Transaction t : all) {
-            if (t.getType() == Transaction.Type.INCOME)
-                income = income.add(t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO);
-            else expense = expense.add(t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO);
-        }
-        BigDecimal balance = income.subtract(expense);
+        io.execute(() -> {                       // ── background: DB + totals ──
+            List<Transaction> all = new TransactionDao(appCtx).findByFilter(currentFilter);
+            BigDecimal income = BigDecimal.ZERO, expense = BigDecimal.ZERO;
+            for (Transaction t : all) {
+                if (t.getType() == Transaction.Type.INCOME)
+                    income = income.add(t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO);
+                else expense = expense.add(t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO);
+            }
+            final BigDecimal fInc = income, fExp = expense;
 
-        com.expenseos.util.UiUtils.animateAmount(tvTotalIncome, income);
-        com.expenseos.util.UiUtils.animateAmount(tvTotalExpense, expense);
-        com.expenseos.util.UiUtils.animateAmount(tvNetBalance, balance);
+            ui.post(() -> {                      // ── main: UI mattum ──
+                if (!isAdded() || seq != loadSeq) return;   // stale result skip
+                com.expenseos.util.UiUtils.animateAmount(tvTotalIncome, fInc);
+                com.expenseos.util.UiUtils.animateAmount(tvTotalExpense, fExp);
+                com.expenseos.util.UiUtils.animateAmount(tvNetBalance, fInc.subtract(fExp));
 
-        transactions.clear();
-        transactions.addAll(all);
-        adapter.setData(transactions);
-        refreshFilterChips();
-        com.expenseos.util.UiUtils.animateCount(tvEntryCount, all.size(), "Showing %d entries");
-        layoutNoTransactions.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
-        updateForecast(bookId);
-
-        if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).updateBookLabel();
+                transactions.clear();
+                transactions.addAll(all);
+                adapter.setData(transactions);
+                refreshFilterChips();
+                com.expenseos.util.UiUtils.animateCount(tvEntryCount, all.size(), "Showing %d entries");
+                layoutNoTransactions.setVisibility(all.isEmpty() ? View.VISIBLE : View.GONE);
+                updateForecast(bookId);
+                if (getActivity() instanceof MainActivity)
+                    ((MainActivity) getActivity()).updateBookLabel();
+            });
+        });
     }
 
     private void openFilterDialog(int tab, boolean singleField) {
@@ -892,5 +907,17 @@ public class HomeFragment extends Fragment {
             com.expenseos.util.UiUtils.toast(requireContext(), "Storage permission needed to save to Downloads");
         }
         pendingExportAction = null;
+    }
+
+    @Override
+    public void onDestroyView() {
+        ui.removeCallbacks(searchRun);
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onDestroy() {
+        io.shutdownNow();
+        super.onDestroy();
     }
 }

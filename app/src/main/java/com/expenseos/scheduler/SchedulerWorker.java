@@ -586,6 +586,8 @@ public class SchedulerWorker extends Worker {
             }
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
+            outcome.ok = false;
+            outcome.summary = "Cancelled (worker stopped)";
         }
         return outcome;
     }

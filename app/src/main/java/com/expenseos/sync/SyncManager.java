@@ -1981,8 +1981,9 @@ public class SyncManager {
                 + "type=EXCLUDED.type, amount=EXCLUDED.amount, sender=EXCLUDED.sender, raw_body=EXCLUDED.raw_body, "
                 + "remark=EXCLUDED.remark, payment_type=EXCLUDED.payment_type, timestamp_millis=EXCLUDED.timestamp_millis, "
                 + "copied=EXCLUDED.copied";
+        log.info("Starting passbook_entries push...");
         try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
-            int n = 0;
+            int n = 0, pending = 0;
             while (c.moveToNext()) {
                 ps.setLong(1, c.getLong(0));
                 ps.setString(2, c.getString(1));
@@ -1993,9 +1994,14 @@ public class SyncManager {
                 ps.setString(7, c.getString(6));
                 ps.setLong(8, c.getLong(7));
                 ps.setInt(9, c.getInt(8));
-                ps.executeUpdate();
+                ps.addBatch();
                 n++;
+                if (++pending >= 200) {
+                    ps.executeBatch();
+                    pending = 0;
+                }
             }
+            if (pending > 0) ps.executeBatch();
             log.info("passbook_entries: pushed " + n);
             return n;
         }
