@@ -374,6 +374,7 @@ public class LocalDB extends SQLiteOpenHelper {
                 "attachment_name TEXT, " +
                 "chart_path TEXT, " +               // assistant-rendered chart image, if any
                 "provider TEXT, " +                 // which AI provider answered (assistant rows only)
+                "session_id TEXT NOT NULL DEFAULT 'default', " +
                 "created_at TEXT NOT NULL)");
 
         // settlement_links — links a transaction to another transaction it
@@ -1016,7 +1017,10 @@ public class LocalDB extends SQLiteOpenHelper {
                 {"task_events", "created_at", "TEXT DEFAULT (datetime('now'))"},
                 {"task_events", "updated_at", "TEXT DEFAULT (datetime('now'))"},
                 {"task_alarms", "created_at", "TEXT DEFAULT (datetime('now'))"},
-                {"task_alarms", "updated_at", "TEXT DEFAULT (datetime('now'))"}
+                {"task_alarms", "updated_at", "TEXT DEFAULT (datetime('now'))"},
+                // Fresh installs created via onCreate() never got this column
+                {"ai_chat_messages", "session_id", "TEXT NOT NULL DEFAULT 'default'"}
+
         };
 
         for (String[] r : repairs) {
@@ -1219,7 +1223,8 @@ public class LocalDB extends SQLiteOpenHelper {
     public void resyncSequences(String... tables) {
         SQLiteDatabase wdb = getWritableDatabase();
         for (String table : tables) {
-            if (!tableExists(wdb, table)) continue;
+            // Skip tables without an "id" column (e.g. passbook_entries uses sms_id)
+            if (!tableExists(wdb, table) || !isColumnExists(wdb, table, "id")) continue;
             wdb.execSQL(nextIdSql(wdb, table));
         }
     }
