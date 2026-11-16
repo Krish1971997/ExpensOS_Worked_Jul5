@@ -15,7 +15,7 @@ public class LogActivity extends AppCompatActivity {
 
         findViewById(R.id.btnConsoleBack).setOnClickListener(v -> finish());
 
-        if (savedInstanceState() == null) {
+        if (s == null) {
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.consoleFragmentContainer, new ConsoleFragment())
                     .commit();

@@ -65,6 +65,7 @@ dependencies {
 
     implementation 'org.postgresql:postgresql:42.7.13'
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
+    implementation 'com.zoho.accounts.android:zaccountssdk:V3_1'
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.itextpdf:itextpdf:5.5.13.3'
 

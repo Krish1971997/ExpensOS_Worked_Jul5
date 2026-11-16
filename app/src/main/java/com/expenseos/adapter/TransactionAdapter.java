@@ -211,7 +211,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     static class TxnVH extends RecyclerView.ViewHolder {
-        TextView tvDate, tvCat, tvSubCat, tvPaymentType, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments, tvSettleStatus;
+        TextView tvDate, tvCat, tvSubCat, tvPaymentType, tvAmount, tvNote, tvBalance, tvSyncDot, tvAttachments, tvSettleStatus, tvBook;
         View typeBadge;
 
         TxnVH(View v) {
@@ -226,6 +226,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             tvSyncDot = v.findViewById(R.id.tvTxnSyncDot);
             tvAttachments = v.findViewById(R.id.tvTxnAttachments);
             tvSettleStatus = v.findViewById(R.id.tvTxnSettleStatus);
+            tvBook = v.findViewById(R.id.tvTxnBook);
             typeBadge = v.findViewById(R.id.viewTypeBadge);
         }
     }
@@ -283,8 +284,10 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
 
         if (showBookLabel && bookNameCache != null) {
             String bookName = bookNameCache.get(t.getBookId());
-            h.tvNote.setText((t.getNote() != null ? t.getNote() + "  " : "") +
-                    "📒 " + (bookName != null ? bookName : "Book #" + t.getBookId()));
+            h.tvBook.setText("📒 " + (bookName != null ? bookName : "Book #" + t.getBookId()));
+            h.tvBook.setVisibility(View.VISIBLE);
+        } else {
+            h.tvBook.setVisibility(View.GONE);
         }
 
         if (t.getRunningBalance() != null) {
@@ -321,9 +324,7 @@ public class TransactionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
 
         boolean selected = selectedIds.contains(t.getId());
-        if (h.itemView instanceof com.google.android.material.card.MaterialCardView) {
-            com.google.android.material.card.MaterialCardView card =
-                    (com.google.android.material.card.MaterialCardView) h.itemView;
+        if (h.itemView instanceof com.google.android.material.card.MaterialCardView card) {
             float d = ctx.getResources().getDisplayMetrics().density;
             card.setStrokeWidth(selected ? (int) (2 * d + 0.5f) : (int) (1 * d + 0.5f));
             card.setStrokeColor(selected

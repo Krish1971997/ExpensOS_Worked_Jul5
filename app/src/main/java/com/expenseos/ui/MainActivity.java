@@ -3,7 +3,6 @@ package com.expenseos.ui;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
@@ -49,6 +48,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
+        if (!com.expenseos.util.AuthManager.isLoggedIn(this)) {
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
         setContentView(R.layout.activity_main);
         com.expenseos.util.UiUtils.styleStatusBar(getWindow(), this);
         // Splash theme's blue window background shows behind the transparent bars; switch to the app background
@@ -111,9 +115,11 @@ public class MainActivity extends AppCompatActivity {
             showMoreSheet();
         });
 
-        // Global search — screens, masters and transactions in one box.
-        findViewById(R.id.btnGlobalSearch).setOnClickListener(v ->
-                startActivity(new Intent(this, GlobalSearchActivity.class)));
+        // Global search — tap the box or the icon → search screen opens with keyboard.
+        View.OnClickListener openGlobalSearch = v ->
+                startActivity(new Intent(this, GlobalSearchActivity.class));
+        findViewById(R.id.etGlobalSearch).setOnClickListener(openGlobalSearch);
+        findViewById(R.id.btnGlobalSearch).setOnClickListener(openGlobalSearch);
 
         // New Book
         findViewById(R.id.btnNewBook).setOnClickListener(v -> showNewBookDialog());
@@ -324,7 +330,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (h.vStatusBar != null) {
                 int statusColor = androidx.core.content.ContextCompat.getColor(
-                    h.itemView.getContext(), b.isActive() ? R.color.green : R.color.danger);
+                        h.itemView.getContext(), b.isActive() ? R.color.green : R.color.danger);
                 h.vStatusBar.setBackgroundColor(statusColor);
             }
 

@@ -21,15 +21,30 @@
         android:paddingHorizontal="14dp">
 
         <TextView
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
-            android:layout_weight="1"
             android:maxLines="1"
             android:text="📈 ExpenseOS"
             android:textColor="@color/primary"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etGlobalSearch"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_field"
+            android:cursorVisible="false"
+            android:focusable="false"
+            android:hint="Search everything…"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingHorizontal="12dp"
+            android:textSize="13sp" />
 
         <ImageButton
             android:id="@+id/btnGlobalSearch"

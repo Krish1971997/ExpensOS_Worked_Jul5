@@ -58,4 +58,7 @@
     <string name="label_all_synced">✓ All records synced</string>
     <string name="label_active">● Active</string>
     <string name="label_inactive">○ Inactive</string>
+
+    <string name="redir_url">expenseos://oauth</string>
+    <string name="accounts_url">https://accounts.zoho.com</string>
 </resources>

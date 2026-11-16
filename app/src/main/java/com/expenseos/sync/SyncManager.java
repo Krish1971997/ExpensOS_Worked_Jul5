@@ -2201,8 +2201,12 @@ public class SyncManager {
      * used from MainActivity (book list) on a fresh install / after uninstall.
      * Simply a full (no fromDate) pull.
      */
+//    public void restoreAllFromCloud(Context ctx, SyncCallback cb) {
+//        fetchFromCloud(ctx, null, cb);
+//    }
     public void restoreAllFromCloud(Context ctx, SyncCallback cb) {
-        fetchFromCloud(ctx, null, cb);
+        // Restore now goes through the Catalyst gateway (DB credentials stay in function env variables)
+        CloudRestore.restoreAll(ctx, cb);
     }
 
     private static volatile boolean remoteSchemaReady = false;

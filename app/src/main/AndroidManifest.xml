@@ -26,6 +26,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Package visibility: lets the app/SDK detect the Zoho OneAuth app (Android 11+) -->
+    <queries>
+        <package android:name="com.zoho.accounts.oneauth" />
+    </queries>
+
     <application
         android:name=".ExpenseOSApp"
         android:allowBackup="false"
@@ -51,6 +56,23 @@
 
         <!-- Main shell: Bottom Nav + Side Drawer -->
         <activity android:name=".ui.HomeActivity" />
+
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.HandleRedirectActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="expenseos" />
+            </intent-filter>
+        </activity>
 
         <!-- Feature screens -->
         <activity android:name=".ui.TransactionActivity" />

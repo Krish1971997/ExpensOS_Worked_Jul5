@@ -128,6 +128,20 @@
                     android:textColor="@color/text" />
 
                 <TextView
+                    android:id="@+id/tvTxnBook"
+                    style="@style/Text.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/space_3"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:maxWidth="150dp"
+                    android:textColor="@color/primary"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:text="📒 November 2026" />
+
+                <TextView
                     android:id="@+id/tvTxnAttachments"
                     style="@style/Text.Caption"
                     android:layout_width="wrap_content"
