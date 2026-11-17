@@ -56,6 +56,47 @@ public class AppConfig {
         }
         prefs = ctx.getApplicationContext()
                 .getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        migrateSecrets(ctx);
+    }
+
+    private String secret(String key) {
+        return SecretStore.decrypt(prefs.getString(key, ""));
+    }
+
+    /**
+     * Idempotent: pulls secrets from the old duplicate prefs file, encrypts every plaintext secret, deletes the duplicates.
+     */
+    private void migrateSecrets(Context ctx) {
+        try {
+            SharedPreferences legacy = ctx.getApplicationContext()
+                    .getSharedPreferences("expenseos_prefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor e = prefs.edit();
+            if (prefs.getString(KEY_DB_URL, "").isEmpty() && !legacy.getString("db_url", "").isEmpty()) {
+                e.putString(KEY_DB_URL, legacy.getString("db_url", ""));
+                e.putString(KEY_DB_USER, legacy.getString("db_user", ""));
+                e.putString(KEY_DB_PASSWORD, legacy.getString("db_pass", ""));
+            }
+            if (prefs.getString(KEY_GMAIL_APP_PASS, "").isEmpty() && !legacy.getString("gmail_pass", "").isEmpty())
+                e.putString(KEY_GMAIL_APP_PASS, legacy.getString("gmail_pass", ""));
+            e.apply();
+
+            e = prefs.edit();
+            for (java.util.Map.Entry<String, ?> en : prefs.getAll().entrySet()) {
+                String k = en.getKey();
+                boolean isSecret = k.equals(KEY_DB_URL) || k.equals(KEY_DB_USER) || k.equals(KEY_DB_PASSWORD)
+                        || k.equals(KEY_GMAIL_APP_PASS) || k.equals(KEY_ZOHO_CLIENT_SECRET)
+                        || k.equals(KEY_ZOHO_REFRESH_TOKEN) || k.equals(KEY_ODOO_APIKEY)
+                        || k.startsWith(KEY_AI_KEY_PREFIX);
+                if (isSecret && en.getValue() instanceof String v) {
+                    if (!v.isEmpty() && !SecretStore.isEncrypted(v))
+                        e.putString(k, SecretStore.encrypt(v));
+                }
+            }
+            e.apply();
+
+            legacy.edit().remove("db_url").remove("db_user").remove("db_pass").remove("gmail_pass").apply();
+        } catch (Exception ignored) {
+        }
     }
 
     public static AppConfig get(Context ctx) {
@@ -65,15 +106,15 @@ public class AppConfig {
 
     // ── Getters ──────────────────────────────────────────────
     public String getDbUrl() {
-        return prefs.getString(KEY_DB_URL, "");
+        return secret(KEY_DB_URL);
     }
 
     public String getDbUser() {
-        return prefs.getString(KEY_DB_USER, "");
+        return secret(KEY_DB_USER);
     }
 
     public String getDbPassword() {
-        return prefs.getString(KEY_DB_PASSWORD, "");
+        return secret(KEY_DB_PASSWORD);
     }
 
     public String getGmailFrom() {
@@ -81,7 +122,7 @@ public class AppConfig {
     }
 
     public String getGmailAppPass() {
-        return prefs.getString(KEY_GMAIL_APP_PASS, "");
+        return secret(KEY_GMAIL_APP_PASS);
     }
 
     public String getSchedulerAlertEmail() {
@@ -89,7 +130,7 @@ public class AppConfig {
     }
 
     public String getAiKey(String provider) {
-        return prefs.getString(KEY_AI_KEY_PREFIX + provider, "");
+        return secret(KEY_AI_KEY_PREFIX + provider);
     }
 
     public String getAiModel(String provider) {
@@ -125,11 +166,11 @@ public class AppConfig {
     }
 
     public String getZohoClientSecret() {
-        return prefs.getString(KEY_ZOHO_CLIENT_SECRET, "");
+        return secret(KEY_ZOHO_CLIENT_SECRET);
     }
 
     public String getZohoRefreshToken() {
-        return prefs.getString(KEY_ZOHO_REFRESH_TOKEN, "");
+        return secret(KEY_ZOHO_REFRESH_TOKEN);
     }
 
     public String getWorkdriveFolderId() {
@@ -212,7 +253,7 @@ public class AppConfig {
     }
 
     public String getOdooApiKey() {
-        return prefs.getString(KEY_ODOO_APIKEY, "").trim();
+        return secret(KEY_ODOO_APIKEY).trim();
     }
 
     /**
@@ -233,11 +274,12 @@ public class AppConfig {
 
     // ── Setters ──────────────────────────────────────────────
     public void setDb(String url, String user, String pass) {
-        prefs.edit().putString(KEY_DB_URL, url).putString(KEY_DB_USER, user).putString(KEY_DB_PASSWORD, pass).apply();
+        prefs.edit().putString(KEY_DB_URL, SecretStore.encrypt(url)).putString(KEY_DB_USER, SecretStore.encrypt(user))
+                .putString(KEY_DB_PASSWORD, SecretStore.encrypt(pass)).apply();
     }
 
     public void setGmail(String from, String appPass) {
-        prefs.edit().putString(KEY_GMAIL_FROM, from).putString(KEY_GMAIL_APP_PASS, appPass).apply();
+        prefs.edit().putString(KEY_GMAIL_FROM, from).putString(KEY_GMAIL_APP_PASS, SecretStore.encrypt(appPass)).apply();
     }
 
     public void setSchedulerAlertEmail(String email) {
@@ -250,7 +292,7 @@ public class AppConfig {
     public void setAiConfig(String apiKey, String model, String provider) {
         String p = provider == null || provider.isBlank() ? PROVIDER_GEMINI : provider;
         prefs.edit()
-                .putString(KEY_AI_KEY_PREFIX + p, apiKey)
+                .putString(KEY_AI_KEY_PREFIX + p, SecretStore.encrypt(apiKey))
                 .putString(KEY_AI_MODEL_PREFIX + p, model == null || model.isBlank() ? defaultModelFor(p) : model)
                 .putString(KEY_AI_PROVIDER, p)
                 .apply();
@@ -259,8 +301,8 @@ public class AppConfig {
     public void setZoho(String clientId, String secret, String refreshToken, String folderId) {
         prefs.edit()
                 .putString(KEY_ZOHO_CLIENT_ID, clientId)
-                .putString(KEY_ZOHO_CLIENT_SECRET, secret)
-                .putString(KEY_ZOHO_REFRESH_TOKEN, refreshToken)
+                .putString(KEY_ZOHO_CLIENT_SECRET, SecretStore.encrypt(secret))
+                .putString(KEY_ZOHO_REFRESH_TOKEN, SecretStore.encrypt(refreshToken))
                 .putString(KEY_WORKDRIVE_FOLDER_ID, folderId)
                 .apply();
     }
@@ -344,7 +386,7 @@ public class AppConfig {
                 .putString(KEY_ODOO_URL, url)
                 .putString(KEY_ODOO_DB, db)
                 .putString(KEY_ODOO_USER, user)
-                .putString(KEY_ODOO_APIKEY, apiKey)
+                .putString(KEY_ODOO_APIKEY, SecretStore.encrypt(apiKey))
                 .apply();
     }
 

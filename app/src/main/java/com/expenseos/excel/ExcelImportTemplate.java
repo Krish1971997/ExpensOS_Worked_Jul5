@@ -22,8 +22,10 @@ public final class ExcelImportTemplate {
     private static final boolean DEPENDENT_SUBS = true;
     private static final int MATRIX_COL = 10; // K: one column per category that has subcategories
     private static final String SUB_FORMULA =
-            "IFERROR(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,"
-                    + "COUNTA(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,200,1)),1),Reference!$J$2)";
+            "IF(ISNUMBER(MATCH($G2,Reference!$K$1:$ZZ$1,0)),"
+                    + "OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,"
+                    + "MAX(1,COUNTA(OFFSET(Reference!$K$2,0,MATCH($G2,Reference!$K$1:$ZZ$1,0)-1,200,1))),1),"
+                    + "Reference!$J$2)";
 
     private ExcelImportTemplate() {
     }
@@ -267,11 +269,12 @@ public final class ExcelImportTemplate {
             + "<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FF2E7D32\"/><bgColor indexed=\"64\"/></patternFill></fill></fills>"
             + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
             + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
-            + "<cellXfs count=\"5\">"
+            + "<cellXfs count=\"6\">"
             + "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
             + "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"2\" borderId=\"0\" xfId=\"0\" applyFont=\"1\" applyFill=\"1\"/>"
             + "<xf numFmtId=\"164\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
             + "<xf numFmtId=\"165\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
             + "<xf numFmtId=\"2\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
+            + "<xf numFmtId=\"49\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
             + "</cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles></styleSheet>";
 }

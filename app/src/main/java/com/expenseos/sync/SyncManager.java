@@ -77,8 +77,10 @@ public class SyncManager {
             String fromStr = fromDate != null ? fromDate.format(TS_FMT) : null;
 
             int totalRows = 0;
-            try (Connection remote = DBConnection.getInstance().getConnection()) {
-                ensureRemoteSchema(remote);          // while still autocommit, so a later rollback can't undo it
+            try (ConnLease lease = new ConnLease(ctx)) {
+                Connection remote = lease.conn;
+                ensureRemoteSchema(remote);         // while still autocommit, so a later rollback can't undo it
+                prepareCloudKey(ctx, remote);        // sets up / verifies the passbook encryption key
                 remote.setAutoCommit(false);
                 try {
                     // Parent tables first (FK order), then children.
@@ -199,8 +201,10 @@ public class SyncManager {
 
             log.info("Fetched date From : " + fromStr);
             int totalRows = 0;
-            try (Connection remote = DBConnection.getInstance().getConnection()) {
+            try (ConnLease lease = new ConnLease(ctx)) {
+                Connection remote = lease.conn;
                 ensureRemoteSchema(remote);
+                prepareCloudKey(ctx, remote);
                 totalRows += pullCashBooks(remote, local, fromStr);
                 totalRows += pullCategories(remote, local, fromStr);
                 totalRows += pullSubCategories(remote, local, fromStr);
@@ -298,6 +302,88 @@ public class SyncManager {
         });
     }
 
+
+    // ════════════════════════════════════════════════════════════════════
+    // Shared cloud connection (reused by Test Connection + scheduler push/pull)
+    // ════════════════════════════════════════════════════════════════════
+
+    private static Connection sharedConn;           // guarded by SyncManager.class
+    private static final int CONNECT_RETRIES = 3;
+
+    private static synchronized void closeShared() {
+        if (sharedConn != null) {
+            try {
+                sharedConn.close();
+            } catch (Exception ignored) {
+            }
+            sharedConn = null;
+        }
+    }
+
+    /**
+     * Returns the cached connection if it is still alive (e.g. the one opened by
+     * Test Connection). Otherwise opens a new one, retrying a few times because
+     * Neon's compute may be suspended and the first attempt often just wakes it up.
+     */
+    private Connection acquireConnection(Context ctx) throws Exception {
+        synchronized (SyncManager.class) {
+            if (sharedConn != null) {
+                try {
+                    if (!sharedConn.isClosed() && sharedConn.isValid(5)) {
+                        log.info("Reusing existing cloud connection");
+                        return sharedConn;
+                    }
+                } catch (Exception ignored) {
+                }
+                log.warn("Cached cloud connection is dead — reconnecting");
+                closeShared();
+            }
+        }
+
+        DBConnection.getInstance().configureFromAppConfig(ctx);
+        Exception last = null;
+        for (int attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
+            try {
+                Connection c = DBConnection.getInstance().getConnection();
+                if (c != null && c.isValid(10)) {
+                    synchronized (SyncManager.class) {
+                        sharedConn = c;
+                    }
+                    log.info("Cloud connection opened (attempt " + attempt + ")");
+                    return c;
+                }
+            } catch (Exception e) {
+                last = e;
+                log.warn("Connect attempt " + attempt + "/" + CONNECT_RETRIES + " failed: " + e.getMessage());
+            }
+            if (attempt < CONNECT_RETRIES) Thread.sleep(3000L * attempt);   // 3s, 6s
+        }
+        throw last != null ? last : new Exception("Unable to connect to cloud DB");
+    }
+
+    /**
+     * try-with-resources wrapper: hands out the shared connection but does NOT close it.
+     * On close it resets the connection state, and discards it only if it is broken.
+     */
+    private final class ConnLease implements AutoCloseable {
+        final Connection conn;
+
+        ConnLease(Context ctx) throws Exception {
+            this.conn = acquireConnection(ctx);
+        }
+
+        @Override
+        public void close() {
+            try {
+                if (!conn.getAutoCommit()) conn.rollback();   // no-op after a successful commit
+                conn.setAutoCommit(true);
+            } catch (Exception e) {
+                log.warn("Cloud connection unusable after sync — discarding: " + e.getMessage());
+                closeShared();
+            }
+        }
+    }
+
     // ── TEST CONNECTION ─────────────────────────────────────────────────
     public void testConnection(Context ctx, SyncCallback cb) {
         executor.execute(() -> {
@@ -305,6 +391,17 @@ public class SyncManager {
             DBConnection.getInstance().configureFromAppConfig(ctx);
             String err = DBConnection.getInstance().testConnection();
             if (err == null) {
+                // Keep a live connection so scheduler push/pull can reuse it
+                try {
+                    closeShared();
+                    Connection c = DBConnection.getInstance().getConnection();
+                    synchronized (SyncManager.class) {
+                        sharedConn = c;
+                    }
+                    log.info("Test connection kept for reuse by scheduler push/pull");
+                } catch (Exception e) {
+                    log.warn("Could not cache test connection: " + e.getMessage());
+                }
                 log.success("Connection successful!");
                 post(cb, "Connected", true, "Connection successful!");
             } else {
@@ -1982,16 +2079,20 @@ public class SyncManager {
                 + "remark=EXCLUDED.remark, payment_type=EXCLUDED.payment_type, timestamp_millis=EXCLUDED.timestamp_millis, "
                 + "copied=EXCLUDED.copied";
         log.info("Starting passbook_entries push...");
+        if (!CloudCrypto.isEnabled()) {          // never upload bank SMS data in plaintext
+            log.warn("passbook_entries NOT synced — " + CloudKeyring.lastError());
+            return 0;
+        }
         try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
             int n = 0, pending = 0;
             while (c.moveToNext()) {
                 ps.setLong(1, c.getLong(0));
-                ps.setString(2, c.getString(1));
-                ps.setString(3, c.getString(2));
-                ps.setString(4, c.getString(3));
-                ps.setString(5, c.getString(4));
-                ps.setString(6, c.getString(5));
-                ps.setString(7, c.getString(6));
+                ps.setString(2, CloudCrypto.enc(c.getString(1)));
+                ps.setString(3, CloudCrypto.enc(c.getString(2)));
+                ps.setString(4, CloudCrypto.enc(c.getString(3)));
+                ps.setString(5, CloudCrypto.enc(c.getString(4)));
+                ps.setString(6, CloudCrypto.enc(c.getString(5)));
+                ps.setString(7, CloudCrypto.enc(c.getString(6)));
                 ps.setLong(8, c.getLong(7));
                 ps.setInt(9, c.getInt(8));
                 ps.addBatch();
@@ -2009,23 +2110,34 @@ public class SyncManager {
 
     private int pullPassbookEntries(Connection remote, SQLiteDatabase local) throws Exception {
         String sql = "SELECT sms_id, type, amount, sender, raw_body, remark, payment_type, timestamp_millis, copied FROM passbook_entries";
-        int n = 0;
+        int n = 0, skipped = 0;
+        String skipReason = null;
         try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 ContentValues cv = new ContentValues();
-                cv.put("sms_id", rs.getLong("sms_id"));
-                cv.put("type", rs.getString("type"));
-                cv.put("amount", rs.getString("amount"));
-                cv.put("sender", rs.getString("sender"));
-                cv.put("raw_body", rs.getString("raw_body"));
-                cv.put("remark", rs.getString("remark"));
-                cv.put("payment_type", rs.getString("payment_type"));
-                cv.put("timestamp_millis", rs.getLong("timestamp_millis"));
-                cv.put("copied", rs.getInt("copied"));
+                try {
+                    cv.put("sms_id", rs.getLong("sms_id"));
+                    cv.put("type", CloudCrypto.dec(rs.getString("type")));
+                    cv.put("amount", CloudCrypto.dec(rs.getString("amount")));
+                    cv.put("sender", CloudCrypto.dec(rs.getString("sender")));
+                    cv.put("raw_body", CloudCrypto.dec(rs.getString("raw_body")));
+                    cv.put("remark", CloudCrypto.dec(rs.getString("remark")));
+                    cv.put("payment_type", CloudCrypto.dec(rs.getString("payment_type")));
+                    cv.put("timestamp_millis", rs.getLong("timestamp_millis"));
+                    cv.put("copied", rs.getInt("copied"));
+                } catch (
+                        IllegalStateException e) {   // encrypted row but no / wrong key: leave the local row untouched
+                    skipped++;
+                    skipReason = e.getMessage();
+                    continue;
+                }
                 local.insertWithOnConflict("passbook_entries", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
                 n++;
             }
         }
+        if (skipped > 0)
+            log.warn("passbook_entries: " + skipped + " encrypted rows skipped — " + skipReason);
+        log.info("passbook_entries: pulled " + n);
         log.info("passbook_entries: pulled " + n);
         return n;
     }
@@ -2212,11 +2324,19 @@ public class SyncManager {
     private static volatile boolean remoteSchemaReady = false;
 
     /**
-     * Creates the new cloud columns/tables if missing. MUST run while the connection is still in autocommit.
+     * Creates what the cloud needs. MUST run while the connection is still in autocommit.
      */
     private void ensureRemoteSchema(Connection remote) {
         if (remoteSchemaReady) return;
         String[] ddl = {
+                "CREATE TABLE IF NOT EXISTS sync_meta (k VARCHAR(64) PRIMARY KEY, v TEXT NOT NULL)",
+                // ciphertext is longer than the plain value, so these must be TEXT
+                "ALTER TABLE passbook_entries ALTER COLUMN type TYPE TEXT USING type::text",
+                "ALTER TABLE passbook_entries ALTER COLUMN amount TYPE TEXT USING amount::text",
+                "ALTER TABLE passbook_entries ALTER COLUMN sender TYPE TEXT USING sender::text",
+                "ALTER TABLE passbook_entries ALTER COLUMN raw_body TYPE TEXT USING raw_body::text",
+                "ALTER TABLE passbook_entries ALTER COLUMN remark TYPE TEXT USING remark::text",
+                "ALTER TABLE passbook_entries ALTER COLUMN payment_type TYPE TEXT USING payment_type::text",
                 "CREATE TABLE IF NOT EXISTS import_log (id BIGINT PRIMARY KEY, imported_at TIMESTAMP, "
                         + "action TEXT, total_rows INTEGER, success_count INTEGER, failed_count INTEGER, "
                         + "status TEXT, message TEXT)",
@@ -2232,6 +2352,38 @@ public class SyncManager {
             }
         }
         remoteSchemaReady = allOk;
+    }
+
+    /**
+     * sync_meta access for CloudKeyring (salt + passphrase check live in the cloud).
+     */
+    private record JdbcMeta(Connection c) implements CloudKeyring.Meta {
+
+        @Override
+        public String get(String k) throws Exception {
+            try (PreparedStatement ps = c.prepareStatement("SELECT v FROM sync_meta WHERE k=?")) {
+                ps.setString(1, k);
+                try (ResultSet rs = ps.executeQuery()) {
+                    return rs.next() ? rs.getString(1) : null;
+                }
+            }
+        }
+
+        @Override
+        public void putIfAbsent(String k, String v) throws Exception {
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO sync_meta(k, v) VALUES(?, ?) ON CONFLICT (k) DO NOTHING")) {
+                ps.setString(1, k);
+                ps.setString(2, v);
+                ps.executeUpdate();
+            }
+        }
+    }
+
+    private void prepareCloudKey(Context ctx, Connection remote) {
+        String err = CloudKeyring.prepare(new JdbcMeta(remote), CloudLock.get(ctx));
+        if (err != null)
+            log.warn("Cloud encryption not ready: " + err + " — passbook_entries will not sync");
     }
 
     /**

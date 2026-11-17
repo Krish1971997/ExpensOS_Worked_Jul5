@@ -54,36 +54,94 @@ public final class CloudRestore {
     private CloudRestore() {
     }
 
+    public interface Listener {
+        void onProgress(int percent, String message);   // main thread
+
+        void onDone(boolean ok, String summary);        // main thread
+    }
+
+    /**
+     * Old entry point (SyncManager.restoreAllFromCloud): the percentage is shown inside the message text.
+     */
     public static void restoreAll(Context ctx, SyncManager.SyncCallback cb) {
+        restoreAll(ctx, new Listener() {
+            @Override
+            public void onProgress(int percent, String message) {
+                progress(cb, percent + "% - " + message);
+            }
+
+            @Override
+            public void onDone(boolean ok, String summary) {
+                done(cb, ok, summary);
+            }
+        });
+    }
+
+    /**
+     * Number of rows of one cloud table (used for the progress bar and the restore prompt). Background thread.
+     */
+    public static long cloudRowCount(Context ctx, String table) throws Exception {
+        JSONObject res = CatalystClient.post(ctx, "/query", new JSONObject()
+                .put("sql", "SELECT COUNT(*) FROM " + table).put("limit", 1).put("offset", 0));
+        JSONArray rows = res.getJSONArray("rows");
+        return rows.length() == 0 ? 0 : rows.getJSONArray(0).getLong(0);
+    }
+
+    public static void restoreAll(Context ctx, Listener l) {
         final Context app = ctx.getApplicationContext();
         EXECUTOR.execute(() -> {
             LOG.info("=== RESTORE VIA CATALYST STARTED ===");
+            final int nReq = REQUIRED_TABLES.length;
+            final String[] all = new String[nReq + OPTIONAL_TABLES.length];
+            System.arraycopy(REQUIRED_TABLES, 0, all, 0, nReq);
+            System.arraycopy(OPTIONAL_TABLES, 0, all, nReq, OPTIONAL_TABLES.length);
+
+            // Phase 1 (0-10%): count the cloud rows so the bar shows real progress
+            long total = 0;
+            try {
+                for (int i = 0; i < all.length; i++) {
+                    post(l, i * 10 / all.length, "Checking cloud data (" + (i + 1) + "/" + all.length + ")...");
+                    try {
+                        total += cloudRowCount(app, all[i]);
+                    } catch (Exception e) {
+                        if (i < nReq)
+                            throw e;   // required table: a real problem (login / network / DB)
+                        LOG.warn(all[i] + " count skipped: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                LOG.error("Restore failed while counting: " + e.getMessage());
+                finish(l, false, e.getMessage());
+                return;
+            }
+            final Tracker tr = new Tracker(l, total);
+
+            // Phase 2 (10-100%): download
             SQLiteDatabase local = LocalDatabase.get(app).getWritableDatabase();
-            int total = 0;
+            int restored = 0;
             local.beginTransaction();
             try {
-                for (String t : REQUIRED_TABLES) {
-                    progress(cb, "Restoring " + t + "...");
-                    total += pullTable(app, local, t);
-                }
-                for (String t : OPTIONAL_TABLES) {
-                    progress(cb, "Restoring " + t + "...");
-                    try {
-                        total += pullTable(app, local, t);
-                    } catch (Exception e) {
-                        LOG.warn(t + " skipped/failed: " + e.getMessage());
+                for (int i = 0; i < all.length; i++) {
+                    if (i < nReq) {
+                        restored += pullTable(app, local, all[i], tr);
+                    } else {
+                        try {
+                            restored += pullTable(app, local, all[i], tr);
+                        } catch (Exception e) {
+                            LOG.warn(all[i] + " skipped/failed: " + e.getMessage());
+                        }
                     }
                 }
                 local.setTransactionSuccessful();
             } catch (Exception e) {
                 LOG.error("Restore failed, rolled back: " + e.getMessage());
                 local.endTransaction();
-                done(cb, false, e.getMessage());
+                finish(l, false, e.getMessage());
                 return;
             }
             local.endTransaction();
 
-            // Keep local autoincrement sequences ahead of the restored ids
+            post(l, 99, "Finishing...");
             try {
                 com.expenseos.db.LocalDB.getInstance(app).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
@@ -97,16 +155,42 @@ public final class CloudRestore {
                 LOG.warn("resyncSequences failed: " + e.getMessage());
             }
 
-            String summary = "Restored " + total + " rows across all tables";
+            String summary = "Restored " + restored + " rows across all tables";
             LOG.success("=== RESTORE DONE - " + summary + " ===");
-            done(cb, true, summary);
+            post(l, 100, "Done");
+            finish(l, true, summary);
         });
+    }
+
+    private static final class Tracker {
+        private final Listener l;
+        private final long total;
+        private long done;
+
+        Tracker(Listener l, long total) {
+            this.l = l;
+            this.total = total;
+        }
+
+        void add(int rows, String table) {
+            done += rows;
+            int pct = 10 + (int) (89L * Math.min(done, total) / Math.max(1L, total));
+            post(l, pct, "Restoring " + table + " (" + done + " / " + total + " rows)");
+        }
+    }
+
+    private static void post(Listener l, int percent, String msg) {
+        if (l != null) MAIN.post(() -> l.onProgress(Math.max(0, Math.min(100, percent)), msg));
+    }
+
+    private static void finish(Listener l, boolean ok, String summary) {
+        if (l != null) MAIN.post(() -> l.onDone(ok, summary));
     }
 
     /**
      * Pages through "SELECT * FROM table" on the server and upserts into the local table.
      */
-    private static int pullTable(Context app, SQLiteDatabase local, String table) throws Exception {
+    private static int pullTable(Context app, SQLiteDatabase local, String table, Tracker tr) throws Exception {
         Set<String> localCols = localColumns(local, table);
         if (localCols.isEmpty()) {
             LOG.warn(table + ": no local table, skipped");
@@ -118,6 +202,7 @@ public final class CloudRestore {
         int n = 0;
         int offset = 0;
         boolean more = true;
+        tr.add(0, table);   // show the table name straight away
         while (more) {
             // The server only allows this exact "SELECT ... FROM <table>" shape
             JSONObject body = new JSONObject()
@@ -142,6 +227,7 @@ public final class CloudRestore {
                 local.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
                 n++;
             }
+            tr.add(rows.length(), table);
             more = res.optBoolean("more", false);
             offset += pageSize;
         }

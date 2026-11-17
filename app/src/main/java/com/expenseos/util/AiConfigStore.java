@@ -11,17 +11,17 @@ import java.util.List;
 
 /**
  * Persistence for the multi-model / multi-key AI configuration.
- *
+ * <p>
  * Storage format (SharedPreferences "expenseos_config", one JSON blob):
- *   ai.config.v2 = {"activeProvider":"gemini","models":[
- *       {"provider":"gemini","model":"gemini-2.0-flash",
- *        "keys":[{"key":"…","desc":"test@gmail.com"}, …]}, …]}
- *
+ * ai.config.v2 = {"activeProvider":"gemini","models":[
+ * {"provider":"gemini","model":"gemini-2.0-flash",
+ * "keys":[{"key":"…","desc":"test@gmail.com"}, …]}, …]}
+ * <p>
  * Backward compatibility: on first read the legacy per-provider slots
  * (ai.key.<provider> / ai.model.<provider>, one key+model per provider) are
  * migrated into the v2 structure (one model, one key each) — the legacy keys
  * are kept intact so an upgrade never destroys existing settings.
- *
+ * <p>
  * NOTE: keys are stored the same way the existing app already stores its
  * single API key (SharedPreferences). This preserves the existing security
  * design; no new exposure is introduced.
@@ -38,7 +38,9 @@ public class AiConfigStore {
                 .getSharedPreferences("expenseos_config", Context.MODE_PRIVATE);
     }
 
-    /** In-memory working copy (edited by the Config UI, persisted on save). */
+    /**
+     * In-memory working copy (edited by the Config UI, persisted on save).
+     */
     public static class AiConfig {
         public String activeProvider = AppConfig.PROVIDER_GEMINI;
         public final List<AiModelConfig> models = new ArrayList<>();
@@ -51,13 +53,22 @@ public class AiConfigStore {
         }
     }
 
-    /** Loads the config, migrating legacy storage transparently. Never returns null. */
+    /**
+     * Loads the config, migrating legacy storage transparently. Never returns null.
+     */
     public synchronized AiConfig load() {
-        String raw = prefs.getString(KEY_V2, null);
+        String stored = prefs.getString(KEY_V2, null);
+        String raw = SecretStore.decrypt(stored);          // old plaintext blobs pass through unchanged
+        if (SecretStore.isEncrypted(stored) && (raw == null || raw.isEmpty())) {
+            // Keystore key lost: never overwrite the stored blob; the user re-enters the keys
+            return new AiConfig();
+        }
         if (raw != null && !raw.isBlank()) {
             try {
                 AiConfig cfg = parse(raw);
                 ensureSane(cfg);
+                if (stored != null && !SecretStore.isEncrypted(stored))
+                    prefs.edit().putString(KEY_V2, SecretStore.encrypt(raw)).apply();   // one-time: encrypt the old plaintext blob
                 return cfg;
             } catch (Exception ignored) {
                 // fall through to legacy migration
@@ -70,7 +81,7 @@ public class AiConfigStore {
 
     public synchronized void save(AiConfig cfg) {
         try {
-            prefs.edit().putString(KEY_V2, serialize(cfg)).apply();
+            prefs.edit().putString(KEY_V2, SecretStore.encrypt(serialize(cfg))).apply();
             if (cfg.activeProvider != null && !cfg.activeProvider.isBlank()) {
                 // keep the legacy flag in sync for any older readers
                 prefs.edit().putString(LEGACY_ACTIVE, cfg.activeProvider).apply();
@@ -153,7 +164,7 @@ public class AiConfigStore {
                 AppConfig.PROVIDER_CLAUDE, AppConfig.PROVIDER_GENSPARK
         };
         for (String p : providers) {
-            String key = prefs.getString("ai.key." + p, "");
+            String key = SecretStore.decrypt(prefs.getString("ai.key." + p, ""));
             String model = prefs.getString("ai.model." + p, "");
             if (key == null || key.isBlank()) continue;
             if (model == null || model.isBlank()) model = new AppConfig(null).defaultModelFor(p);

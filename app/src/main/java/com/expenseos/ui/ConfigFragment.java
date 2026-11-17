@@ -29,6 +29,7 @@ import androidx.fragment.app.Fragment;
 
 import com.expenseos.R;
 import com.expenseos.android.timesheet.OdooClient;
+import com.expenseos.sync.CloudLock;
 import com.expenseos.util.AppConfig;
 import com.expenseos.util.AppLockManager;
 
@@ -61,6 +62,7 @@ public class ConfigFragment extends Fragment {
     private androidx.appcompat.widget.SwitchCompat swAppLock, swAppLockBio;
     private View rowAppLockBio, rowAppLockPin, rowAppLockTimeout;
     private TextView tvAppLockTimeout;
+    private TextView tvCloudPassStatus;
     private final ActivityResultLauncher<Intent> lockLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                     r -> refreshAppLockUi());
@@ -82,6 +84,40 @@ public class ConfigFragment extends Fragment {
         setupButtons();
         setupAlarmSettings(v);
         setupAppLockSettings(v);
+        setupCloudEncryptionSettings(v);
+    }
+
+    private void setupCloudEncryptionSettings(View v) {
+        View anchor = rowAppLockTimeout != null ? rowAppLockTimeout : v.findViewById(R.id.rowPreAlarm);
+        if (anchor == null || !(anchor.getParent() instanceof LinearLayout parent)) return;
+        if (parent.getOrientation() != LinearLayout.VERTICAL) return;
+        Context ctx = requireContext();
+        int at = parent.indexOfChild(anchor) + 1;
+
+        TextView header = new TextView(ctx);
+        header.setText("CLOUD ENCRYPTION");
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        header.setTypeface(header.getTypeface(), android.graphics.Typeface.BOLD);
+        header.setTextColor(ctx.getColor(R.color.primary));
+        header.setPadding(anchor.getPaddingLeft(), appLockDp(16), anchor.getPaddingRight(), appLockDp(4));
+
+        LinearLayout row = appLockRow(anchor, "Passbook cloud passphrase");
+        tvCloudPassStatus = new TextView(ctx);
+        tvCloudPassStatus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        tvCloudPassStatus.setTextColor(ctx.getColor(R.color.text_muted));
+        row.addView(tvCloudPassStatus);
+
+        ViewGroup.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        parent.addView(header, at++, lp);
+        parent.addView(row, at, new LinearLayout.LayoutParams(lp));
+        row.setOnClickListener(x -> CloudLock.showDialog(requireActivity(), this::refreshCloudPassUi));
+        refreshCloudPassUi();
+    }
+
+    private void refreshCloudPassUi() {
+        if (tvCloudPassStatus == null || !isAdded()) return;
+        tvCloudPassStatus.setText(CloudLock.isSet(requireContext()) ? "Set" : "Not set — passbook won't sync");
     }
 
     /**
@@ -370,11 +406,12 @@ public class ConfigFragment extends Fragment {
     }
 
     private void loadSavedValues() {
-        etDbUrl.setText(prefs.getString("db_url", ""));
-        etDbUser.setText(prefs.getString("db_user", ""));
-        etDbPass.setText(prefs.getString("db_pass", ""));
+        AppConfig secCfg = AppConfig.get(requireContext());
+        etDbUrl.setText(secCfg.getDbUrl());
+        etDbUser.setText(secCfg.getDbUser());
+        etDbPass.setText(secCfg.getDbPassword());
         etGmailFrom.setText(prefs.getString("gmail_from", ""));
-        etGmailPass.setText(prefs.getString("gmail_pass", ""));
+        etGmailPass.setText(secCfg.getGmailAppPass());
         etAlertEmail.setText(AppConfig.get(requireContext()).getSchedulerAlertEmail());
 
         AppConfig cfg = AppConfig.get(requireContext());
@@ -471,9 +508,10 @@ public class ConfigFragment extends Fragment {
         saveDbPrefs();
         saveGmailPrefs();
 
-        String url = prefs.getString("db_url", "");
-        String user = prefs.getString("db_user", "");
-        String pass = prefs.getString("db_pass", "");
+        AppConfig secCfg = AppConfig.get(requireContext());
+        String url = secCfg.getDbUrl();
+        String user = secCfg.getDbUser();
+        String pass = secCfg.getDbPassword();
 
         if (url.isEmpty()) {
             showResult(tvSyncConfigStatus, "✗ DB URL not configured!", false);
@@ -543,11 +581,6 @@ public class ConfigFragment extends Fragment {
         String pass = etDbPass.getText().toString().trim();
 
         AppConfig.get(requireContext()).setDb(url, user, pass);
-        prefs.edit()
-                .putString("db_url", url)
-                .putString("db_user", user)
-                .putString("db_pass", pass)
-                .apply();
     }
 
     private void saveGmailPrefs() {
@@ -557,10 +590,7 @@ public class ConfigFragment extends Fragment {
 
         AppConfig.get(requireContext()).setGmail(from, pass);
         AppConfig.get(requireContext()).setSchedulerAlertEmail(alertEmail);
-        prefs.edit()
-                .putString("gmail_from", from)
-                .putString("gmail_pass", pass)
-                .apply();
+        prefs.edit().putString("gmail_from", from).apply();   // not a secret; "Sync Config to DB" uses it
     }
 
     private void saveOdooPrefs() {

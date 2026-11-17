@@ -4,8 +4,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -114,6 +116,23 @@ public class LockActivity extends AppCompatActivity {
             return true;
         });
 
+        // Auto-submit: once the typed digits reach the expected length, no button press needed
+        pinInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                int expected = expectedPinLength();
+                if (expected > 0 && e.length() == expected && pinInput.isEnabled()) onPrimary();
+            }
+        });
+
         error = new TextView(this);
         error.setGravity(Gravity.CENTER);
         error.setTextColor(androidx.core.content.ContextCompat.getColor(this, R.color.danger));
@@ -147,6 +166,16 @@ public class LockActivity extends AppCompatActivity {
         setContentView(sv);
     }
 
+
+    /**
+     * Digits after which we auto-submit; 0 = unknown (new-PIN stage still needs the button).
+     */
+    private int expectedPinLength() {
+        if (stage == STAGE_VERIFY) return AppLockManager.getPinLength(this);
+        if (stage == STAGE_CONFIRM && firstPin != null) return firstPin.length();
+        return 0;
+    }
+
     private void render() {
         boolean verify = stage == STAGE_VERIFY;
         if (verify) {
@@ -165,6 +194,8 @@ public class LockActivity extends AppCompatActivity {
         }
         error.setText("");
         pinInput.setText("");
+        // Button only needed while PIN length is unknown / being chosen
+        primary.setVisibility(expectedPinLength() > 0 ? View.GONE : View.VISIBLE);
         biometricBtn.setVisibility(verify && mode != MODE_SETUP
                 && AppLockManager.isBiometricEnabled(this) && canUseBiometric()
                 ? View.VISIBLE : View.GONE);

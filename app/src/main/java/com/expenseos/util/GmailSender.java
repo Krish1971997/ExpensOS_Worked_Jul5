@@ -2,12 +2,10 @@ package com.expenseos.util;
 
 import android.content.Context;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Properties;
 
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
-import javax.mail.BodyPart;
 import javax.mail.Message;
 import javax.mail.Multipart;
 import javax.mail.PasswordAuthentication;
@@ -27,23 +25,14 @@ import javax.mail.util.ByteArrayDataSource;
  */
 public class GmailSender {
 
-    public static class Attachment {
-        public final String fileName;
-        public final byte[] data;
-        public final String mimeType;
-
-        public Attachment(String fileName, byte[] data, String mimeType) {
-            this.fileName = fileName;
-            this.data = data;
-            this.mimeType = mimeType;
-        }
+    public record Attachment(String fileName, byte[] data, String mimeType) {
     }
 
     /**
-     * @param toAddress   recipient — defaults to the configured Gmail address
-     *                    itself if null/blank (send-to-self is the common case)
-     * @param htmlBody    email body, rendered as HTML
-     * @param attachment  optional single attachment (PDF/XLSX), null for none
+     * @param toAddress  recipient — defaults to the configured Gmail address
+     *                   itself if null/blank (send-to-self is the common case)
+     * @param htmlBody   email body, rendered as HTML
+     * @param attachment optional single attachment (PDF/XLSX), null for none
      */
     public static void send(Context ctx, String toAddress, String subject, String htmlBody, Attachment attachment) throws Exception {
         com.expenseos.util.AppConfig cfg = com.expenseos.util.AppConfig.get(ctx);
@@ -58,6 +47,8 @@ public class GmailSender {
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.starttls.required", "true");          // never fall back to plaintext SMTP
+        props.put("mail.smtp.ssl.checkserveridentity", "true");    // verify the server certificate's host name
         props.put("mail.smtp.host", "smtp.gmail.com");
         props.put("mail.smtp.port", "587");
 

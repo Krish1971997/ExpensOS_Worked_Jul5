@@ -22,13 +22,19 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
 public class ExcelImportService {
@@ -79,6 +85,22 @@ public class ExcelImportService {
         subDao = new SubCategoryDao(this.ctx);
         txnDao = new TransactionDao(this.ctx);
         logDao = new ImportLogDao(this.ctx);
+    }
+
+    /**
+     * "Food › Breakfast" -> "Breakfast"; plain names unchanged.
+     */
+    private static String subOnly(String s) {
+        int i = s.indexOf('›');
+        return i >= 0 ? s.substring(i + 1).trim() : s;
+    }
+
+    /**
+     * "Food › Breakfast" -> "Food"; null when the value has no label prefix.
+     */
+    private static String subLabelCategory(String s) {
+        int i = s.indexOf('›');
+        return i > 0 ? s.substring(0, i).trim() : null;
     }
 
     // ── 1. Update Excel — refreshes the "Reference" sheet (dropdown source lists); Import rows untouched ──
@@ -294,7 +316,7 @@ public class ExcelImportService {
     }
 
     private static final int IMPORT_LAST_ROW = 1000;
-    private static final int DV_VERSION = 2; // bump to force re-applying dropdowns to every file
+    private static final int DV_VERSION = 3; // bump to force re-applying dropdowns to every file
 
     /**
      * Re-applies Import-sheet dropdowns + validation when the lists changed (or were never applied).
@@ -319,10 +341,14 @@ public class ExcelImportService {
         } catch (Exception ignored) {
         }
 
-        pickFromRef(rid, A, "A", ref.cashbooks.size());      // Reference col A = Cashbooks
+        if (!ref.cashbooks.isEmpty()) {   // fixed items: shows the real names even if the Reference cells were converted to dates
+            JSONArray books = new JSONArray();
+            for (String name : ref.cashbooks) books.put(new JSONObject().put("value", name));
+            sheet.setPicklistItems(rid, IMPORT_SHEET, A, books);
+        }
         pickFromRef(rid, F, "B", ref.paymentTypes.size());   // B = Payment Types
         pickFromRef(rid, G, "C", ref.categories.size());     // C = Categories
-        pickFromRef(rid, H, "D", ref.subCategories.size());  // D = Subcategories
+        pickFromRef(rid, H, "E", ref.subLabels.size());      // E = "Category › Subcategory" labels
 
         JSONArray types = new JSONArray()
                 .put(new JSONObject().put("value", "INCOME").put("font_color", "#000000").put("fill_color", "#C8E6C9"))
@@ -389,8 +415,15 @@ public class ExcelImportService {
 
     // ── validation ──
     public void validate(List<ImportRow> rows) {
-        Map<String, CashBook> books = new HashMap<>();
-        for (CashBook b : bookDao.findAll()) books.put(key(b.getName()), b);
+        Map<String, CashBook> books = new HashMap<>();          // exact name (lower-case)
+        Map<String, CashBook> booksByMonth = new HashMap<>();   // tolerant key, see bookKey()
+        Set<String> ambiguousMonth = new HashSet<>();
+        for (CashBook b : bookDao.findAll()) {
+            books.put(key(b.getName()), b);
+            String bk = bookKey(b.getName());
+            if (booksByMonth.containsKey(bk)) ambiguousMonth.add(bk);
+            else booksByMonth.put(bk, b);
+        }
         Map<String, String> payments = new HashMap<>();
         for (PaymentType pt : ptDao.findAll()) payments.put(key(pt.getName()), pt.getName());
         Map<String, List<Category>> cats = new HashMap<>();
@@ -413,7 +446,15 @@ public class ExcelImportService {
             if (r.cashbook.isEmpty()) err.add("Cashbook is required");
             else {
                 book = books.get(key(r.cashbook));
-                if (book == null) err.add("Cashbook '" + r.cashbook + "' not found");
+                boolean amb = false;
+                if (book == null) {   // Zoho/Excel may have turned "June 2026" into a date/number
+                    String bk = bookKey(r.cashbook);
+                    if (ambiguousMonth.contains(bk)) amb = true;
+                    else book = booksByMonth.get(bk);
+                }
+                if (amb)
+                    err.add("Cashbook '" + r.cashbook + "' matches more than one cashbook — type the full name as text");
+                else if (book == null) err.add("Cashbook '" + r.cashbook + "' not found");
                 else if (!book.isActive()) {
                     err.add("Cashbook '" + book.getName() + "' is inactive");
                     book = null;
@@ -483,9 +524,12 @@ public class ExcelImportService {
                         if (subIn.isEmpty())
                             err.add("Subcategory is required for '" + chosen.getName() + "'");
                         else {
+                            String lc = subLabelCategory(r.subCategory);
+                            if (lc != null && !key(lc).equals(key(chosen.getName())))
+                                err.add("Subcategory '" + r.subCategory + "' is for '" + lc + "', not '" + chosen.getName() + "'");
                             SubCategory m = null;
                             for (SubCategory s : sl)
-                                if (key(s.getName()).equals(key(subIn))) {
+                                if (key(s.getName()).equals(key(subOnly(r.subCategory)))) {
                                     m = s;
                                     break;
                                 }
@@ -599,6 +643,42 @@ public class ExcelImportService {
         t.setBookId(r.bookId);
         t.setPaymentType(r.canonicalPaymentType);
         return t;
+    }
+
+    private static final DateTimeFormatter[] DAY_FMTS = {
+            DateTimeFormatter.ofPattern("d/M/yyyy"), DateTimeFormatter.ofPattern("d-M-yyyy"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd")};
+    private static final DateTimeFormatter[] MONTH_FMTS = {
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("MMMM yyyy").toFormatter(Locale.ENGLISH),
+            new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("MMM yyyy").toFormatter(Locale.ENGLISH)};
+
+    /**
+     * "June 2026", "Jun 2026", 46174 (date serial) and "1/6/2026" all become the same key "ym:2026-06".
+     */
+    private static String bookKey(String raw) {
+        String s = key(raw);
+        if (s.startsWith("'")) s = s.substring(1).trim();
+        try {
+            if (s.matches("\\d{5}")) {
+                LocalDate d = LocalDate.of(1899, 12, 30).plusDays(Long.parseLong(s));
+                if (d.getDayOfMonth() == 1) return "ym:" + YearMonth.from(d);
+            }
+            for (DateTimeFormatter f : DAY_FMTS) {
+                try {
+                    LocalDate d = LocalDate.parse(s, f);
+                    if (d.getDayOfMonth() == 1) return "ym:" + YearMonth.from(d);
+                } catch (Exception ignored) {
+                }
+            }
+            for (DateTimeFormatter f : MONTH_FMTS) {
+                try {
+                    return "ym:" + YearMonth.parse(s, f);
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return s;
     }
 
     private static String key(String s) {

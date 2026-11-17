@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle s) {
         super.onCreate(s);
-        if (!com.expenseos.util.AuthManager.isLoggedIn(this)) {
+        if (!com.expenseos.util.AuthManager.isLoggedIn(this) || !AppConfig.get(this).isConfigured()) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
             return;
@@ -475,9 +475,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doCloudRestore() {
-        Toast.makeText(this, "Restoring from cloud…", Toast.LENGTH_SHORT).show();
-        com.expenseos.sync.SyncManager.get().restoreAllFromCloud(this, (ok, summary) -> {
-            Toast.makeText(this, ok ? "✔ " + summary : "✘ " + summary, Toast.LENGTH_LONG).show();
+        RestoreProgressDialog.run(this, ok -> {
             if (ok) loadBooks();
         });
     }

@@ -29,6 +29,7 @@ public final class AppLockManager {
     private static final String K_TIMEOUT = "lock.timeout.sec";
     private static final String K_FAILS = "lock.fails";
     private static final String K_LOCK_UNTIL = "lock.until";
+    private static final String K_PIN_LEN = "lock.pin.len";
     private static final int ITERATIONS = 100_000;
 
     private static volatile boolean unlocked = false;
@@ -106,6 +107,7 @@ public final class AppLockManager {
                     .putString(K_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
                     .putString(K_HASH, Base64.encodeToString(h, Base64.NO_WRAP))
                     .putBoolean(K_ENABLED, true)
+                    .putInt(K_PIN_LEN, pin.length())
                     .putInt(K_FAILS, 0)
                     .putLong(K_LOCK_UNTIL, 0)
                     .apply();
@@ -117,7 +119,7 @@ public final class AppLockManager {
     public static void disable(Context ctx) {
         prefs(ctx).edit()
                 .putBoolean(K_ENABLED, false)
-                .remove(K_SALT).remove(K_HASH)
+                .remove(K_SALT).remove(K_HASH).remove(K_PIN_LEN)
                 .putInt(K_FAILS, 0).putLong(K_LOCK_UNTIL, 0)
                 .apply();
         unlocked = true;
@@ -148,6 +150,13 @@ public final class AppLockManager {
         }
         e.apply();
         return fails >= MAX_FREE_ATTEMPTS ? Result.LOCKED_OUT : Result.WRONG;
+    }
+
+    /**
+     * Length of the saved PIN (0 = unknown, e.g. PIN saved before this change) — used for auto-unlock.
+     */
+    public static int getPinLength(Context ctx) {
+        return prefs(ctx).getInt(K_PIN_LEN, 0);
     }
 
     public static int attemptsLeft(Context ctx) {
