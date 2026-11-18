@@ -59,8 +59,18 @@ public class AppConfig {
         migrateSecrets(ctx);
     }
 
+    /**
+     * Reads a string pref. Plain values pass through unchanged; "ks1:" values are decrypted
+     * (up to 3 layers, in case a value was wrapped more than once). Decrypt failure -> "".
+     */
+    private String plain(String key, String def) {
+        String v = prefs.getString(key, def);
+        for (int i = 0; i < 3 && SecretStore.isEncrypted(v); i++) v = SecretStore.decrypt(v);
+        return v == null ? def : v;
+    }
+
     private String secret(String key) {
-        return SecretStore.decrypt(prefs.getString(key, ""));
+        return plain(key, "");
     }
 
     /**
@@ -118,7 +128,7 @@ public class AppConfig {
     }
 
     public String getGmailFrom() {
-        return prefs.getString(KEY_GMAIL_FROM, "");
+        return plain(KEY_GMAIL_FROM, "");
     }
 
     public String getGmailAppPass() {
@@ -126,7 +136,7 @@ public class AppConfig {
     }
 
     public String getSchedulerAlertEmail() {
-        return prefs.getString(KEY_SCHEDULER_ALERT_EMAIL, "");
+        return plain(KEY_SCHEDULER_ALERT_EMAIL, "");
     }
 
     public String getAiKey(String provider) {
@@ -134,11 +144,13 @@ public class AppConfig {
     }
 
     public String getAiModel(String provider) {
-        return prefs.getString(KEY_AI_MODEL_PREFIX + provider, defaultModelFor(provider));
+        String m = plain(KEY_AI_MODEL_PREFIX + provider, "");
+        return m.isEmpty() ? defaultModelFor(provider) : m;
     }
 
     public String getAiProvider() {
-        return prefs.getString(KEY_AI_PROVIDER, PROVIDER_GEMINI);
+        String p = plain(KEY_AI_PROVIDER, PROVIDER_GEMINI);
+        return p.isEmpty() ? PROVIDER_GEMINI : p;
     }
 
     String defaultModelFor(String provider) { // package-private: reused by legacy migration
@@ -162,7 +174,7 @@ public class AppConfig {
     }
 
     public String getZohoClientId() {
-        return prefs.getString(KEY_ZOHO_CLIENT_ID, "");
+        return plain(KEY_ZOHO_CLIENT_ID, "");
     }
 
     public String getZohoClientSecret() {
@@ -174,7 +186,7 @@ public class AppConfig {
     }
 
     public String getWorkdriveFolderId() {
-        return prefs.getString(KEY_WORKDRIVE_FOLDER_ID, "");
+        return plain(KEY_WORKDRIVE_FOLDER_ID, "");
     }
 
     /**
@@ -192,7 +204,7 @@ public class AppConfig {
      * All files: comma / semicolon / newline separated in the same Config field.
      */
     public java.util.List<String> getImportExcelFileNames() {
-        String raw = prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
+        String raw = plain(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         if (raw != null) for (String part : raw.split("[,;\\n]")) {
             String n = part.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
@@ -206,7 +218,7 @@ public class AppConfig {
      * Raw text exactly as saved (may hold several comma-separated names), for the Config screen.
      */
     public String getImportExcelFileNamesRaw() {
-        return prefs.getString(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
+        return plain(KEY_IMPORT_EXCEL_FILE_NAME, DEFAULT_IMPORT_EXCEL_FILE_NAME);
     }
 
     public int getBackupHour() {
@@ -237,19 +249,19 @@ public class AppConfig {
     }
 
     public String getActiveBookName() {
-        return prefs.getString(KEY_ACTIVE_BOOK_NAME, "General");
+        return plain(KEY_ACTIVE_BOOK_NAME, "General");
     }
 
     public String getOdooUrl() {
-        return prefs.getString(KEY_ODOO_URL, "").trim();
+        return plain(KEY_ODOO_URL, "").trim();
     }
 
     public String getOdooDb() {
-        return prefs.getString(KEY_ODOO_DB, "").trim();
+        return plain(KEY_ODOO_DB, "").trim();
     }
 
     public String getOdooUser() {
-        return prefs.getString(KEY_ODOO_USER, "").trim();
+        return plain(KEY_ODOO_USER, "").trim();
     }
 
     public String getOdooApiKey() {

@@ -36,7 +36,9 @@ import java.util.Map;
 public class MainActivity extends AppCompatActivity {
 
     private CashBookDao dao;
-    private List<CashBook> books;
+    private List<CashBook> books = new java.util.ArrayList<>();
+    private final Map<Integer, Map<String, BigDecimal>> summaries = new java.util.HashMap<>();
+    private int loadSeq = 0;   // ignore results of older, overlapping loads
     private String search = null;
     private String sort = null; // null=updated, name_asc, balance_desc, balance_asc, created
     private static final int REQ_SMS_PERMISSION = 101;
@@ -230,12 +232,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadBooks() {
-        books = dao.findAll(search, sort);
-        RecyclerView rv = findViewById(R.id.rvBooks);
-        rv.setItemAnimator(new androidx.recyclerview.widget.DefaultItemAnimator());
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setAdapter(new BookAdapter());
-        rv.scheduleLayoutAnimation(); // staggered fall-down entrance
+        final int seq = ++loadSeq;
+        final String s = search, so = sort;
+        new Thread(() -> {
+            // all DB work off the main thread
+            List<CashBook> list = dao.findAll(s, so);
+            Map<Integer, Map<String, BigDecimal>> sums = new java.util.HashMap<>();
+            for (CashBook b : list) sums.put(b.getId(), dao.getSummary(b.getId()));
+
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || seq != loadSeq) return; // stale result
+                books = list;
+                summaries.clear();
+                summaries.putAll(sums);
+                RecyclerView rv = findViewById(R.id.rvBooks);
+                rv.setItemAnimator(new androidx.recyclerview.widget.DefaultItemAnimator());
+                rv.setLayoutManager(new LinearLayoutManager(this));
+                rv.setAdapter(new BookAdapter());
+                rv.scheduleLayoutAnimation(); // staggered fall-down entrance
+            });
+        }).start();
     }
 
     // ── Sort dialog ───────────────────────────────────────
@@ -315,7 +331,8 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(VH h, int pos) {
             CashBook b = books.get(pos);
-            Map<String, BigDecimal> sum = dao.getSummary(b.getId());
+            Map<String, BigDecimal> sum = summaries.containsKey(b.getId())
+                    ? summaries.get(b.getId()) : new java.util.HashMap<>();
             BigDecimal income = sum.getOrDefault("income", BigDecimal.ZERO);
             BigDecimal expense = sum.getOrDefault("expense", BigDecimal.ZERO);
             BigDecimal net = income.subtract(expense);
@@ -457,7 +474,7 @@ public class MainActivity extends AppCompatActivity {
 
         new AlertDialog.Builder(this)
                 .setTitle("☁ Restore from Cloud")
-                .setMessage("Enter your Neon DB credentials to pull down all cash books, categories, and transactions.")
+                .setMessage("This will pull down all cash books, categories, and transactions from the cloud.")
                 .setView(v)
                 .setPositiveButton("Restore", (d, w) -> {
                     String url = etUrl.getText().toString().trim();

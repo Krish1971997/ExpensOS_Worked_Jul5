@@ -3,6 +3,7 @@ package com.expenseos.sync;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Handler;
 import android.os.Looper;
@@ -45,7 +46,7 @@ public final class CloudRestore {
     };
 
     private static final int PAGE_SIZE = 500;
-    private static final int PAGE_SIZE_BLOBS = 25; // receipts carry base64 file data
+    private static final int PAGE_SIZE_BLOBS = 3; // receipts carry base64 file data
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -91,6 +92,8 @@ public final class CloudRestore {
         final Context app = ctx.getApplicationContext();
         EXECUTOR.execute(() -> {
             LOG.info("=== RESTORE VIA CATALYST STARTED ===");
+            LOG.info("CloudRestore build v3 (FK debug)");
+            LOG.info("=== RESTORE VIA CATALYST STARTED ===");
             final int nReq = REQUIRED_TABLES.length;
             final String[] all = new String[nReq + OPTIONAL_TABLES.length];
             System.arraycopy(REQUIRED_TABLES, 0, all, 0, nReq);
@@ -102,7 +105,9 @@ public final class CloudRestore {
                 for (int i = 0; i < all.length; i++) {
                     post(l, i * 10 / all.length, "Checking cloud data (" + (i + 1) + "/" + all.length + ")...");
                     try {
-                        total += cloudRowCount(app, all[i]);
+                        long cnt = cloudRowCount(app, all[i]);
+                        LOG.info("cloud count: " + all[i] + " = " + cnt);
+                        total += cnt;
                     } catch (Exception e) {
                         if (i < nReq)
                             throw e;   // required table: a real problem (login / network / DB)
@@ -121,6 +126,8 @@ public final class CloudRestore {
             int restored = 0;
             local.beginTransaction();
             try {
+                // FK is checked only at the end, so one bad row doesn't stop the loading
+                local.execSQL("PRAGMA defer_foreign_keys = ON");
                 for (int i = 0; i < all.length; i++) {
                     if (i < nReq) {
                         restored += pullTable(app, local, all[i], tr);
@@ -132,6 +139,10 @@ public final class CloudRestore {
                         }
                     }
                 }
+                // list ALL orphan rows before commit
+                int bad = logFkViolations(local);
+                if (bad > 0)
+                    throw new Exception(bad + " foreign key violations (see FK_DEBUG lines above)");
                 local.setTransactionSuccessful();
             } catch (Exception e) {
                 LOG.error("Restore failed, rolled back: " + e.getMessage());
@@ -199,6 +210,9 @@ public final class CloudRestore {
         boolean hasSynced = localCols.contains("synced");
         int pageSize = table.equals("transaction_receipts") ? PAGE_SIZE_BLOBS : PAGE_SIZE;
 
+        // transactions only: ids that really exist (sub_categories is already restored at this point)
+        Set<Long> validSubIds = table.equals("transactions") ? loadIds(local, "sub_categories") : null;
+
         int n = 0;
         int offset = 0;
         boolean more = true;
@@ -209,7 +223,8 @@ public final class CloudRestore {
                     .put("sql", "SELECT * FROM " + table)
                     .put("limit", pageSize)
                     .put("offset", offset);
-            JSONObject res = CatalystClient.post(app, "/query", body);
+
+            JSONObject res = postWithRetry(app, "/query", body, table + " offset=" + offset);
 
             JSONArray cols = res.getJSONArray("cols");
             JSONArray types = res.getJSONArray("types");
@@ -224,7 +239,28 @@ public final class CloudRestore {
                     put(cv, col, types.getString(c), row.get(c));
                 }
                 if (hasSynced && !cv.containsKey("synced")) cv.put("synced", 1);
-                local.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+
+                // repair: transaction points to a sub-category that doesn't exist in the cloud
+                if (validSubIds != null && cv.get("sub_categories_id") != null) {
+                    long sid = cv.getAsLong("sub_categories_id");
+                    if (!validSubIds.contains(sid)) {
+                        LOG.warn("REPAIR --> transaction " + cv.get("id") + ": sub_category "
+                                + sid + " not found, set to NULL");
+                        cv.putNull("sub_categories_id");
+                    }
+                }
+
+                try {
+                    local.insertWithOnConflict(table, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                } catch (Exception e) {
+                    String data = String.valueOf(cv);
+                    if (data.length() > 400) data = data.substring(0, 400) + "...";
+                    LOG.error("FAILED_ROW --> table=" + table + " row#" + (offset + r)
+                            + " error=" + e.getMessage());
+                    LOG.error("FAILED_ROW --> data: " + data);
+                    logMissingParents(local, table, cv);
+                    throw e;
+                }
                 n++;
             }
             tr.add(rows.length(), table);
@@ -286,4 +322,87 @@ public final class CloudRestore {
     private static void done(SyncManager.SyncCallback cb, boolean ok, String summary) {
         if (cb != null) MAIN.post(() -> cb.onComplete(ok, summary));
     }
+
+    /**
+     * Runs PRAGMA foreign_key_check and logs every orphan row. Returns the violation count.
+     */
+    private static int logFkViolations(SQLiteDatabase db) {
+        int n = 0;
+        try (Cursor c = db.rawQuery("PRAGMA foreign_key_check", null)) {
+            while (c.moveToNext()) {
+                n++;
+                if (n <= 50) {   // don't flood the console
+                    LOG.error("FK_DEBUG --> child table=[" + c.getString(0)
+                            + "] id=[" + c.getLong(1)
+                            + "] missing parent table=[" + c.getString(2) + "]");
+                }
+            }
+        }
+        if (n > 50) LOG.error("FK_DEBUG --> ... and " + (n - 50) + " more");
+        LOG.info("FK_DEBUG --> total violations: " + n);
+        return n;
+    }
+
+    /**
+     * For a failed row: checks each FK column of that row and says which parent id is missing.
+     */
+    private static void logMissingParents(SQLiteDatabase db, String table, ContentValues cv) {
+        try (Cursor c = db.rawQuery("PRAGMA foreign_key_list(" + table + ")", null)) {
+            int iTable = c.getColumnIndexOrThrow("table");
+            int iFrom = c.getColumnIndexOrThrow("from");
+            int iTo = c.getColumnIndexOrThrow("to");
+            while (c.moveToNext()) {
+                String parent = c.getString(iTable);
+                String from = c.getString(iFrom);
+                String to = c.isNull(iTo) ? "id" : c.getString(iTo);
+                Object val = cv.get(from);
+                if (val == null) {
+                    LOG.info("FK_DEBUG --> " + table + "." + from + " = NULL (ok)");
+                    continue;
+                }
+                long cnt = DatabaseUtils.longForQuery(db,
+                        "SELECT COUNT(*) FROM " + parent + " WHERE " + to + "=?",
+                        new String[]{String.valueOf(val)});
+                LOG.info("FK_DEBUG --> " + table + "." + from + " = " + val + " -> "
+                        + parent + "." + to + (cnt > 0 ? " exists" : "  ❌ MISSING"));
+            }
+        } catch (Exception e) {
+            LOG.warn("FK_DEBUG --> parent check failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Same as CatalystClient.post, but retries a failed page (network drop / timeout). Safe because SELECT is idempotent.
+     */
+    private static JSONObject postWithRetry(Context app, String path, JSONObject body, String label) throws Exception {
+        final int MAX = 4;
+        Exception last = null;
+        for (int attempt = 1; attempt <= MAX; attempt++) {
+            try {
+                long t0 = System.currentTimeMillis();
+                JSONObject res = CatalystClient.post(app, path, body);
+                long ms = System.currentTimeMillis() - t0;
+                if (ms > 5000) LOG.info("SLOW --> " + label + " took " + ms + " ms");
+                return res;
+            } catch (Exception e) {
+                last = e;
+                LOG.warn("RETRY --> " + label + " attempt " + attempt + "/" + MAX
+                        + " failed: " + e.getMessage());
+                if (attempt < MAX) Thread.sleep(2000L * attempt);   // 2s, 4s, 6s
+            }
+        }
+        throw last;
+    }
+
+    /**
+     * All ids currently in a local table.
+     */
+    private static Set<Long> loadIds(SQLiteDatabase db, String table) {
+        Set<Long> ids = new HashSet<>();
+        try (Cursor c = db.rawQuery("SELECT id FROM " + table, null)) {
+            while (c.moveToNext()) ids.add(c.getLong(0));
+        }
+        return ids;
+    }
+
 }

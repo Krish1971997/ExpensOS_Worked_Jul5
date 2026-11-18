@@ -3,7 +3,6 @@ package com.expenseos;
 import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
-import android.view.WindowManager;
 
 import com.expenseos.ui.AlarmRingActivity;
 import com.expenseos.ui.LockActivity;
@@ -28,9 +27,9 @@ public class ExpenseOSApp extends Application implements Application.ActivityLif
     public void onActivityCreated(Activity a, Bundle b) {
         // Hides content in Recents and blocks screenshots while app lock is on.
         // Remove this block if you want screenshots allowed.
-        if (AppLockManager.isEnabled(this)) {
-            a.getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,
-                    WindowManager.LayoutParams.FLAG_SECURE);
+        // Screenshots stay allowed. With app lock on, only the Recents thumbnail is hidden (Android 13+).
+        if (AppLockManager.isEnabled(this) && android.os.Build.VERSION.SDK_INT >= 33) {
+            a.setRecentsScreenshotEnabled(false);
         }
     }
 

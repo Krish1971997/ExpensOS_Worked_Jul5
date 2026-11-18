@@ -22,9 +22,8 @@ import java.util.List;
  * migrated into the v2 structure (one model, one key each) — the legacy keys
  * are kept intact so an upgrade never destroys existing settings.
  * <p>
- * NOTE: keys are stored the same way the existing app already stores its
- * single API key (SharedPreferences). This preserves the existing security
- * design; no new exposure is introduced.
+ * NOTE: the whole JSON blob is encrypted with SecretStore (AES-256-GCM, Android Keystore key).
+ * An old plaintext blob is encrypted on first load.
  */
 public class AiConfigStore {
 
@@ -81,6 +80,10 @@ public class AiConfigStore {
 
     public synchronized void save(AiConfig cfg) {
         try {
+            // Never overwrite a blob we cannot read (Keystore key lost / temporary Keystore error) with an EMPTY config.
+            String stored = prefs.getString(KEY_V2, null);
+            if (cfg.models.isEmpty() && SecretStore.isEncrypted(stored) && SecretStore.decrypt(stored).isEmpty())
+                return;
             prefs.edit().putString(KEY_V2, SecretStore.encrypt(serialize(cfg))).apply();
             if (cfg.activeProvider != null && !cfg.activeProvider.isBlank()) {
                 // keep the legacy flag in sync for any older readers

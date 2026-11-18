@@ -86,6 +86,7 @@ public class SyncManager {
                     // Parent tables first (FK order), then children.
                     log.info("Starting cash_books push...");
                     totalRows += pushCashBooks(local, remote, fromStr);
+                    log.info("Finished cash_books push...");
 
                     log.info("Starting categories push...");
                     totalRows += pushCategories(local, remote, fromStr);
@@ -2084,7 +2085,8 @@ public class SyncManager {
             return 0;
         }
         try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
-            int n = 0, pending = 0;
+            int n = 0;
+            int pending = 0;
             while (c.moveToNext()) {
                 ps.setLong(1, c.getLong(0));
                 ps.setString(2, CloudCrypto.enc(c.getString(1)));
