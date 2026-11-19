@@ -477,12 +477,12 @@ public class ConfigFragment extends Fragment {
 
         saveDbPrefs();
         setButtonState(btnTestConnection, false, "Testing…");
-        showResult(tvConnectionResult, "⏳ Connecting to Neon DB…", null);
+        showResult(tvConnectionResult, "⏳ Connecting to Supabase DB…", null);
 
         saveDbPrefs();
         final boolean strict = swStrictTls.isChecked();   // read the switch on the main thread
         setButtonState(btnTestConnection, false, "Testing…");
-        showResult(tvConnectionResult, "⏳ Connecting to Neon DB…", null);
+        showResult(tvConnectionResult, "⏳ Connecting to Supabase DB…", null);
 
         exec.execute(() -> {
             String result;
@@ -530,7 +530,7 @@ public class ConfigFragment extends Fragment {
         }
 
         setButtonState(btnSyncConfigToDb, false, "Syncing…");
-        showResult(tvSyncConfigStatus, "⏳ Pushing config to Neon DB…", null);
+        showResult(tvSyncConfigStatus, "⏳ Pushing config to Supabase DB…", null);
 
         exec.execute(() -> {
             String result;
@@ -570,7 +570,7 @@ public class ConfigFragment extends Fragment {
                 }
                 ps.executeBatch();
                 conn.close();
-                result = "✓ Config synced to Neon DB! (" + configs.length + " settings)";
+                result = "✓ Config synced to Supabase DB! (" + configs.length + " settings)";
                 ok = true;
             } catch (Exception e) {
                 result = "✗ Sync failed: " + e.getMessage();
