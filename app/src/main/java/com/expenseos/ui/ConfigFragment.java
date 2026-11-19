@@ -32,6 +32,7 @@ import com.expenseos.android.timesheet.OdooClient;
 import com.expenseos.sync.CloudLock;
 import com.expenseos.util.AppConfig;
 import com.expenseos.util.AppLockManager;
+import com.expenseos.util.DBConnection;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -56,7 +57,9 @@ public class ConfigFragment extends Fragment {
 
     // Status & AI Spinner views
     private Button btnTestConnection, btnSyncConfigToDb;
+
     private TextView tvConnectionResult, tvSyncConfigStatus;
+    private androidx.appcompat.widget.SwitchCompat swStrictTls;
 
     // App Lock rows (built in code)
     private androidx.appcompat.widget.SwitchCompat swAppLock, swAppLockBio;
@@ -182,7 +185,7 @@ public class ConfigFragment extends Fragment {
         copy.setLayoutParams(new LinearLayout.LayoutParams(iconSize, iconSize));
         copy.setPadding(iconPad, iconPad, iconPad, iconPad);
         copy.setBackgroundResource(android.R.color.transparent);
-        copy.setImageResource(android.R.drawable.ic_menu_save);
+        copy.setImageResource(R.drawable.ic_copy);
         copy.setContentDescription("Copy");
         copy.setOnClickListener(v -> copyToClipboard(et.getText().toString()));
         row.addView(copy);
@@ -403,6 +406,7 @@ public class ConfigFragment extends Fragment {
         btnSyncConfigToDb = v.findViewById(R.id.btnSyncConfigToDb);
         tvConnectionResult = v.findViewById(R.id.tvConnectionResult);
         tvSyncConfigStatus = v.findViewById(R.id.tvSyncConfigStatus);
+        swStrictTls = v.findViewById(R.id.swCfgStrictTls);
     }
 
     private void loadSavedValues() {
@@ -410,7 +414,9 @@ public class ConfigFragment extends Fragment {
         etDbUrl.setText(secCfg.getDbUrl());
         etDbUser.setText(secCfg.getDbUser());
         etDbPass.setText(secCfg.getDbPassword());
-        etGmailFrom.setText(prefs.getString("gmail_from", ""));
+        swStrictTls.setChecked(secCfg.isStrictTls());
+        String gf = secCfg.getGmailFrom();
+        etGmailFrom.setText(gf.isEmpty() ? prefs.getString("gmail_from", "") : gf);
         etGmailPass.setText(secCfg.getGmailAppPass());
         etAlertEmail.setText(AppConfig.get(requireContext()).getSchedulerAlertEmail());
 
@@ -473,12 +479,20 @@ public class ConfigFragment extends Fragment {
         setButtonState(btnTestConnection, false, "Testing…");
         showResult(tvConnectionResult, "⏳ Connecting to Neon DB…", null);
 
+        saveDbPrefs();
+        final boolean strict = swStrictTls.isChecked();   // read the switch on the main thread
+        setButtonState(btnTestConnection, false, "Testing…");
+        showResult(tvConnectionResult, "⏳ Connecting to Neon DB…", null);
+
         exec.execute(() -> {
             String result;
             boolean ok;
             try {
-                Class.forName("org.postgresql.Driver");
-                Connection conn = DriverManager.getConnection(url, user, pass);
+                // Use DBConnection so the test uses the same TLS settings as the rest of the app
+                DBConnection db = DBConnection.getInstance();
+                db.configure(url, user, pass);
+                db.setStrictTls(strict);
+                Connection conn = db.getConnection();
                 ResultSet rs = conn.createStatement()
                         .executeQuery("SELECT COUNT(*) FROM transactions");
                 rs.next();
@@ -486,9 +500,6 @@ public class ConfigFragment extends Fragment {
                 conn.close();
                 result = "✓ Connected! Transactions in DB: " + cnt;
                 ok = true;
-            } catch (ClassNotFoundException e) {
-                result = "✗ Driver not found: " + e.getMessage();
-                ok = false;
             } catch (Exception e) {
                 result = "✗ " + e.getMessage();
                 ok = false;
@@ -543,6 +554,7 @@ public class ConfigFragment extends Fragment {
                         {"auto.sync.enabled", Boolean.toString(prefs.getBoolean("auto_sync", false))},
                         {"app.display.name", prefs.getString("app_name", "ExpenseOS")},
                         {"gmail.from", prefs.getString("gmail_from", "")},
+                        {"db.strict.tls", Boolean.toString(secCfg.isStrictTls())},
                 };
 
                 PreparedStatement ps = conn.prepareStatement(
@@ -569,7 +581,7 @@ public class ConfigFragment extends Fragment {
             final boolean finalOk = ok;
             mainHandler.post(() -> {
                 if (!isAdded() || getView() == null) return;
-                setButtonState(btnSyncConfigToDb, true, "☁ Save All + Sync Config to DB");
+                setButtonState(btnSyncConfigToDb, true, "☁ Sync Config to DB");
                 showResult(tvSyncConfigStatus, finalResult, finalOk);
             });
         });
@@ -581,6 +593,7 @@ public class ConfigFragment extends Fragment {
         String pass = etDbPass.getText().toString().trim();
 
         AppConfig.get(requireContext()).setDb(url, user, pass);
+        AppConfig.get(requireContext()).setStrictTls(swStrictTls.isChecked());
     }
 
     private void saveGmailPrefs() {

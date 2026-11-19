@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.util.Base64;
 
 import com.expenseos.dao.LocalDatabase;
+import com.expenseos.util.AppConfig;
 import com.expenseos.util.CatalystClient;
 import com.expenseos.util.ConsoleLogger;
 
@@ -153,6 +154,19 @@ public final class CloudRestore {
             local.endTransaction();
 
             post(l, 99, "Finishing...");
+
+            // Restore the Strict TLS setting from the cloud app_config table (optional: table or row may not exist)
+            try {
+                JSONObject cfgRes = CatalystClient.post(app, "/query", new JSONObject()
+                        .put("sql", "SELECT value FROM app_config WHERE key = 'db.strict.tls'")
+                        .put("limit", 1).put("offset", 0));
+                JSONArray cfgRows = cfgRes.getJSONArray("rows");
+                if (cfgRows.length() > 0)
+                    AppConfig.get(app).setStrictTls("true".equalsIgnoreCase(cfgRows.getJSONArray(0).getString(0)));
+            } catch (Exception e) {
+                LOG.warn("strict_tls restore skipped: " + e.getMessage());
+            }
+
             try {
                 com.expenseos.db.LocalDB.getInstance(app).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
@@ -216,6 +230,7 @@ public final class CloudRestore {
         int n = 0;
         int offset = 0;
         boolean more = true;
+        boolean warnedNoId = false;
         tr.add(0, table);   // show the table name straight away
         while (more) {
             // The server only allows this exact "SELECT ... FROM <table>" shape
@@ -234,9 +249,14 @@ public final class CloudRestore {
                 JSONArray row = rows.getJSONArray(r);
                 ContentValues cv = new ContentValues();
                 for (int c = 0; c < cols.length(); c++) {
-                    String col = cols.getString(c);
+                    String col = localName(table, cols.getString(c));
                     if (!localCols.contains(col)) continue; // cloud-only column
                     put(cv, col, types.getString(c), row.get(c));
+                }
+                if (localCols.contains("id") && !cv.containsKey("id") && !warnedNoId) {
+                    LOG.warn("ID_DEBUG --> " + table + ": cloud rows have no 'id' column, "
+                            + "local ids will be auto-assigned (column name mismatch?)");
+                    warnedNoId = true;
                 }
                 if (hasSynced && !cv.containsKey("synced")) cv.put("synced", 1);
 
@@ -304,6 +324,14 @@ public final class CloudRestore {
                 cv.put(col, s);
             }
         }
+    }
+
+    /**
+     * Cloud column name -> local column name, where the two schemas differ.
+     */
+    private static String localName(String table, String cloudCol) {
+        if (table.equals("sub_categories") && cloudCol.equals("sub_categories_id")) return "id";
+        return cloudCol;
     }
 
     private static Set<String> localColumns(SQLiteDatabase db, String table) {

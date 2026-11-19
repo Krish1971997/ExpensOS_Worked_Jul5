@@ -102,6 +102,8 @@ public class BackupManager {
                 backup.put("app_config", tableToJson(db, "app_config"));
                 backup.put("ai_chat_messages", tableToJson(db, "ai_chat_messages"));
                 backup.put("settlement_links", tableToJson(db, "settlement_links"));
+                if (com.expenseos.sync.CloudLock.getSalt(ctx) != null)
+                    backup.put("cloud_salt", com.expenseos.sync.CloudLock.getSalt(ctx));
                 backup.put("import_log", tableToJson(db, "import_log"));
                 backup.put("card_mappings", tableToJson(db, "card_mappings"));
 
@@ -258,6 +260,9 @@ public class BackupManager {
             restoreTable(db, "app_config", backup.optJSONArray("app_config"));
             restoreTable(db, "ai_chat_messages", backup.optJSONArray("ai_chat_messages"));
             restoreTable(db, "settlement_links", backup.optJSONArray("settlement_links"));
+            String restoredSalt = backup.optString("cloud_salt", "");
+            if (!restoredSalt.isEmpty() && com.expenseos.sync.CloudLock.getSalt(ctx) == null)
+                com.expenseos.sync.CloudLock.setSalt(ctx, restoredSalt);
             restoreTable(db, "import_log", backup.optJSONArray("import_log"));
             restoreTable(db, "card_mappings", backup.optJSONArray("card_mappings"));
 

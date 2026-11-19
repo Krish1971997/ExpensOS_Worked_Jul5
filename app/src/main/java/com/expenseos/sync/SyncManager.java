@@ -2080,21 +2080,22 @@ public class SyncManager {
                 + "remark=EXCLUDED.remark, payment_type=EXCLUDED.payment_type, timestamp_millis=EXCLUDED.timestamp_millis, "
                 + "copied=EXCLUDED.copied";
         log.info("Starting passbook_entries push...");
-        if (!CloudCrypto.isEnabled()) {          // never upload bank SMS data in plaintext
+        if (!CloudKeyring.isCloudReady()) {      // passphrase not verified against the cloud: never upload bank SMS data
             log.warn("passbook_entries NOT synced — " + CloudKeyring.lastError());
             return 0;
         }
+        PassbookVault.encryptPending(local);     // every local row is ciphertext before it leaves the phone
         try (Cursor c = rawQuery(local, sel, null); PreparedStatement ps = remote.prepareStatement(sql)) {
             int n = 0;
             int pending = 0;
             while (c.moveToNext()) {
                 ps.setLong(1, c.getLong(0));
-                ps.setString(2, CloudCrypto.enc(c.getString(1)));
-                ps.setString(3, CloudCrypto.enc(c.getString(2)));
-                ps.setString(4, CloudCrypto.enc(c.getString(3)));
-                ps.setString(5, CloudCrypto.enc(c.getString(4)));
-                ps.setString(6, CloudCrypto.enc(c.getString(5)));
-                ps.setString(7, CloudCrypto.enc(c.getString(6)));
+                ps.setString(2, c.getString(1));     // already ciphertext: copied as-is
+                ps.setString(3, c.getString(2));
+                ps.setString(4, c.getString(3));
+                ps.setString(5, c.getString(4));
+                ps.setString(6, c.getString(5));
+                ps.setString(7, c.getString(6));
                 ps.setLong(8, c.getLong(7));
                 ps.setInt(9, c.getInt(8));
                 ps.addBatch();
@@ -2111,35 +2112,29 @@ public class SyncManager {
     }
 
     private int pullPassbookEntries(Connection remote, SQLiteDatabase local) throws Exception {
+        if (!CloudKeyring.isCloudReady()) {
+            log.warn("passbook_entries NOT pulled — " + CloudKeyring.lastError());
+            return 0;
+        }
         String sql = "SELECT sms_id, type, amount, sender, raw_body, remark, payment_type, timestamp_millis, copied FROM passbook_entries";
-        int n = 0, skipped = 0;
-        String skipReason = null;
+        int n = 0;
         try (PreparedStatement ps = prep(remote, sql, null); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 ContentValues cv = new ContentValues();
-                try {
-                    cv.put("sms_id", rs.getLong("sms_id"));
-                    cv.put("type", CloudCrypto.dec(rs.getString("type")));
-                    cv.put("amount", CloudCrypto.dec(rs.getString("amount")));
-                    cv.put("sender", CloudCrypto.dec(rs.getString("sender")));
-                    cv.put("raw_body", CloudCrypto.dec(rs.getString("raw_body")));
-                    cv.put("remark", CloudCrypto.dec(rs.getString("remark")));
-                    cv.put("payment_type", CloudCrypto.dec(rs.getString("payment_type")));
-                    cv.put("timestamp_millis", rs.getLong("timestamp_millis"));
-                    cv.put("copied", rs.getInt("copied"));
-                } catch (
-                        IllegalStateException e) {   // encrypted row but no / wrong key: leave the local row untouched
-                    skipped++;
-                    skipReason = e.getMessage();
-                    continue;
-                }
+                cv.put("sms_id", rs.getLong("sms_id"));
+                cv.put("type", rs.getString("type"));              // ciphertext is stored as-is; only the UI decrypts
+                cv.put("amount", rs.getString("amount"));
+                cv.put("sender", rs.getString("sender"));
+                cv.put("raw_body", rs.getString("raw_body"));
+                cv.put("remark", rs.getString("remark"));
+                cv.put("payment_type", rs.getString("payment_type"));
+                cv.put("timestamp_millis", rs.getLong("timestamp_millis"));
+                cv.put("copied", rs.getInt("copied"));
                 local.insertWithOnConflict("passbook_entries", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
                 n++;
             }
         }
-        if (skipped > 0)
-            log.warn("passbook_entries: " + skipped + " encrypted rows skipped — " + skipReason);
-        log.info("passbook_entries: pulled " + n);
+        PassbookVault.encryptPending(local);     // old plaintext rows still in the cloud get encrypted on the phone
         log.info("passbook_entries: pulled " + n);
         return n;
     }
@@ -2383,9 +2378,32 @@ public class SyncManager {
     }
 
     private void prepareCloudKey(Context ctx, Connection remote) {
-        String err = CloudKeyring.prepare(new JdbcMeta(remote), CloudLock.get(ctx));
-        if (err != null)
+        String err = CloudKeyring.prepare(new JdbcMeta(remote), CloudLock.get(ctx), CloudLock.getSalt(ctx));
+        if (err == null) {
+            if (CloudLock.getSalt(ctx) == null) CloudLock.setSalt(ctx, CloudKeyring.lastSalt());
+        } else {
             log.warn("Cloud encryption not ready: " + err + " — passbook_entries will not sync");
+            CloudLock.unlockLocal(ctx);      // the phone's own encrypted data must stay readable even when the cloud is not
+        }
+    }
+
+    /**
+     * Called from the Config dialog (background thread): creates/reads the shared salt and verifies the passphrase. Returns null on success.
+     */
+    public static String establishCloudKey(Context ctx, char[] pass) {
+        try {
+            DBConnection.getInstance().configureFromAppConfig(ctx);
+            try (Connection remote = DBConnection.getInstance().getConnection()) {
+                try (java.sql.Statement st = remote.createStatement()) {
+                    st.execute("CREATE TABLE IF NOT EXISTS sync_meta (k VARCHAR(64) PRIMARY KEY, v TEXT NOT NULL)");
+                }
+                String err = CloudKeyring.prepare(new JdbcMeta(remote), pass, CloudLock.getSalt(ctx));
+                if (err == null) CloudLock.setSalt(ctx, CloudKeyring.lastSalt());
+                return err;
+            }
+        } catch (Exception e) {
+            return "Could not reach the cloud database — connect to the internet and try again (" + e.getMessage() + ")";
+        }
     }
 
     /**

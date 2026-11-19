@@ -374,6 +374,13 @@ public class ExcelImportService {
                 REFERENCE_SHEET, refCol + "2:" + refCol + (1 + count));
     }
 
+    /**
+     * Zoho parses CSV like typed input ("June 2026" becomes a date); a text formula keeps it text.
+     */
+    private static String asText(String v) {
+        return !v.isEmpty() && bookKey(v).startsWith("ym:") ? "=\"" + v.replace("\"", "\"\"") + "\"" : v;
+    }
+
     private void refreshReferenceSheet(String rid, ReferenceData ref) throws Exception {
         int oldLast = 1;
         for (Map<String, String> m : sheet.fetchRecords(rid, REFERENCE_SHEET))
@@ -383,7 +390,7 @@ public class ExcelImportService {
                 Math.max(ref.categories.size(), ref.subCategories.size())), ref.subLabels.size());
         List<String[]> rows = new ArrayList<>();
         for (int i = 0; i < n; i++)
-            rows.add(new String[]{cell(ref.cashbooks, i), cell(ref.paymentTypes, i),
+            rows.add(new String[]{asText(cell(ref.cashbooks, i)), cell(ref.paymentTypes, i),
                     cell(ref.categories, i), cell(ref.subCategories, i), cell(ref.subLabels, i)});
 
         try {

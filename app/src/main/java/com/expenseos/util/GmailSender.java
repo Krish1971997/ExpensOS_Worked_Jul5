@@ -51,6 +51,9 @@ public class GmailSender {
         props.put("mail.smtp.ssl.checkserveridentity", "true");    // verify the server certificate's host name
         props.put("mail.smtp.host", "smtp.gmail.com");
         props.put("mail.smtp.port", "587");
+        props.put("mail.smtp.connectiontimeout", "20000");   // dead network la worker hang aagaama
+        props.put("mail.smtp.timeout", "30000");
+        props.put("mail.smtp.writetimeout", "30000");
 
         Session session = Session.getInstance(props, new javax.mail.Authenticator() {
             @Override

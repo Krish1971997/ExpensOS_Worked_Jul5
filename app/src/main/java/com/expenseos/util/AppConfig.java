@@ -46,6 +46,9 @@ public class AppConfig {
     public static final String KEY_ODOO_USER = "odoo.user";
     public static final String KEY_ODOO_APIKEY = "odoo.apikey";
 
+    // DB: verify the server certificate chain and host name (sslmode=verify-full)
+    public static final String KEY_STRICT_TLS = "db.strict.tls";
+
     private final SharedPreferences prefs;
     private static AppConfig instance;
 
@@ -400,6 +403,14 @@ public class AppConfig {
                 .putString(KEY_ODOO_USER, user)
                 .putString(KEY_ODOO_APIKEY, SecretStore.encrypt(apiKey))
                 .apply();
+    }
+
+    public boolean isStrictTls() {
+        return prefs.getBoolean(KEY_STRICT_TLS, false);
+    }
+
+    public void setStrictTls(boolean on) {
+        prefs.edit().putBoolean(KEY_STRICT_TLS, on).apply();
     }
 
     public boolean isConfigured() {

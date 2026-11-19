@@ -63,17 +63,32 @@ public final class ConfigDownloader {
             groups++;
         }
 
-        // AI keys: setAiConfig() also makes that provider active, so the chosen AI_PROVIDER is applied last
-        for (String p : AI_PROVIDERS) {
-            String key = v.optString(aiVar(p, "KEY"), "");
-            if (key.isEmpty()) continue;
-            cfg.setAiConfig(key, v.optString(aiVar(p, "MODEL"), ""), p);
+        // AI: AI_CONFIG (full multi-model / multi-key JSON) wins over the old single-key variables
+        String aiJson = v.optString("AI_CONFIG", "").trim();
+        if (!aiJson.isEmpty()) {
+            AiConfigStore.AiConfig ai;
+            try {
+                ai = AiConfigStore.parse(aiJson);
+            } catch (Exception e) {
+                throw new IOException("AI_CONFIG env variable is not valid JSON: " + e.getMessage());
+            }
+            if (ai.models.isEmpty()) throw new IOException("AI_CONFIG has no models");
+            new AiConfigStore(ctx).save(ai);
             groups++;
+        } else {
+            // Old style: one key + model per provider. setAiConfig() also makes that provider active,
+            // so the chosen AI_PROVIDER is applied last.
+            for (String p : AI_PROVIDERS) {
+                String key = v.optString(aiVar(p, "KEY"), "");
+                if (key.isEmpty()) continue;
+                cfg.setAiConfig(key, v.optString(aiVar(p, "MODEL"), ""), p);
+                groups++;
+            }
+            String active = v.optString("AI_PROVIDER", "").trim().toLowerCase(Locale.ROOT);
+            String activeKey = active.isEmpty() ? "" : v.optString(aiVar(active, "KEY"), "");
+            if (!activeKey.isEmpty())
+                cfg.setAiConfig(activeKey, v.optString(aiVar(active, "MODEL"), ""), active);
         }
-        String active = v.optString("AI_PROVIDER", "").trim().toLowerCase(Locale.ROOT);
-        String activeKey = active.isEmpty() ? "" : v.optString(aiVar(active, "KEY"), "");
-        if (!activeKey.isEmpty())
-            cfg.setAiConfig(activeKey, v.optString(aiVar(active, "MODEL"), ""), active);
 
         return groups;
     }

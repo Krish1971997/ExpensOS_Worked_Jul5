@@ -5,6 +5,7 @@ import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.expenseos.R;
+import com.expenseos.util.ConfigExporter;
 
 /**
  * Hosts ConfigFragment (DB/Gmail config) as a standalone screen. Needed
@@ -20,6 +21,7 @@ public class ConfigActivity extends AppCompatActivity {
         setContentView(R.layout.activity_config);
 
         findViewById(R.id.btnConfigBack).setOnClickListener(v -> finish());
+        findViewById(R.id.btnConfigExport).setOnClickListener(v -> ConfigExporter.start(this));
 
         if (savedInstanceState == null) {
             getSupportFragmentManager().beginTransaction()

@@ -50,7 +50,7 @@ public class AlarmService extends Service {
     private static final String CHANNEL_ID = "task_alarm_v2";
     private static final String SNOOZE_CHANNEL = "task_snooze_v2";
     private static final int SNOOZE_NOTIF_BASE = 110000;
-    private static final long MAX_RING_MS = 2 * 60 * 1000L;
+    private static final long MAX_RING_MS = 5 * 60 * 1000L;
     private static final long SNOOZE_MS = 10 * 60 * 1000L;
 
     private long rampMs = 30_000L;       // Config → Alarm → Gradually increase volume (0 = off)
@@ -147,7 +147,8 @@ public class AlarmService extends Service {
         ringing = true;
         ringStartedAt = SystemClock.elapsedRealtime();
         NotificationManagerCompat.from(this).cancel(SNOOZE_NOTIF_BASE + (int) taskId);
-        registerScreenOff();
+        // screen-off auto-snooze removed: screen timeout was silently snoozing the alarm.
+        // Alarm now rings until Dismiss / Snooze button or MAX_RING_MS.
 
         // Screen off / locked → the full-screen intent opens the ring screen.
         // Screen on → heads-up popup with Snooze / Dismiss buttons.

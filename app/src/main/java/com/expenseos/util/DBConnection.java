@@ -17,7 +17,7 @@ import java.util.Properties;
 public class DBConnection {
 
     private static final String TAG = "DBConnection";
-    private static final boolean STRICT_TLS = true;
+    private boolean strictTls;   // read from AppConfig, default false
 
     /**
      * Removes "sslmode=..." from the JDBC URL query (Neon connection strings usually carry ?sslmode=require).
@@ -49,6 +49,12 @@ public class DBConnection {
     public void configureFromAppConfig(Context ctx) {
         AppConfig cfg = AppConfig.get(ctx);
         configure(cfg.getDbUrl(), cfg.getDbUser(), cfg.getDbPassword());
+        this.strictTls = cfg.isStrictTls();
+    }
+
+    // Used by the Test Connection button so it tests the switch state before saving
+    public void setStrictTls(boolean on) {
+        this.strictTls = on;
     }
 
     /**
@@ -71,16 +77,17 @@ public class DBConnection {
         // Neon requires SSL. STRICT_TLS: verify the server certificate chain (Android system CAs) AND the host name,
         // so a fake server on hostile Wi-Fi can't steal the DB password. If it breaks the connection, set false.
         props.setProperty("ssl", "true");
-        if (STRICT_TLS) {
+        if (strictTls) {
             props.setProperty("sslmode", "verify-full");
             props.setProperty("sslfactory", "org.postgresql.ssl.DefaultJavaSSLFactory");
         } else {
             props.setProperty("sslmode", "require");
         }
+
         props.setProperty("socketTimeout", "30");
         props.setProperty("connectTimeout", "15");
 
-        String url = STRICT_TLS ? stripParam(jdbcUrl, "sslmode") : jdbcUrl;   // a URL-level sslmode would override ours
+        String url = strictTls ? stripParam(jdbcUrl, "sslmode") : jdbcUrl;
         Log.d(TAG, "Connecting to: " + url.replaceAll("password=[^&]*", "password=***"));
         return DriverManager.getConnection(url, props);
     }

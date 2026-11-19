@@ -54,6 +54,8 @@ import com.expenseos.model.PaymentType;
 import com.expenseos.model.Receipt;
 import com.expenseos.model.SubCategory;
 import com.expenseos.model.Transaction;
+import com.expenseos.sync.CloudLock;
+import com.expenseos.sync.PassbookVault;
 import com.expenseos.util.AppConfig;
 
 import java.io.ByteArrayOutputStream;
@@ -197,22 +199,25 @@ public class PassbookCopyActivity extends AppCompatActivity {
             ph.append(i == 0 ? "?" : ",?");
             args[i] = String.valueOf(ids[i]);
         }
+        CloudLock.unlockLocal(this);
         SQLiteDatabase db = LocalDB.getInstance(this).getReadableDatabase();
         try (Cursor c = db.rawQuery(
                 "SELECT sms_id, type, amount, sender, raw_body, remark, timestamp_millis, copied, payment_type " +
                         "FROM passbook_entries WHERE copied=0 AND sms_id IN (" + ph + ") " +
                         "ORDER BY timestamp_millis DESC", args)) {
             while (c.moveToNext()) {
+                String amt = PassbookVault.dec(c.getString(2));
+                if (amt == null) continue;                          // locked: no key on this phone
                 PassbookEntry e = new PassbookEntry();
                 e.setSmsId(c.getLong(0));
-                e.setType(c.getString(1));
-                e.setAmount(new BigDecimal(c.getString(2)));
-                e.setSender(c.getString(3));
-                e.setRawBody(c.getString(4));
-                e.setRemark(c.isNull(5) ? null : c.getString(5));
+                e.setType(PassbookVault.dec(c.getString(1)));
+                e.setAmount(new BigDecimal(amt));
+                e.setSender(PassbookVault.dec(c.getString(3)));
+                e.setRawBody(PassbookVault.dec(c.getString(4)));
+                e.setRemark(c.isNull(5) ? null : PassbookVault.dec(c.getString(5)));
                 e.setTimestampMillis(c.getLong(6));
                 e.setCopied(c.getInt(7) == 1);
-                e.setPaymentType(c.isNull(8) ? null : c.getString(8));
+                e.setPaymentType(c.isNull(8) ? null : PassbookVault.dec(c.getString(8)));
                 out.add(e);
             }
         }

@@ -24,6 +24,8 @@ import com.expenseos.model.CashBook;
 import com.expenseos.model.Category;
 import com.expenseos.model.PassbookEntry;
 import com.expenseos.model.Transaction;
+import com.expenseos.sync.CloudLock;
+import com.expenseos.sync.PassbookVault;
 import com.expenseos.sync.SmsReaderService;
 
 import java.math.BigDecimal;
@@ -77,6 +79,8 @@ public class PassbookActivity extends AppCompatActivity {
         Toast.makeText(this, "Reading SMS…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             int found = SmsReaderService.scanInboxAndStore(this);
+            CloudLock.unlockLocal(this);                                                     // offline key (first call ~0.5 s)
+            PassbookVault.encryptPending(LocalDB.getInstance(this).getWritableDatabase());   // encrypt what the scan just stored
             runOnUiThread(() -> {
                 Toast.makeText(this, found + " transaction SMS found", Toast.LENGTH_SHORT).show();
                 loadEntries();
@@ -86,24 +90,32 @@ public class PassbookActivity extends AppCompatActivity {
 
     private void loadEntries() {
         entries.clear();
+        int locked = 0;
         SQLiteDatabase db = LocalDB.getInstance(this).getReadableDatabase();
         try (Cursor c = db.rawQuery(
                 "SELECT sms_id, type, amount, sender, raw_body, remark, timestamp_millis, copied, payment_type " +
                         "FROM passbook_entries WHERE copied=0 ORDER BY timestamp_millis DESC", null)) {
             while (c.moveToNext()) {
+                String amt = PassbookVault.dec(c.getString(2));     // decrypted only here, for display
+                if (amt == null) {                                  // encrypted, but this phone has no key yet
+                    locked++;
+                    continue;
+                }
                 PassbookEntry e = new PassbookEntry();
                 e.setSmsId(c.getLong(0));
-                e.setType(c.getString(1));
-                e.setAmount(new BigDecimal(c.getString(2)));
-                e.setSender(c.getString(3));
-                e.setRawBody(c.getString(4));
-                e.setRemark(c.isNull(5) ? null : c.getString(5));
+                e.setType(PassbookVault.dec(c.getString(1)));
+                e.setAmount(new BigDecimal(amt));
+                e.setSender(PassbookVault.dec(c.getString(3)));
+                e.setRawBody(PassbookVault.dec(c.getString(4)));
+                e.setRemark(c.isNull(5) ? null : PassbookVault.dec(c.getString(5)));
                 e.setTimestampMillis(c.getLong(6));
                 e.setCopied(c.getInt(7) == 1);
-                e.setPaymentType(c.isNull(8) ? null : c.getString(8));
+                e.setPaymentType(c.isNull(8) ? null : PassbookVault.dec(c.getString(8)));
                 entries.add(e);
             }
         }
+        if (locked > 0)
+            Toast.makeText(this, locked + " entries are locked — set the cloud passphrase in Config", Toast.LENGTH_LONG).show();
 
         tvEmpty.setVisibility(entries.isEmpty() ? android.view.View.VISIBLE : android.view.View.GONE);
         adapter = new PassbookAdapter(entries, this::updateSelectedCount);

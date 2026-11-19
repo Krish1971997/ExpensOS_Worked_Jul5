@@ -13,16 +13,17 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * AES-256-GCM encryption of text fields pushed to the cloud DB: "enc:v1:" + Base64(iv | ciphertext | tag).
- * dec() returns values without the prefix unchanged (old plaintext rows). The key is derived from a passphrase
- * (PBKDF2, 200k iterations) and never leaves the device.
+ * AES-256-GCM encryption of text fields: "enc:v1:" + Base64(iv | ciphertext | tag).
+ * dec() returns values without the prefix unchanged (not-yet-encrypted rows). The key is derived from a passphrase
+ * (PBKDF2, 200k iterations) and never leaves the device. The SAME key/format protects the phone's passbook table,
+ * the cloud copy and the backup file, so ciphertext moves between them untouched.
  */
 public final class CloudCrypto {
 
     private static final String PREFIX = "enc:v1:";
     private static final int IV_LEN = 12, TAG_BITS = 128, PBKDF2_ITER = 200_000;
     private static final SecureRandom RNG = new SecureRandom();
-    private static volatile SecretKey key;               // null = encryption OFF
+    private static volatile SecretKey key;               // null = locked / not set up
 
     private CloudCrypto() {
     }
@@ -52,15 +53,29 @@ public final class CloudCrypto {
     }
 
     /**
-     * Returns the input unchanged when null or when encryption is OFF; callers that must never push plaintext check isEnabled() first.
+     * Uses the global key; returns the input unchanged when null or when no key is loaded.
      */
     public static String enc(String plain) {
-        if (plain == null || key == null) return plain;
+        return key == null ? plain : encWith(key, plain);
+    }
+
+    /**
+     * Plain values pass through; an encrypted value with no key throws IllegalStateException (locked).
+     */
+    public static String dec(String s) {
+        if (!isEncrypted(s)) return s;
+        if (key == null)
+            throw new IllegalStateException("Encrypted — set the cloud encryption passphrase in Config.");
+        return decWith(key, s);
+    }
+
+    public static String encWith(SecretKey k, String plain) {
+        if (plain == null) return null;
         try {
             byte[] iv = new byte[IV_LEN];
             RNG.nextBytes(iv);
             Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+            c.init(Cipher.ENCRYPT_MODE, k, new GCMParameterSpec(TAG_BITS, iv));
             byte[] ct = c.doFinal(plain.getBytes(StandardCharsets.UTF_8));
             byte[] out = new byte[IV_LEN + ct.length];
             System.arraycopy(iv, 0, out, 0, IV_LEN);
@@ -71,17 +86,15 @@ public final class CloudCrypto {
         }
     }
 
-    public static String dec(String s) {
+    public static String decWith(SecretKey k, String s) {
         if (!isEncrypted(s)) return s;
-        if (key == null)
-            throw new IllegalStateException("Cloud data is encrypted — set the cloud encryption passphrase in Config.");
         try {
             byte[] in = Base64.getDecoder().decode(s.substring(PREFIX.length()));
             Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-            c.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, in, 0, IV_LEN));
+            c.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(TAG_BITS, in, 0, IV_LEN));
             return new String(c.doFinal(in, IV_LEN, in.length - IV_LEN), StandardCharsets.UTF_8);
         } catch (AEADBadTagException e) {
-            throw new IllegalStateException("Wrong cloud encryption passphrase, or the cloud data was modified.");
+            throw new IllegalStateException("Wrong encryption passphrase, or the data was modified.");
         } catch (Exception e) {
             throw new IllegalStateException("Decryption failed: " + e.getMessage(), e);
         }

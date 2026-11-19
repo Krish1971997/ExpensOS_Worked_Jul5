@@ -617,6 +617,7 @@ public class SchedulerWorker extends Worker {
             log.info("Excel sync: " + o.message);
         } catch (Exception e) {
             dao.logFinish((int) logId, s.getId(), "FAILED", e.getMessage(), 0, nextRun);
+            com.expenseos.excel.ExcelSyncRunner.alertCrash(ctx, e);   // run() itself blew up
         }
     }
 

@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 48; // v48: event_reminders allows many reminders per event+type
+    private static final int DB_VERSION = 49; // v48: event_reminders allows many reminders per event+type
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;

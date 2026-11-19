@@ -48,6 +48,20 @@ public final class ExcelSyncRunner {
         return o;
     }
 
+    /**
+     * Anything thrown OUTSIDE svc.sync() (e.g. while building the file list) — same throttled alert email.
+     */
+    public static void alertCrash(Context ctx, Exception e) {
+        ExcelImportService.SyncReport r = new ExcelImportService.SyncReport();
+        r.fileName = "(Excel sync crashed)";
+        r.mode = "?";
+        r.error = e.getMessage() != null ? e.getMessage() : e.toString();
+        java.io.StringWriter sw = new java.io.StringWriter();
+        e.printStackTrace(new java.io.PrintWriter(sw));
+        r.stackTrace = sw.toString().length() > 4000 ? sw.toString().substring(0, 4000) : sw.toString();
+        emailFailure(ctx, ctx.getSharedPreferences("excel_sync", Context.MODE_PRIVATE), r);
+    }
+
     private static void emailFailure(Context ctx, SharedPreferences sp, ExcelImportService.SyncReport r) {
         ConsoleLogger log = ConsoleLogger.get();
         AppConfig cfg = AppConfig.get(ctx);

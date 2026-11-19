@@ -156,6 +156,7 @@ public class AlarmRingActivity extends AppCompatActivity {
     }
 
     private void stopAlert() {
+
         if (ringtone != null && ringtone.isPlaying()) ringtone.stop();
         if (vibrator != null) vibrator.cancel();
         androidx.core.app.NotificationManagerCompat.from(this).cancel((int) (70000 + taskId));
@@ -170,6 +171,5 @@ public class AlarmRingActivity extends AppCompatActivity {
             }
         }
         super.onDestroy();
-        stopAlert();
     }
 }
