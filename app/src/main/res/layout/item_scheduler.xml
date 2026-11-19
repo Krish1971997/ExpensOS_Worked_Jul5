@@ -31,7 +31,7 @@
                 android:textColor="@color/text"
                 android:textSize="15sp"
                 android:textStyle="bold"
-                tools:text="NEON_SYNC_PUSH" />
+                tools:text="Supabase_SYNC_PUSH" />
 
             <Switch
                 android:id="@+id/swSchedEnabled"

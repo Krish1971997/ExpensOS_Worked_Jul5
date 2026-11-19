@@ -31,7 +31,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="DATABASE (PostgreSQL / Neon)"
+            android:text="DATABASE (PostgreSQL / Supabase)"
             android:textSize="12sp"
             android:textColor="@color/primary"
             android:textStyle="bold"
@@ -61,7 +61,7 @@
                     android:id="@+id/et_db_url"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="jdbc:postgresql://ep-xxx.neon.tech/dbname"
+                    android:hint="jdbc:postgresql://ep-xxx.Supabase.tech/dbname"
                     android:inputType="textUri"
                     android:layout_marginBottom="10dp" />
 
