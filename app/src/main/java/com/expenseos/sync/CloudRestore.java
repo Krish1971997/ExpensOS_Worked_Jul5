@@ -168,6 +168,23 @@ public final class CloudRestore {
             }
 
             try {
+                JSONObject cfgRes = CatalystClient.post(app, "/query", new JSONObject()
+                        .put("sql", "SELECT key, value FROM app_config WHERE key IN ('supabase.url','supabase.bucket')")
+                        .put("limit", 200).put("offset", 0));
+                JSONArray cfgRows = cfgRes.getJSONArray("rows");
+                String sbUrl = null, sbBucket = null;
+                for (int i = 0; i < cfgRows.length(); i++) {
+                    JSONArray row = cfgRows.getJSONArray(i);
+                    String k = row.getString(0);
+                    if ("supabase.url".equals(k)) sbUrl = row.getString(1);
+                    else if ("supabase.bucket".equals(k)) sbBucket = row.getString(1);
+                }
+                if (sbUrl != null) AppConfig.get(app).setSupabasePublic(sbUrl, sbBucket);
+            } catch (Exception e) {
+                LOG.warn("supabase config restore skipped: " + e.getMessage());
+            }
+
+            try {
                 com.expenseos.db.LocalDB.getInstance(app).resyncSequences(
                         "cash_books", "categories", "sub_categories", "column_definitions",
                         "transactions", "transaction_custom_values", "deleted_records",

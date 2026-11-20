@@ -25,12 +25,7 @@ public class ExpenseOSApp extends Application implements Application.ActivityLif
 
     @Override
     public void onActivityCreated(Activity a, Bundle b) {
-        // Hides content in Recents and blocks screenshots while app lock is on.
-        // Remove this block if you want screenshots allowed.
-        // Screenshots stay allowed. With app lock on, only the Recents thumbnail is hidden (Android 13+).
-        if (AppLockManager.isEnabled(this) && android.os.Build.VERSION.SDK_INT >= 33) {
-            a.setRecentsScreenshotEnabled(false);
-        }
+        // Intentionally empty: screenshots and the Recents thumbnail stay allowed on every screen.
     }
 
     @Override

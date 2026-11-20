@@ -204,7 +204,10 @@ public class TransactionDetailActivity extends AppCompatActivity {
         });
         btnDetailAttach.setOnClickListener(v -> {
             hideKeyboard();
-            pickAttachment();
+            if (com.expenseos.cloud.SupabaseStorage.isSignedIn(this)
+                    && com.expenseos.cloud.FileCrypto.isReady(this)) pickAttachment();
+            else Toast.makeText(this, "Attachments need Supabase Storage settings and the cloud passphrase. Set both under Config first.",
+                    Toast.LENGTH_LONG).show();
         });
 
         findViewById(R.id.btnDetailSettle).setOnClickListener(v -> {
@@ -864,16 +867,32 @@ public class TransactionDetailActivity extends AppCompatActivity {
     }
 
     private void saveAttachments(int forTxnId) {
-        for (PendingAttachment pa : pendingAttachments) {
-            Receipt r = new Receipt();
-            r.setTransactionId(forTxnId);
-            r.setFileName(pa.name);
-            r.setFileType(pa.mimeType);
-            r.setFileData(pa.bytes);
-            r.setFileSize(pa.bytes != null ? pa.bytes.length : 0);
-            receiptDao.insert(r);
-        }
+        if (pendingAttachments.isEmpty()) return;
+        final List<PendingAttachment> batch = new ArrayList<>(pendingAttachments);
         pendingAttachments.clear();
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            ReceiptDao dao = new ReceiptDao(app);
+            int failed = 0;
+            for (PendingAttachment pa : batch) {
+                try {
+                    Receipt r = new Receipt();
+                    r.setTransactionId(forTxnId);
+                    r.setFileName(pa.name);
+                    r.setFileType(pa.mimeType);
+                    r.setFileData(pa.bytes);
+                    r.setFileSize(pa.bytes != null ? pa.bytes.length : 0);
+                    dao.insert(r);
+                } catch (Exception e) {
+                    failed++;
+                }
+            }
+            final int f = failed;
+            if (f > 0)
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                        Toast.makeText(app, f + " attachment(s) failed to upload. Check your internet connection and Supabase settings.",
+                                Toast.LENGTH_LONG).show());
+        }).start();
     }
 
     private void showDuplicateDialog() {

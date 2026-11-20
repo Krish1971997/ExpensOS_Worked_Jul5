@@ -14,7 +14,8 @@ import java.time.format.DateTimeFormatter;
 public class LocalDB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "expenseos.db";
-    private static final int DB_VERSION = 49; // v48: event_reminders allows many reminders per event+type
+    private static final int DB_VERSION = 50; // v50: transaction_receipts.storage_path (Supabase Storage)
+    // v48: event_reminders allows many reminders per event+type
     // bumped: added keyword_mappings (auto-suggest category/sub-category from description)
     // bumped: added recycle_bin (soft-delete/restore)
     private static LocalDB instance;
@@ -156,6 +157,7 @@ public class LocalDB extends SQLiteOpenHelper {
                 "file_type      TEXT," +
                 "file_data      BLOB," +
                 "file_size      INTEGER," +
+                "storage_path   TEXT," +
                 "uploaded_at    TEXT DEFAULT (datetime('now'))," +
                 "created_at     TEXT DEFAULT (datetime('now'))," +
                 "updated_at     TEXT DEFAULT (datetime('now')))");
@@ -970,6 +972,16 @@ public class LocalDB extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE event_reminders_new RENAME TO event_reminders");
         }
 
+        // v50: attachments moved to Supabase Storage keep only metadata + storage_path here
+        if (oldV < 50) {
+            try {
+                if (!isColumnExists(db, "transaction_receipts", "storage_path"))
+                    db.execSQL("ALTER TABLE transaction_receipts ADD COLUMN storage_path TEXT");
+            } catch (Exception e) {
+                android.util.Log.w("LocalDB", "storage_path add failed: " + e.getMessage());
+            }
+        }
+
     }
 
     @Override
@@ -1019,7 +1031,9 @@ public class LocalDB extends SQLiteOpenHelper {
                 {"task_alarms", "created_at", "TEXT DEFAULT (datetime('now'))"},
                 {"task_alarms", "updated_at", "TEXT DEFAULT (datetime('now'))"},
                 // Fresh installs created via onCreate() never got this column
-                {"ai_chat_messages", "session_id", "TEXT NOT NULL DEFAULT 'default'"}
+                {"ai_chat_messages", "session_id", "TEXT NOT NULL DEFAULT 'default'"},
+                // v50: Supabase Storage object key (also repairs installs that skipped onUpgrade)
+                {"transaction_receipts", "storage_path", "TEXT"}
 
         };
 

@@ -77,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
         requestNotificationPermissionIfNeeded();
 
         com.expenseos.scheduler.SchedulerWorker.schedulePeriodic(this);
+        // after the first frame, so startup isn't slowed
+        getWindow().getDecorView().post(() -> com.expenseos.cloud.CloudWarmup.start(this));
 
         // ── Bottom nav: Cashbooks / Stats / AI Bot / More ──
         findViewById(R.id.navCashbooks).setOnClickListener(v -> {

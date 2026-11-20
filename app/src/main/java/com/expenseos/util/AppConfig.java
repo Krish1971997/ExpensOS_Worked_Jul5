@@ -49,6 +49,14 @@ public class AppConfig {
     // DB: verify the server certificate chain and host name (sslmode=verify-full)
     public static final String KEY_STRICT_TLS = "db.strict.tls";
 
+    // ── Supabase Storage (attachment files) ──
+    public static final String KEY_SUPABASE_URL = "supabase.url";
+    public static final String KEY_SUPABASE_BUCKET = "supabase.bucket";
+    public static final String KEY_SUPABASE_ANON_KEY = "supabase.anon.key";
+    public static final String KEY_SUPABASE_EMAIL = "supabase.email";
+    public static final String KEY_SUPABASE_PASSWORD = "supabase.password";
+    public static final String DEFAULT_SUPABASE_BUCKET = "ExpenseOS_FileStorage";
+
     private final SharedPreferences prefs;
     private static AppConfig instance;
 
@@ -99,6 +107,8 @@ public class AppConfig {
                 boolean isSecret = k.equals(KEY_DB_URL) || k.equals(KEY_DB_USER) || k.equals(KEY_DB_PASSWORD)
                         || k.equals(KEY_GMAIL_APP_PASS) || k.equals(KEY_ZOHO_CLIENT_SECRET)
                         || k.equals(KEY_ZOHO_REFRESH_TOKEN) || k.equals(KEY_ODOO_APIKEY)
+                        || k.equals(KEY_SUPABASE_ANON_KEY) || k.equals(KEY_SUPABASE_EMAIL)
+                        || k.equals(KEY_SUPABASE_PASSWORD)
                         || k.startsWith(KEY_AI_KEY_PREFIX);
                 if (isSecret && en.getValue() instanceof String v) {
                     if (!v.isEmpty() && !SecretStore.isEncrypted(v))
@@ -403,6 +413,57 @@ public class AppConfig {
                 .putString(KEY_ODOO_USER, user)
                 .putString(KEY_ODOO_APIKEY, SecretStore.encrypt(apiKey))
                 .apply();
+    }
+
+    public String getSupabaseUrl() {
+        String u = plain(KEY_SUPABASE_URL, "").trim();
+        // Keep scheme + host only: the dashboard shows ".../rest/v1", but Auth and Storage live at the project root
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(https?://[^/]+)").matcher(u);
+        return m.find() ? m.group(1) : u;
+    }
+
+    public String getSupabaseBucket() {
+        String b = plain(KEY_SUPABASE_BUCKET, "").trim();
+        return b.isEmpty() ? DEFAULT_SUPABASE_BUCKET : b;
+    }
+
+    public String getSupabaseAnonKey() {
+        return secret(KEY_SUPABASE_ANON_KEY).trim();
+    }
+
+    public String getSupabaseEmail() {
+        return secret(KEY_SUPABASE_EMAIL).trim();
+    }
+
+    public String getSupabasePassword() {
+        return secret(KEY_SUPABASE_PASSWORD);
+    }
+
+    public boolean isSupabaseConfigured() {
+        return !getSupabaseUrl().isEmpty() && !getSupabaseAnonKey().isEmpty()
+                && !getSupabaseEmail().isEmpty() && !getSupabasePassword().isEmpty();
+    }
+
+    public void setSupabase(String url, String bucket, String anonKey, String email, String password) {
+        prefs.edit()
+                .putString(KEY_SUPABASE_URL, url == null ? "" : url.trim())
+                .putString(KEY_SUPABASE_BUCKET, bucket == null ? "" : bucket.trim())
+                .putString(KEY_SUPABASE_ANON_KEY, SecretStore.encrypt(anonKey == null ? "" : anonKey.trim()))
+                .putString(KEY_SUPABASE_EMAIL, SecretStore.encrypt(email == null ? "" : email.trim()))
+                .putString(KEY_SUPABASE_PASSWORD, SecretStore.encrypt(password == null ? "" : password))
+                .apply();
+        com.expenseos.cloud.SupabaseStorage.reset();
+    }
+
+    /**
+     * Non-secret part only (restored from the cloud app_config table).
+     */
+    public void setSupabasePublic(String url, String bucket) {
+        prefs.edit()
+                .putString(KEY_SUPABASE_URL, url == null ? "" : url.trim())
+                .putString(KEY_SUPABASE_BUCKET, bucket == null ? "" : bucket.trim())
+                .apply();
+        com.expenseos.cloud.SupabaseStorage.reset();
     }
 
     public boolean isStrictTls() {

@@ -63,6 +63,16 @@ public final class ConfigDownloader {
             groups++;
         }
 
+        // Supabase Storage: only the secrets travel through the Catalyst config endpoint.
+        // The (non-secret) url + bucket are restored from the cloud app_config table.
+        if (any(v, "SUPABASE_ANON_KEY", "SUPABASE_EMAIL", "SUPABASE_PASSWORD")) {
+            cfg.setSupabase(cfg.getSupabaseUrl(), cfg.getSupabaseBucket(),
+                    v.optString("SUPABASE_ANON_KEY", cfg.getSupabaseAnonKey()),
+                    v.optString("SUPABASE_EMAIL", cfg.getSupabaseEmail()),
+                    v.optString("SUPABASE_PASSWORD", cfg.getSupabasePassword()));
+            groups++;
+        }
+
         // AI: AI_CONFIG (full multi-model / multi-key JSON) wins over the old single-key variables
         String aiJson = v.optString("AI_CONFIG", "").trim();
         if (!aiJson.isEmpty()) {

@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Base64;
 
+import com.expenseos.cloud.FileCrypto;
+import com.expenseos.cloud.SupabaseStorage;
 import com.expenseos.db.LocalDB;
 
 import org.json.JSONArray;
@@ -20,8 +22,10 @@ import java.util.List;
 public class RecycleBinDao {
     private final LocalDB helper;
     private final SQLiteDatabase db;
+    private final Context ctx;
 
     public RecycleBinDao(Context ctx) {
+        this.ctx = ctx.getApplicationContext();
         helper = LocalDB.getInstance(ctx);
         db = helper.getWritableDatabase();
     }
@@ -143,6 +147,7 @@ public class RecycleBinDao {
                     rCv.put("file_name", rObj.optString("file_name"));
                     rCv.put("file_type", rObj.optString("file_type"));
                     rCv.put("file_size", rObj.optInt("file_size"));
+                    if (!rObj.isNull("storage_path")) rCv.put("storage_path", rObj.getString("storage_path"));
                     if (!rObj.isNull("file_data"))
                         rCv.put("file_data", Base64.decode(rObj.getString("file_data"), Base64.NO_WRAP));
                     db.insertWithOnConflict("transaction_receipts", null, rCv, SQLiteDatabase.CONFLICT_REPLACE);
@@ -225,8 +230,116 @@ public class RecycleBinDao {
         }
     }
 
+    /**
+     * Removes the recycle-bin row and, if it referenced cloud objects, deletes those in the
+     * background. Restore keeps the object (only the link comes back), so this is the only place
+     * where a cloud attachment is actually destroyed.
+     */
     public void purge(int binId) {
+        List<String> paths = new ArrayList<>();
+        try (Cursor c = db.rawQuery("SELECT json_extract(record_json,'$.storage_path') FROM recycle_bin "
+                + "WHERE id=? AND table_name='transaction_receipts'", new String[]{String.valueOf(binId)})) {
+            if (c.moveToFirst() && !c.isNull(0)) paths.add(c.getString(0));
+        } catch (Exception ignored) {
+        }
+        try (Cursor c = db.rawQuery("SELECT json_extract(j.value,'$.storage_path') "
+                + "FROM recycle_bin r, json_each(r.record_json,'$.receipts_data') j WHERE r.id=?",
+                new String[]{String.valueOf(binId)})) {
+            while (c.moveToNext()) if (!c.isNull(0)) paths.add(c.getString(0));
+        } catch (Exception ignored) {
+        }
         db.delete("recycle_bin", "id=?", new String[]{String.valueOf(binId)});
+        if (paths.isEmpty()) return;
+        final List<String> toDelete = new ArrayList<>(paths);
+        new Thread(() -> {
+            for (String p : toDelete) {
+                try {
+                    SupabaseStorage.delete(ctx, p);
+                } catch (Exception e) {
+                    android.util.Log.w("RecycleBinDao", "Cloud delete failed: " + p + " " + e.getMessage());
+                }
+            }
+        }).start();
+    }
+
+    // ── One-time migration: embedded base64 blobs -> encrypted Supabase objects ──
+
+    /**
+     * Moves attachment bytes embedded in old recycle_bin snapshots to encrypted Supabase objects
+     * and replaces them with a storage_path in the JSON. Background thread only. Returns the
+     * number of attachments moved.
+     */
+    public int migrateAttachmentsToCloud() {
+        // Only the ids are selected here, so the big JSON is never loaded into a cursor window
+        List<Integer> ids = new ArrayList<>();
+        String sel = "SELECT id FROM recycle_bin WHERE "
+                + "(table_name='transaction_receipts' AND json_extract(record_json,'$.file_data') IS NOT NULL) "
+                + "OR (table_name='transactions' AND EXISTS (SELECT 1 FROM json_each(record_json,'$.receipts_data') j "
+                + "WHERE json_extract(j.value,'$.file_data') IS NOT NULL))";
+        try (Cursor c = db.rawQuery(sel, null)) {
+            while (c.moveToNext()) ids.add(c.getInt(0));
+        }
+        int moved = 0;
+        for (int binId : ids) {
+            try {
+                moved += migrateBinRow(binId);
+            } catch (Exception e) {
+                // e.g. cloud unreachable, or the cash book is inactive; the row stays unchanged and is retried next time
+                android.util.Log.w("RecycleBinDao", "bin migrate " + binId + " failed: " + e.getMessage());
+            }
+        }
+        return moved;
+    }
+
+    private int migrateBinRow(int binId) throws Exception {
+        String tableName;
+        int recordId;
+        String json;
+        CursorWindow window = new CursorWindow("bin_migrate", 64L * 1024 * 1024);
+        try (Cursor c = db.rawQuery("SELECT table_name, record_id, record_json FROM recycle_bin WHERE id=?",
+                new String[]{String.valueOf(binId)})) {
+            if (c instanceof SQLiteCursor) ((SQLiteCursor) c).setWindow(window);
+            if (!c.moveToFirst()) return 0;
+            tableName = c.getString(0);
+            recordId = c.getInt(1);
+            json = c.getString(2);
+        } finally {
+            window.close();
+        }
+
+        JSONObject obj = new JSONObject(json);
+        int moved = 0;
+        if ("transaction_receipts".equals(tableName)) {
+            moved += moveBlob(obj, obj.optInt("transaction_id"), recordId);
+        } else if ("transactions".equals(tableName)) {
+            JSONArray arr = obj.optJSONArray("receipts_data");
+            if (arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject r = arr.getJSONObject(i);
+                    moved += moveBlob(r, recordId, r.getInt("id"));
+                }
+            }
+        }
+        if (moved > 0) {
+            // The JSON is saved only after every upload of this row succeeded
+            ContentValues cv = new ContentValues();
+            cv.put("record_json", obj.toString());
+            db.update("recycle_bin", cv, "id=?", new String[]{String.valueOf(binId)});
+        }
+        return moved;
+    }
+
+    /**
+     * Uploads one embedded base64 blob (encrypted) and swaps it for a storage_path in the JSON.
+     */
+    private int moveBlob(JSONObject o, int txnId, int receiptId) throws Exception {
+        if (o.isNull("file_data")) return 0;
+        byte[] data = Base64.decode(o.getString("file_data"), Base64.NO_WRAP);
+        String path = SupabaseStorage.pathFor(txnId, receiptId);
+        SupabaseStorage.upload(ctx, path, "application/octet-stream", FileCrypto.encrypt(ctx, data, path));
+        o.remove("file_data");
+        o.put("storage_path", path);
+        return 1;
     }
 
     private static class RecycledItemSummary {

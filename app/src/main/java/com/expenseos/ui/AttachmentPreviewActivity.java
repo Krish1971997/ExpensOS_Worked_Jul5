@@ -56,8 +56,8 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
             return;
         }
 
-        receipt = new ReceiptDao(this).findById(receiptId);
-        if (receipt == null || receipt.getFileData() == null) {
+        receipt = new ReceiptDao(this).findMetaById(receiptId);
+        if (receipt == null) {
             Toast.makeText(this, "Attachment not found", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -65,6 +65,32 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
 
         isImage = receipt.getFileType() != null && receipt.getFileType().startsWith("image/");
 
+        // Show the placeholder now; the file bytes are fetched from Supabase on a background thread
+        ((TextView) findViewById(R.id.tvPdfName)).setText(receipt.getFileName());
+        findViewById(R.id.pdfPlaceholder).setVisibility(View.VISIBLE);
+        findViewById(R.id.ivPreview).setVisibility(View.GONE);
+
+        findViewById(R.id.btnDownloadAttachment).setOnClickListener(v -> openExternally());
+        findViewById(R.id.btnShareAttachment).setOnClickListener(v -> shareAttachment());
+
+        loadBytes();
+    }
+
+    private void loadBytes() {
+        new Thread(() -> {
+            try {
+                receipt.setFileData(new ReceiptDao(this).loadFileData(receipt));
+                runOnUiThread(this::showContent);
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+                    finish();
+                });
+            }
+        }).start();
+    }
+
+    private void showContent() {
         ImageView iv = findViewById(R.id.ivPreview);
         View pdfPlaceholder = findViewById(R.id.pdfPlaceholder);
         RecyclerView rvPdfPages = findViewById(R.id.rvPdfPages);
@@ -76,18 +102,8 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
             iv.setVisibility(View.VISIBLE);
             pdfPlaceholder.setVisibility(View.GONE);
         } else {
-            // Show the placeholder immediately, then swap in the real
-            // rendered pages (all of them, scrollable) once PdfRenderer
-            // finishes (can take a moment for larger PDFs, so it runs off
-            // the main thread).
-            ((TextView) findViewById(R.id.tvPdfName)).setText(receipt.getFileName());
-            pdfPlaceholder.setVisibility(View.VISIBLE);
-            iv.setVisibility(View.GONE);
             renderAllPdfPages(pdfPlaceholder, rvPdfPages, tvPageIndicator);
         }
-
-        findViewById(R.id.btnDownloadAttachment).setOnClickListener(v -> openExternally());
-        findViewById(R.id.btnShareAttachment).setOnClickListener(v -> shareAttachment());
     }
 
     // Renders EVERY page of the PDF to a bitmap using Android's built-in
@@ -204,6 +220,10 @@ public class AttachmentPreviewActivity extends AppCompatActivity {
     // Writes the blob to a cache file and hands it off via FileProvider —
     // required because we only have raw bytes in the DB, not a real file.
     private Uri writeToCacheAndGetUri() {
+        if (receipt.getFileData() == null) {
+            Toast.makeText(this, "Still loading…", Toast.LENGTH_SHORT).show();
+            return null;
+        }
         try {
             File dir = new File(getCacheDir(), "receipts");
             if (!dir.exists()) dir.mkdirs();

@@ -403,6 +403,140 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
+        <!-- ── SUPABASE STORAGE (attachments) ── -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="3dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:letterSpacing="0.08"
+                    android:text="SUPABASE STORAGE (ATTACHMENTS)"
+                    android:textAllCaps="true"
+                    android:textColor="@color/primary"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="supabase.url"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
+
+                <EditText
+                    android:id="@+id/etCfgSbUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="12dp"
+                    android:hint="https://xxxx.supabase.co"
+                    android:inputType="textUri" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="supabase.bucket"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
+
+                <EditText
+                    android:id="@+id/etCfgSbBucket"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="12dp"
+                    android:hint="ExpenseOS_FileStorage"
+                    android:inputType="text" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="supabase.anon.key 🔒"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
+
+                <EditText
+                    android:id="@+id/etCfgSbAnonKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="12dp"
+                    android:hint="••••••••"
+                    android:inputType="textPassword" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="supabase.email 🔒"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
+
+                <EditText
+                    android:id="@+id/etCfgSbEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="12dp"
+                    android:hint="app user email"
+                    android:inputType="textEmailAddress" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="supabase.password 🔒"
+                    android:textColor="@color/text_muted"
+                    android:textSize="10sp" />
+
+                <EditText
+                    android:id="@+id/etCfgSbPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginBottom="12dp"
+                    android:hint="••••••••"
+                    android:inputType="textPassword" />
+
+                <Button
+                    android:id="@+id/btnTestCfgSb"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="6dp"
+                    android:text="🔗 Test Supabase (save first)" />
+
+                <TextView
+                    android:id="@+id/tvCfgSbResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:padding="8dp"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/btnMigrateCfgSb"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="📦 Migrate existing attachments" />
+
+                <Button
+                    android:id="@+id/btnSaveCfgSb"
+                    style="@style/BtnPrimary"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:text="Save Supabase Config" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
         <!-- ── ALARM ── -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"

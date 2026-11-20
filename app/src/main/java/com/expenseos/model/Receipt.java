@@ -10,6 +10,8 @@ public class Receipt {
     private String fileName;
     private String fileType;
     private byte[] fileData;
+    /** Supabase Storage object key; null for legacy rows that still hold bytes locally. */
+    private String storagePath;
     private int fileSize;
     private LocalDateTime uploadedAt;
     private LocalDateTime createdAt;
@@ -57,6 +59,14 @@ public class Receipt {
 
     public void setFileData(byte[] fileData) {
         this.fileData = fileData;
+    }
+
+    public String getStoragePath() {
+        return storagePath;
+    }
+
+    public void setStoragePath(String storagePath) {
+        this.storagePath = storagePath;
     }
 
     public int getFileSize() {

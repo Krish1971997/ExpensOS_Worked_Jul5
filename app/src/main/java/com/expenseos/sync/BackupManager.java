@@ -10,6 +10,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.expenseos.cloud.FileCrypto;
 import com.expenseos.dao.LocalDatabase;
 import com.expenseos.util.ConsoleLogger;
 
@@ -115,7 +116,7 @@ public class BackupManager {
                     zos.putNextEntry(new ZipEntry("backup_data.json"));
                     zos.write(backup.toString(2).getBytes(StandardCharsets.UTF_8));
                     zos.closeEntry();
-                    writeReceiptsToZip(db, zos);
+                    writeReceiptsToZip(ctx, db, zos);
                 }
 
                 long size = tempZip.length();
@@ -288,8 +289,16 @@ public class BackupManager {
             if (us <= 0) continue;
             try {
                 int receiptId = Integer.parseInt(entryName.substring(0, us));
+                byte[] data;
+                try {
+                    // Entries from new backups are ciphertext; entries from older backups are plaintext and pass through unchanged
+                    data = FileCrypto.decrypt(ctx, e.getValue(), "Receipts/" + entryName);
+                } catch (IOException ex) {
+                    log.error("Attachment " + receiptId + " not restored: " + ex.getMessage());
+                    continue;
+                }
                 ContentValues cv = new ContentValues();
-                cv.put("file_data", e.getValue());
+                cv.put("file_data", data);
                 db.update("transaction_receipts", cv, "id=?", new String[]{String.valueOf(receiptId)});
             } catch (NumberFormatException ignored) {
             }
@@ -395,7 +404,7 @@ public class BackupManager {
     private JSONArray receiptsMetaToJson(SQLiteDatabase db) throws Exception {
         JSONArray arr = new JSONArray();
         try (Cursor c = db.rawQuery(
-                "SELECT id, transaction_id, file_name, file_type, file_size, uploaded_at FROM transaction_receipts", null)) {
+                "SELECT id, transaction_id, file_name, file_type, file_size, uploaded_at, storage_path FROM transaction_receipts", null)) {
             while (c.moveToNext()) {
                 JSONObject row = new JSONObject();
                 row.put("id", c.getInt(0));
@@ -404,15 +413,19 @@ public class BackupManager {
                 row.put("file_type", c.isNull(3) ? JSONObject.NULL : c.getString(3));
                 row.put("file_size", c.isNull(4) ? JSONObject.NULL : c.getLong(4));
                 row.put("uploaded_at", c.isNull(5) ? JSONObject.NULL : c.getString(5));
+                row.put("storage_path", c.isNull(6) ? JSONObject.NULL : c.getString(6));
                 arr.put(row);
             }
         }
         return arr;
     }
 
-    private void writeReceiptsToZip(SQLiteDatabase db, ZipOutputStream zos) throws Exception {
+    private void writeReceiptsToZip(Context ctx, SQLiteDatabase db, ZipOutputStream zos) throws Exception {
+        // Attachments that were moved to Supabase Storage are not part of the backup (metadata + storage_path only).
+        // Only legacy rows that still have a local blob are written, and always as ciphertext.
         try (Cursor c = db.rawQuery(
-                "SELECT id, file_name, file_data FROM transaction_receipts WHERE file_data IS NOT NULL", null)) {
+                "SELECT id, file_name, file_data FROM transaction_receipts "
+                        + "WHERE storage_path IS NULL AND file_data IS NOT NULL", null)) {
 
             // 👈 CURSOR WINDOW SIZE FIX ADDED HERE
             fixCursorWindowSize(c);
@@ -422,8 +435,14 @@ public class BackupManager {
                 String fname = c.getString(1);
                 byte[] data = c.getBlob(2);
                 if (data == null || data.length == 0) continue;
-                zos.putNextEntry(new ZipEntry("Receipts/" + id + "_" + fname));
-                zos.write(data);
+                if (!FileCrypto.isReady(ctx)) {
+                    log.error("Attachment " + id + " skipped in backup: cloud passphrase is not set "
+                            + "(plaintext is never written to a backup)");
+                    continue;
+                }
+                String entryName = "Receipts/" + id + "_" + fname;
+                zos.putNextEntry(new ZipEntry(entryName));
+                zos.write(FileCrypto.encrypt(ctx, data, entryName));
                 zos.closeEntry();
             }
         }

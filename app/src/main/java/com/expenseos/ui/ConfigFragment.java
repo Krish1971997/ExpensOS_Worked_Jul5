@@ -88,6 +88,7 @@ public class ConfigFragment extends Fragment {
         setupAlarmSettings(v);
         setupAppLockSettings(v);
         setupCloudEncryptionSettings(v);
+        SupabaseConfigSection.bind(v, requireActivity());
     }
 
     private void setupCloudEncryptionSettings(View v) {
@@ -120,7 +121,7 @@ public class ConfigFragment extends Fragment {
 
     private void refreshCloudPassUi() {
         if (tvCloudPassStatus == null || !isAdded()) return;
-        tvCloudPassStatus.setText(CloudLock.isSet(requireContext()) ? "Set" : "Not set — passbook won't sync");
+        tvCloudPassStatus.setText(CloudLock.isSet(requireContext()) ? "Set" : "Not set — passbook and attachments won't sync");
     }
 
     /**
@@ -555,6 +556,8 @@ public class ConfigFragment extends Fragment {
                         {"app.display.name", prefs.getString("app_name", "ExpenseOS")},
                         {"gmail.from", prefs.getString("gmail_from", "")},
                         {"db.strict.tls", Boolean.toString(secCfg.isStrictTls())},
+                        {"supabase.url", secCfg.getSupabaseUrl()},
+                        {"supabase.bucket", secCfg.getSupabaseBucket()},
                 };
 
                 PreparedStatement ps = conn.prepareStatement(

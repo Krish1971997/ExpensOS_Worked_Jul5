@@ -169,7 +169,7 @@ public class TransactionDao {
 
                     // 🟢 1. Attachments JSON (Base64) - snapshot
                     org.json.JSONArray receiptsArr = new org.json.JSONArray();
-                    try (Cursor rc = db.rawQuery("SELECT id, file_name, file_type, file_data, file_size FROM transaction_receipts WHERE transaction_id=?", new String[]{String.valueOf(id)})) {
+                    try (Cursor rc = db.rawQuery("SELECT id, file_name, file_type, file_data, file_size, storage_path FROM transaction_receipts WHERE transaction_id=?", new String[]{String.valueOf(id)})) {
                         while (rc.moveToNext()) {
                             org.json.JSONObject rObj = new org.json.JSONObject();
                             rObj.put("id", rc.getInt(0));
@@ -178,6 +178,7 @@ public class TransactionDao {
                             byte[] blob = rc.getBlob(3);
                             rObj.put("file_data", blob != null ? android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP) : org.json.JSONObject.NULL);
                             rObj.put("file_size", rc.getInt(4));
+                            rObj.put("storage_path", rc.isNull(5) ? org.json.JSONObject.NULL : rc.getString(5));
                             receiptsArr.put(rObj);
                         }
                     }

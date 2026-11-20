@@ -18,6 +18,8 @@ public class ConfigActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Allow screenshots on this screen even if a global FLAG_SECURE is set elsewhere
+//        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         setContentView(R.layout.activity_config);
 
         findViewById(R.id.btnConfigBack).setOnClickListener(v -> finish());

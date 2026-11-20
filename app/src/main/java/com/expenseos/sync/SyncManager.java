@@ -738,7 +738,9 @@ public class SyncManager {
 
     private int pushTransactionReceipts(SQLiteDatabase local, Connection remote, String fromStr) throws Exception {
         // 1. முதலில் ID-களை மட்டும் எடுக்கிறோம்
-        String idSel = "SELECT id FROM transaction_receipts" + (fromStr != null ? " WHERE updated_at>=?" : "");
+        // Only rows already uploaded to Supabase Storage; file bytes are never written to the cloud DB
+        String idSel = "SELECT id FROM transaction_receipts WHERE storage_path IS NOT NULL"
+                + (fromStr != null ? " AND updated_at>=?" : "");
         java.util.List<Long> receiptIds = new java.util.ArrayList<>();
 
         try (Cursor c = rawQuery(local, idSel, fromStr)) {
@@ -752,16 +754,17 @@ public class SyncManager {
             return 0;
         }
 
-        String sql = "INSERT INTO transaction_receipts (id, transaction_id, file_name, file_type, file_data, "
-                + "file_size, uploaded_at, created_at, updated_at) "
+        String sql = "INSERT INTO transaction_receipts (id, transaction_id, file_name, file_type, "
+                + "file_size, storage_path, uploaded_at, created_at, updated_at) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?::timestamp, ?::timestamp, ?::timestamp) "
                 + "ON CONFLICT (id) DO UPDATE SET "
                 + "transaction_id=EXCLUDED.transaction_id, file_name=EXCLUDED.file_name, "
-                + "file_type=EXCLUDED.file_type, file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, "
+                + "file_type=EXCLUDED.file_type, file_size=EXCLUDED.file_size, "
+                + "storage_path=EXCLUDED.storage_path, "
                 + "uploaded_at=EXCLUDED.uploaded_at, created_at=EXCLUDED.created_at, updated_at=EXCLUDED.updated_at";
 
-        String singleSel = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at, created_at, updated_at "
-                + "FROM transaction_receipts WHERE id = ?";
+        String singleSel = "SELECT id, transaction_id, file_name, file_type, file_size, storage_path, "
+                + "uploaded_at, created_at, updated_at FROM transaction_receipts WHERE id = ?";
 
         boolean originalAutoCommit = remote.getAutoCommit();
         remote.setAutoCommit(false);
@@ -769,43 +772,20 @@ public class SyncManager {
         int n = 0;
         try (PreparedStatement ps = remote.prepareStatement(sql)) {
             for (Long id : receiptIds) {
-
-                Cursor c = null;
-                try {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        // 💡 சரிசெய்யப்பட்ட இடம்: (db, cursorDriver, editTable, query)
-                        // driver-க்கு பதிலாக cursorDriver என மாற்றி அதை SQLiteCursor-க்கு வழங்கியுள்ளோம்
-                        c = local.rawQueryWithFactory((db, cursorDriver, editTable, query) -> {
-                            android.database.sqlite.SQLiteCursor cursor = new android.database.sqlite.SQLiteCursor(cursorDriver, editTable, query);
-                            cursor.setWindow(new android.database.CursorWindow("ReceiptWindow", 15 * 1024 * 1024)); // 15 MB
-                            return cursor;
-                        }, singleSel, new String[]{String.valueOf(id)}, null);
-                    } else {
-                        c = local.rawQuery(singleSel, new String[]{String.valueOf(id)});
-                    }
-
-                    if (c.moveToFirst()) {
-                        ps.setLong(1, c.getLong(0));
-                        ps.setLong(2, c.getLong(1));
-                        ps.setString(3, c.getString(2));
-                        ps.setString(4, c.getString(3));
-
-                        byte[] blob = c.getBlob(4);
-                        if (blob == null) ps.setNull(5, Types.BINARY);
-                        else ps.setBytes(5, blob);
-
-                        if (c.isNull(5)) ps.setNull(6, Types.INTEGER);
-                        else ps.setLong(6, c.getLong(5));
-
-                        ps.setString(7, c.getString(6));
-                        ps.setString(8, c.getString(7));
-                        ps.setString(9, c.getString(8));
-
-                        ps.executeUpdate();
-                        n++;
-                    }
-                } finally {
-                    if (c != null) c.close();
+                try (Cursor c = local.rawQuery(singleSel, new String[]{String.valueOf(id)})) {
+                    if (!c.moveToFirst()) continue;
+                    ps.setLong(1, c.getLong(0));
+                    ps.setLong(2, c.getLong(1));
+                    ps.setString(3, c.getString(2));
+                    ps.setString(4, c.getString(3));
+                    if (c.isNull(4)) ps.setNull(5, Types.INTEGER);
+                    else ps.setLong(5, c.getLong(4));
+                    ps.setString(6, c.getString(5)); // storage_path
+                    ps.setString(7, c.getString(6));
+                    ps.setString(8, c.getString(7));
+                    ps.setString(9, c.getString(8));
+                    ps.executeUpdate();
+                    n++;
                 }
             }
             remote.commit();
@@ -1621,17 +1601,25 @@ public class SyncManager {
     }
 
     private int pullTransactionReceipts(Connection remote, SQLiteDatabase local, String fromStr) throws Exception {
-        String sql = "SELECT id, transaction_id, file_name, file_type, file_data, file_size, uploaded_at, "
-                + "created_at, updated_at FROM transaction_receipts" + (fromStr != null ? " WHERE updated_at>=?" : "");
+        // file_data is only returned for legacy rows that have no storage_path yet
+        String sql = "SELECT id, transaction_id, file_name, file_type, "
+                + "CASE WHEN storage_path IS NULL THEN file_data END AS file_data, "
+                + "file_size, storage_path, uploaded_at, created_at, updated_at "
+                + "FROM transaction_receipts" + (fromStr != null ? " WHERE updated_at>=?" : "");
         int n = 0;
         try (PreparedStatement ps = prep(remote, sql, fromStr); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
+                String path = rs.getString("storage_path");
+                byte[] data = rs.getBytes("file_data");
+                // Nothing usable in the cloud row; skip so a local copy is never overwritten with NULL
+                if (path == null && data == null) continue;
                 ContentValues cv = new ContentValues();
                 cv.put("id", rs.getInt("id"));
                 cv.put("transaction_id", rs.getInt("transaction_id"));
                 cv.put("file_name", rs.getString("file_name"));
                 cv.put("file_type", rs.getString("file_type"));
-                cv.put("file_data", rs.getBytes("file_data"));
+                cv.put("file_data", data);
+                cv.put("storage_path", path);
                 cv.put("file_size", rs.getLong("file_size"));
                 cv.put("uploaded_at", strTs(rs, "uploaded_at"));
                 cv.put("created_at", strTs(rs, "created_at"));

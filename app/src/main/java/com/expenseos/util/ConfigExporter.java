@@ -81,6 +81,9 @@ public final class ConfigExporter {
         put(env, "ODOO_DB", c.getOdooDb());
         put(env, "ODOO_USER", c.getOdooUser());
         put(env, "ODOO_APIKEY", c.getOdooApiKey());
+        put(env, "SUPABASE_ANON_KEY", c.getSupabaseAnonKey());
+        put(env, "SUPABASE_EMAIL", c.getSupabaseEmail());
+        put(env, "SUPABASE_PASSWORD", c.getSupabasePassword());
 
         // AI: one AI_CONFIG variable holds all models and keys (old AI_PROVIDER / AI_*_KEY vars are not needed)
         AiConfigStore.AiConfig ai = new AiConfigStore(ctx).load();
